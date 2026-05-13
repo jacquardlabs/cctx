@@ -855,3 +855,25 @@ def test_orphan_parent_uuid_warns(write_jsonl):
     assert "orphan_parent" in codes
     # Turn is still kept.
     assert len(trace.turns) == 2
+
+
+def test_decode_project_path_known_ambiguity(tmp_path):
+    """A project name containing hyphens cannot be losslessly reversed.
+
+    This test pins the documented best-effort behavior. Downstream code
+    should rely on SessionTrace.cwd (observed from line data) when an
+    exact filesystem path is required.
+    """
+    # The directory name "-Users-bryan-Projects-my-app-frontend" was
+    # encoded from "/Users/bryan/Projects/my-app-frontend". The decoder
+    # cannot recover the hyphens in "my-app-frontend".
+    proj_dir = tmp_path / "-Users-bryan-Projects-my-app-frontend"
+    proj_dir.mkdir()
+    jsonl = proj_dir / "abc123.jsonl"
+    jsonl.write_text("")
+
+    trace = parse_session(jsonl)
+    # The decoded path WILL be wrong here — that's the documented best-effort behavior.
+    assert trace.project_path == "/Users/bryan/Projects/my/app/frontend"
+    # The correct path lives on cwd if the JSONL had any lines with it;
+    # for an empty file, project_path is the fallback.

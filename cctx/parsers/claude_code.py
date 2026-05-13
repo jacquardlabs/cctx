@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from cctx.models import (
@@ -55,6 +55,8 @@ def parse_session(
     turns: list[Turn] = []
     attachments: list[Attachment] = []
     warnings: list[ParserWarning] = []
+    claude_code_version: str | None = None
+    observed_cwd: str | None = None
 
     for line_number, raw, truncated, had_encoding_error in _iter_lines(jsonl_path):
         if had_encoding_error:
@@ -77,6 +79,14 @@ def parse_session(
                     )
                 )
             continue
+        if claude_code_version is None:
+            v = raw.get("version")
+            if v:
+                claude_code_version = str(v)
+        if observed_cwd is None:
+            c = raw.get("cwd")
+            if c:
+                observed_cwd = str(c)
         line_type = raw.get("type")
         if line_type == "user":
             turn = _parse_user_line(raw)
@@ -137,8 +147,8 @@ def parse_session(
 
     # Metadata pass.
     primary_model = _most_common([t.model for t in turns if t.role == "assistant" and t.model])
-    claude_code_version = _first_present_field(jsonl_path, "version", turns)
-    observed_cwd = _first_present_field(jsonl_path, "cwd", turns) or project_path
+    if observed_cwd is None:
+        observed_cwd = project_path
     tool_names_loaded = _collect_tool_names(turns, attachments)
     raw_tool_result_files = _enumerate_raw_tool_result_files(jsonl_path)
 
@@ -338,23 +348,6 @@ def _most_common(values: list[str]) -> str | None:
     for v in values:
         counts[v] = counts.get(v, 0) + 1
     return max(counts.items(), key=lambda item: item[1])[0]
-
-
-def _first_present_field(jsonl_path: Path, field_name: str, turns: list[Turn]) -> str | None:
-    """Re-scan the file to find the first non-null value of a top-level field.
-
-    Cheap: stops at first hit. Used for fields we don't store on Turn (cwd, version).
-    """
-    with jsonl_path.open("r", encoding="utf-8", errors="replace") as f:
-        for line in f:
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            value = obj.get(field_name)
-            if value:
-                return str(value)
-    return None
 
 
 def _collect_tool_names(turns: list[Turn], attachments: list[Attachment]) -> list[str]:
@@ -667,7 +660,7 @@ def _parse_timestamp(value: str | None) -> datetime:
     """Parse an ISO 8601 timestamp. Accepts both 'Z' suffix and '+00:00'."""
     if not value:
         # Fallback for synthetic edge cases; should never be reached with real data.
-        return datetime.fromtimestamp(0, tz=__import__("datetime").timezone.utc)
+        return datetime.fromtimestamp(0, tz=timezone.utc)
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
     return datetime.fromisoformat(value)
@@ -680,6 +673,18 @@ def _resolve_jsonl_path(path: Path) -> Path:
 
 
 def _decode_project_path(dir_name: str) -> str:
+    """Decode Claude Code's project-dir naming convention to a filesystem path.
+
+    Convention: every '/' in the original cwd was replaced with '-'.
+    The reverse is lossy: a real '-' in the original path is
+    indistinguishable from a path separator, so this returns a
+    best-effort reconstruction. For paths that contain hyphens
+    (e.g. project names with dashes), the result will be wrong.
+
+    Downstream consumers should prefer `SessionTrace.cwd` (observed
+    from the line data) when an exact path is required;
+    `project_path` is a display-friendly fallback.
+    """
     if not dir_name.startswith("-"):
         return dir_name
     return dir_name.replace("-", "/")
