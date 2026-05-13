@@ -100,6 +100,13 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
     start_time = turns[0].timestamp if turns else None
     end_time = turns[-1].timestamp if turns else None
 
+    # Compute initial_context_tokens from the first assistant turn.
+    initial_context_tokens = 0
+    for turn in turns:
+        if turn.role == "assistant" and turn.usage is not None:
+            initial_context_tokens = turn.usage.cache_creation_5m + turn.usage.cache_creation_1h
+            break
+
     return SessionTrace(
         session_id=session_id,
         parent_session_id=None,
@@ -111,7 +118,7 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
         subagents=[],
         attachments=attachments,
         raw_tool_result_files=[],
-        initial_context_tokens=0,
+        initial_context_tokens=initial_context_tokens,
         tool_names_loaded=[],
         start_time=start_time,
         end_time=end_time,

@@ -514,3 +514,36 @@ def test_truncated_final_line_dropped_silently(tmp_path):
     # No warning for the truncated last line specifically.
     malformed = [w for w in trace.warnings if w.code == "malformed_json"]
     assert malformed == []
+
+
+# --- Task 15: initial_context_tokens ---
+
+
+def test_initial_context_tokens_from_first_assistant(write_jsonl):
+    path = write_jsonl(
+        [
+            make_user_line(uuid="u1", content="hi"),
+            make_assistant_line(
+                uuid="a1",
+                parent_uuid="u1",
+                text="hello",
+                cache_creation_5m=1000,
+                cache_creation_1h=29000,
+            ),
+            make_assistant_line(  # later assistant turn should be ignored for this anchor
+                uuid="a2",
+                parent_uuid="a1",
+                text="more",
+                cache_creation_5m=0,
+                cache_creation_1h=500,
+            ),
+        ]
+    )
+    trace = parse_session(path)
+    assert trace.initial_context_tokens == 30000
+
+
+def test_initial_context_tokens_zero_when_no_assistant_turns(write_jsonl):
+    path = write_jsonl([make_user_line(uuid="u1", content="hi then abandoned")])
+    trace = parse_session(path)
+    assert trace.initial_context_tokens == 0
