@@ -41,8 +41,10 @@ _SECRET_PATTERNS = [
     re.compile(r"(sk-[a-zA-Z0-9]+)", re.IGNORECASE),  # OpenAI/Anthropic key patterns
     re.compile(r"(Bearer\s+[a-zA-Z0-9_\-\.]+)", re.IGNORECASE),
     re.compile(r"(CLIENT_SECRET|CLIENT_ID)\s*[=:]\s*['\"]?[a-zA-Z0-9_\-\.]+['\"]?", re.IGNORECASE),
-    re.compile(r"api\d+-[a-zA-Z0-9]+", re.IGNORECASE),  # OAuth API endpoint references like api03-xyz
-    re.compile(r"[a-zA-Z0-9]+\.apps\.googleusercontent\.com", re.IGNORECASE),  # Google OAuth domains
+    # OAuth API endpoint references like api03-xyz
+    re.compile(r"api\d+-[a-zA-Z0-9]+", re.IGNORECASE),
+    # Google OAuth domains
+    re.compile(r"[a-zA-Z0-9]+\.apps\.googleusercontent\.com", re.IGNORECASE),
 ]
 
 
@@ -81,7 +83,7 @@ def anonymize_line(obj: dict) -> dict:
             parent[key] = new_value
 
     # Targeted truncations.
-    for parent, key, value in list(_walk(out)):
+    for _parent, key, value in list(_walk(out)):
         if isinstance(value, dict) and key == "file":
             content = value.get("content")
             if isinstance(content, str) and len(content) > 200:
