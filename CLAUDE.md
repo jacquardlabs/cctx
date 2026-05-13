@@ -106,6 +106,50 @@ Feature designs live in `docs/superpowers/specs/`, dated and committed before im
 Current specs:
 - `docs/superpowers/specs/2026-05-12-claude-code-parser-design.md` — the Claude Code JSONL parser.
 
+## GitHub issue structure
+
+The initial breakdown of the brief into trackable work lives in issues #1–#32. New work should follow the same conventions so the board stays coherent.
+
+**Granularity.** One issue = one PR. If a ticket can't reasonably land in a single PR, split it. Cross-cutting infrastructure (e.g. the recommendations engine, used by seven subcommands) gets its own ticket rather than being buried inside the first consumer. Test fixtures that block a parser get their own ticket. High-polish or novel surfaces (e.g. the TUI) split into spec + implementation.
+
+**Milestones.** Build-order phases get milestones (`M0 — Project setup` through `M10 — Release v0.1.0`). Every issue belongs to exactly one milestone. Add a new milestone if a phase is genuinely new; don't reuse an existing milestone for unrelated work.
+
+**Labels.** Use `area:*` labels only (parser, analyzer, cli, renderer, exporter, tokenizer, tui, models, infra, docs). An issue can have multiple `area:` labels if it touches multiple layers. Don't invent new label taxonomies (priority, type, status) — milestones + the issue board cover that.
+
+**Body template.** Every issue has these sections, in this order:
+
+```markdown
+**Phase:** Mn — <phase name>
+**Module:** `path/to/file.py` (or files plural)
+
+## Goal
+One paragraph: what this delivers and why.
+
+## Acceptance criteria
+- [ ] Spec at `docs/superpowers/specs/<date>-<slug>.md` reviewed first (if a spec is warranted — see below)
+- [ ] Concrete, testable items
+- [ ] Tests that prove the behavior
+- [ ] Layering invariants honored (e.g. "no imports from `anthropic`")
+
+## Files
+- Exact paths the PR touches
+
+## References
+- Brief sections, parser spec sections, CLAUDE.md sections
+
+## Blocked by
+- (Posted as a comment with `#N` references after all related issues are filed — GitHub auto-links and surfaces the dependency graph.)
+```
+
+**Spec gate inside the ticket.** CLAUDE.md requires specs before implementation. The default is **the spec is the first acceptance-criteria checkbox in the impl ticket**, not a separate ticket. Exceptions: surfaces big enough that the spec is itself a meaningful deliverable (the TUI is the example in the initial set — #20 is spec, #21 is implementation).
+
+**Dependencies.** After filing a batch of issues, post a comment on each blocked ticket: `Blocked by #N, #M`. GitHub auto-links and shows the parent/child relationship in the timeline. Don't try to encode the dep graph in the issue body — it goes stale and is painful to maintain.
+
+**Granularity smell tests** (use these when proposing a new ticket):
+- *Too thick* — needs two specs, two reviewers, or PRs in two different areas (`area:parser` + `area:cli`). Split along the layering boundary.
+- *Too thin* — the entire ticket fits in a 5-line PR with no tests. Combine with its sibling.
+- *Hidden dependency* — the work assumes something exists that isn't filed yet. File that first or note it as blocked-by.
+
 ## Working in this repo
 
 - The brief is authoritative for product scope. Don't rewrite it during implementation; if scope needs to change, amend the brief deliberately.
