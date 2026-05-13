@@ -1,1 +1,0 @@
-{"agentType":"general-purpose","description":"Drop SQLite from test suite, use Postgres for all tests"}
