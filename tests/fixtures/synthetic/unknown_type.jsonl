@@ -1,0 +1,2 @@
+{"type":"tool_search_result","uuid":"x1","sessionId":"test"}
+{"type":"user","uuid":"u1","parentUuid":null,"isSidechain":false,"timestamp":"2026-05-13T02:00:00.000Z","sessionId":"test","message":{"role":"user","content":"hi"}}
