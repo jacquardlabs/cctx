@@ -10,6 +10,7 @@ from cctx.models import (
     Attachment,
     ParserError,
     ParserWarning,
+    RawToolResultFile,
     SessionTrace,
     ToolResult,
     ToolUse,
@@ -112,6 +113,7 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
     claude_code_version = _first_present_field(jsonl_path, "version", turns)
     observed_cwd = _first_present_field(jsonl_path, "cwd", turns) or project_path
     tool_names_loaded = _collect_tool_names(turns, attachments)
+    raw_tool_result_files = _enumerate_raw_tool_result_files(jsonl_path)
 
     return SessionTrace(
         session_id=session_id,
@@ -123,7 +125,7 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
         turns=turns,
         subagents=[],
         attachments=attachments,
-        raw_tool_result_files=[],
+        raw_tool_result_files=raw_tool_result_files,
         initial_context_tokens=initial_context_tokens,
         tool_names_loaded=tool_names_loaded,
         start_time=start_time,
@@ -321,6 +323,18 @@ def _collect_tool_names(turns: list[Turn], attachments: list[Attachment]) -> lis
                 seen.add(use.tool_name)
                 names.append(use.tool_name)
     return names
+
+
+def _enumerate_raw_tool_result_files(jsonl_path: Path) -> list[RawToolResultFile]:
+    """List <sid>/tool-results/*.txt with sizes. Does NOT read contents."""
+    sid = jsonl_path.stem
+    tr_dir = jsonl_path.parent / sid / "tool-results"
+    if not tr_dir.is_dir():
+        return []
+    return [
+        RawToolResultFile(path=p, size_bytes=p.stat().st_size, tool_use_id=None)
+        for p in sorted(tr_dir.glob("*.txt"))
+    ]
 
 
 def _parse_system_line(raw: dict) -> Turn | None:

@@ -609,3 +609,30 @@ def test_version_and_cwd_from_first_line_with_them(write_jsonl):
     trace = parse_session(path)
     assert trace.claude_code_version == "2.1.138"
     assert trace.cwd == "/Users/test/Projects/demo"
+
+
+# --- Task 17: raw_tool_result_files enumeration ---
+
+
+def test_raw_tool_result_files_enumerated(session_dir):
+    sid = "abc123"
+    jsonl = session_dir / f"{sid}.jsonl"
+    jsonl.write_text("")
+    tr_dir = session_dir / sid / "tool-results"
+    tr_dir.mkdir(parents=True)
+    (tr_dir / "a.txt").write_bytes(b"x" * 100)
+    (tr_dir / "b.txt").write_bytes(b"y" * 250)
+
+    trace = parse_session(jsonl)
+    files = sorted(trace.raw_tool_result_files, key=lambda r: r.path.name)
+    assert len(files) == 2
+    assert files[0].path.name == "a.txt"
+    assert files[0].size_bytes == 100
+    assert files[0].tool_use_id is None  # v1: matching deferred
+    assert files[1].size_bytes == 250
+
+
+def test_raw_tool_result_files_empty_when_dir_missing(write_jsonl):
+    path = write_jsonl([])
+    trace = parse_session(path)
+    assert trace.raw_tool_result_files == []
