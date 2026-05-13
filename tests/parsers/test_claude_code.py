@@ -680,3 +680,65 @@ def test_subagent_meta_loaded_when_present(session_dir):
     trace = parse_session(jsonl)
     assert len(trace.subagents) == 1
     assert trace.subagents[0].subagent_meta == {"tool_use_id": "toolu_42"}
+
+
+# --- Task 19: Link subagent_session_id and orphan detection ---
+
+
+def test_agent_tool_use_linked_to_subagent_via_meta_tool_use_id(session_dir):
+    sid = "parent-sid"
+    jsonl = session_dir / f"{sid}.jsonl"
+    # Parent has an Agent tool_use with id toolu_42.
+    parent_assistant = make_assistant_line(
+        uuid="a1",
+        tool_uses=[make_tool_use_block("toolu_42", "Agent", {"subagent_type": "doc-auditor"})],
+        session_id=sid,
+    )
+    jsonl.write_text(_json.dumps(parent_assistant) + "\n")
+
+    # Child file with matching meta.
+    sub_dir = session_dir / sid / "subagents"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "agent-aaa.jsonl").write_text(
+        _json.dumps(make_user_line(uuid="cu1", content="prompt", session_id="agent-aaa")) + "\n"
+    )
+    (sub_dir / "agent-aaa.meta.json").write_text(_json.dumps({"tool_use_id": "toolu_42"}))
+
+    trace = parse_session(jsonl)
+    assert trace.turns[0].tool_uses[0].subagent_session_id == "agent-aaa"
+
+
+def test_orphan_agent_call_warns_and_keeps_subagent_session_id_none(session_dir):
+    sid = "parent-sid"
+    jsonl = session_dir / f"{sid}.jsonl"
+    parent_assistant = make_assistant_line(
+        uuid="a1",
+        tool_uses=[make_tool_use_block("toolu_orphan", "Agent", {"subagent_type": "x"})],
+        session_id=sid,
+    )
+    jsonl.write_text(_json.dumps(parent_assistant) + "\n")
+    # No subagents/ dir at all.
+
+    trace = parse_session(jsonl)
+    assert trace.turns[0].tool_uses[0].subagent_session_id is None
+    codes = [w.code for w in trace.warnings]
+    assert "orphan_agent_call" in codes
+
+
+def test_orphan_subagent_file_warns_but_is_kept(session_dir):
+    sid = "parent-sid"
+    jsonl = session_dir / f"{sid}.jsonl"
+    # Parent has NO Agent tool_uses.
+    jsonl.write_text(_json.dumps(make_user_line(uuid="u1", content="hi", session_id=sid)) + "\n")
+
+    sub_dir = session_dir / sid / "subagents"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "agent-stray.jsonl").write_text(
+        _json.dumps(make_user_line(uuid="cu1", content="stray", session_id="agent-stray")) + "\n"
+    )
+
+    trace = parse_session(jsonl)
+    assert len(trace.subagents) == 1  # kept
+    assert trace.subagents[0].parent_session_id == sid
+    codes = [w.code for w in trace.warnings]
+    assert "orphan_subagent_file" in codes

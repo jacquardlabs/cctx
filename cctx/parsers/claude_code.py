@@ -139,6 +139,8 @@ def parse_session(
     )
     warnings.extend(depth_warnings)
 
+    _link_subagents(turns, subagents, warnings, jsonl_path)
+
     parent_session_id = _parent_session_id
 
     return SessionTrace(
@@ -402,6 +404,56 @@ def _parse_subagents(
         except ParserError as e:
             errors.append({"path": child_jsonl, "reason": e.reason})
     return subagents, errors, []
+
+
+def _link_subagents(
+    turns: list[Turn],
+    subagents: list[SessionTrace],
+    warnings: list[ParserWarning],
+    path: Path,
+) -> None:
+    """Stamp ToolUse.subagent_session_id and emit orphan warnings.
+
+    Linking strategy (spec §7):
+      1. Exact: child.subagent_meta["tool_use_id"] matches a parent ToolUse.tool_use_id.
+      2. Fallback: not implemented in v1; orphans warn.
+
+    Both directions of orphan are warned:
+      - orphan_agent_call: parent has an Agent ToolUse with no matching child.
+      - orphan_subagent_file: child exists but no parent ToolUse claimed it.
+    """
+    # Index parent Agent tool_uses by tool_use_id.
+    agent_uses_by_id: dict[str, ToolUse] = {}
+    for turn in turns:
+        for use in turn.tool_uses:
+            if use.tool_name == "Agent" and use.tool_use_id:
+                agent_uses_by_id[use.tool_use_id] = use
+
+    matched_use_ids: set[str] = set()
+    for child in subagents:
+        meta_tool_use_id = (child.subagent_meta or {}).get("tool_use_id")
+        if meta_tool_use_id and meta_tool_use_id in agent_uses_by_id:
+            agent_uses_by_id[meta_tool_use_id].subagent_session_id = child.session_id
+            matched_use_ids.add(meta_tool_use_id)
+        else:
+            warnings.append(
+                ParserWarning(
+                    code="orphan_subagent_file",
+                    detail=f"subagent {child.session_id} has no matching parent Agent tool_use",
+                    path=path,
+                )
+            )
+
+    # Agent tool_uses that never got linked.
+    for use_id, _use in agent_uses_by_id.items():
+        if use_id not in matched_use_ids:
+            warnings.append(
+                ParserWarning(
+                    code="orphan_agent_call",
+                    detail=f"Agent tool_use {use_id} has no matching subagent file",
+                    path=path,
+                )
+            )
 
 
 def _enumerate_raw_tool_result_files(jsonl_path: Path) -> list[RawToolResultFile]:
