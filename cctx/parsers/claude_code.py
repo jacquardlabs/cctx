@@ -31,7 +31,13 @@ _BOOKKEEPING_TYPES = frozenset(
 )
 
 
-def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> SessionTrace:
+def parse_session(
+    session_path: Path,
+    *,
+    max_subagent_depth: int = 4,
+    _depth: int = 0,
+    _parent_session_id: str | None = None,
+) -> SessionTrace:
     session_path = Path(session_path)
     jsonl_path = _resolve_jsonl_path(session_path)
 
@@ -115,15 +121,35 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
     tool_names_loaded = _collect_tool_names(turns, attachments)
     raw_tool_result_files = _enumerate_raw_tool_result_files(jsonl_path)
 
+    # Load subagent meta if this is a child session.
+    subagent_meta: dict = {}
+    if _depth > 0:
+        meta_path = jsonl_path.with_suffix(".meta.json")
+        if meta_path.exists():
+            try:
+                subagent_meta = json.loads(meta_path.read_text())
+            except json.JSONDecodeError:
+                subagent_meta = {}
+
+    subagents, subagent_parse_errors, depth_warnings = _parse_subagents(
+        jsonl_path,
+        max_subagent_depth=max_subagent_depth,
+        depth=_depth,
+        parent_session_id=session_id,
+    )
+    warnings.extend(depth_warnings)
+
+    parent_session_id = _parent_session_id
+
     return SessionTrace(
         session_id=session_id,
-        parent_session_id=None,
+        parent_session_id=parent_session_id,
         project_path=project_path,
         cwd=observed_cwd,
         primary_model=primary_model,
         claude_code_version=claude_code_version,
         turns=turns,
-        subagents=[],
+        subagents=subagents,
         attachments=attachments,
         raw_tool_result_files=raw_tool_result_files,
         initial_context_tokens=initial_context_tokens,
@@ -131,9 +157,9 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
         start_time=start_time,
         end_time=end_time,
         source_path=jsonl_path,
-        subagent_meta={},
+        subagent_meta=subagent_meta,
         warnings=warnings,
-        subagent_parse_errors=[],
+        subagent_parse_errors=subagent_parse_errors,
     )
 
 
@@ -323,6 +349,59 @@ def _collect_tool_names(turns: list[Turn], attachments: list[Attachment]) -> lis
                 seen.add(use.tool_name)
                 names.append(use.tool_name)
     return names
+
+
+def _parse_subagents(
+    parent_jsonl: Path,
+    *,
+    max_subagent_depth: int,
+    depth: int,
+    parent_session_id: str,
+) -> tuple[list[SessionTrace], list[dict], list[ParserWarning]]:
+    """Discover and recursively parse subagent JSONLs.
+
+    Returns (subagents, parse_errors, depth_warnings). Each subagent trace has
+    parent_session_id set.
+    """
+    if depth >= max_subagent_depth:
+        sub_dir = parent_jsonl.parent / parent_jsonl.stem / "subagents"
+        has_children = sub_dir.is_dir() and any(sub_dir.glob("agent-*.jsonl"))
+        if has_children:
+            return (
+                [],
+                [],
+                [
+                    ParserWarning(
+                        code="max_subagent_depth",
+                        detail=(
+                            f"depth {depth} reached at {sub_dir};"
+                            " raise max_subagent_depth to recurse deeper"
+                        ),
+                        path=parent_jsonl,
+                    )
+                ],
+            )
+        return [], [], []
+
+    sid = parent_jsonl.stem
+    sub_dir = parent_jsonl.parent / sid / "subagents"
+    if not sub_dir.is_dir():
+        return [], [], []
+
+    subagents: list[SessionTrace] = []
+    errors: list[dict] = []
+    for child_jsonl in sorted(sub_dir.glob("agent-*.jsonl")):
+        try:
+            child = parse_session(
+                child_jsonl,
+                max_subagent_depth=max_subagent_depth,
+                _depth=depth + 1,
+                _parent_session_id=parent_session_id,
+            )
+            subagents.append(child)
+        except ParserError as e:
+            errors.append({"path": child_jsonl, "reason": e.reason})
+    return subagents, errors, []
 
 
 def _enumerate_raw_tool_result_files(jsonl_path: Path) -> list[RawToolResultFile]:

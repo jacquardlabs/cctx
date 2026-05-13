@@ -636,3 +636,47 @@ def test_raw_tool_result_files_empty_when_dir_missing(write_jsonl):
     path = write_jsonl([])
     trace = parse_session(path)
     assert trace.raw_tool_result_files == []
+
+
+# --- Task 18: Subagent discovery and recursive parsing ---
+
+
+def test_subagent_files_discovered_and_parsed(session_dir):
+    sid = "parent-sid"
+    jsonl = session_dir / f"{sid}.jsonl"
+    jsonl.write_text(_json.dumps(make_user_line(uuid="u1", content="hi", session_id=sid)) + "\n")
+
+    sub_dir = session_dir / sid / "subagents"
+    sub_dir.mkdir(parents=True)
+    child_jsonl = sub_dir / "agent-aaa.jsonl"
+    child_jsonl.write_text(
+        _json.dumps(make_user_line(uuid="cu1", content="subagent prompt", session_id="agent-aaa"))
+        + "\n"
+    )
+
+    trace = parse_session(jsonl)
+    assert len(trace.subagents) == 1
+    child = trace.subagents[0]
+    assert child.session_id == "agent-aaa"
+    assert child.parent_session_id == sid
+    assert len(child.turns) == 1
+
+
+def test_subagents_empty_when_dir_missing(write_jsonl):
+    path = write_jsonl([make_user_line(uuid="u1", content="hi")])
+    trace = parse_session(path)
+    assert trace.subagents == []
+
+
+def test_subagent_meta_loaded_when_present(session_dir):
+    sid = "parent-sid"
+    jsonl = session_dir / f"{sid}.jsonl"
+    jsonl.write_text("")
+    sub_dir = session_dir / sid / "subagents"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "agent-aaa.jsonl").write_text("")
+    (sub_dir / "agent-aaa.meta.json").write_text(_json.dumps({"tool_use_id": "toolu_42"}))
+
+    trace = parse_session(jsonl)
+    assert len(trace.subagents) == 1
+    assert trace.subagents[0].subagent_meta == {"tool_use_id": "toolu_42"}
