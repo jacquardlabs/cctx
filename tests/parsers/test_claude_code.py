@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json as _json
+import time
 
 import pytest
 
@@ -770,3 +771,29 @@ def test_max_subagent_depth_circuit_breaker(session_dir):
     # Warning emitted on child1.
     depth_warnings = [w for w in child1.warnings if w.code == "max_subagent_depth"]
     assert len(depth_warnings) == 1
+
+
+def test_performance_budget_6mb_under_500ms(write_jsonl):
+    """Parsing a 6 MB session file completes in under 500ms."""
+    big_text = "x" * 12_000
+    target_bytes = 6 * 1024 * 1024
+    lines: list[dict] = []
+    parent_uuid = None
+    accumulated = 0
+    i = 0
+    while accumulated < target_bytes:
+        a = make_assistant_line(uuid=f"a{i}", parent_uuid=parent_uuid, text=big_text)
+        lines.append(a)
+        parent_uuid = f"a{i}"
+        accumulated += len(_json.dumps(a))
+        i += 1
+    path = write_jsonl(lines)
+    actual_size = path.stat().st_size
+    assert actual_size >= 6 * 1024 * 1024
+    start = time.perf_counter()
+    trace = parse_session(path)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    assert len(trace.turns) == len(lines)
+    assert elapsed_ms < 500, (
+        f"parsed {actual_size / 1_000_000:.2f}MB in {elapsed_ms:.1f}ms (budget: 500ms)"
+    )
