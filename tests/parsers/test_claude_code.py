@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json as _json
+
 import pytest
 
 from cctx.models import ParserError
@@ -481,3 +483,34 @@ def test_unknown_line_with_no_type_field_warns(write_jsonl):
     trace = parse_session(path)
     assert len(trace.warnings) == 1
     assert trace.warnings[0].code == "unknown_type"
+
+
+# --- Task 14: Malformed JSON and truncated final line ---
+
+
+def test_malformed_json_line_warns_and_continues(tmp_path):
+    """A bad JSON line in the middle is skipped with a warning; surrounding lines parse fine."""
+    path = tmp_path / "broken.jsonl"
+    good_line = _json.dumps(make_user_line(uuid="u1", content="before"))
+    bad_line = "{not valid json"
+    after_line = _json.dumps(make_user_line(uuid="u2", parent_uuid="u1", content="after"))
+    path.write_text(good_line + "\n" + bad_line + "\n" + after_line + "\n")
+    trace = parse_session(path)
+    assert [t.text for t in trace.turns] == ["before", "after"]
+    codes = [w.code for w in trace.warnings]
+    assert codes == ["malformed_json"]
+    assert trace.warnings[0].line_number == 2
+
+
+def test_truncated_final_line_dropped_silently(tmp_path):
+    """A final line lacking a newline AND failing JSON parse is silently dropped."""
+    path = tmp_path / "truncated.jsonl"
+    good = _json.dumps(make_user_line(uuid="u1", content="hi"))
+    truncated = '{"type":"assistant","uu'  # cut off mid-line, no trailing newline
+    path.write_text(good + "\n" + truncated)
+    trace = parse_session(path)
+    assert len(trace.turns) == 1
+    assert trace.turns[0].text == "hi"
+    # No warning for the truncated last line specifically.
+    malformed = [w for w in trace.warnings if w.code == "malformed_json"]
+    assert malformed == []

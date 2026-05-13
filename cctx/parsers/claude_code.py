@@ -49,8 +49,17 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
     attachments: list[Attachment] = []
     warnings: list[ParserWarning] = []
 
-    for line_number, raw in _iter_lines(jsonl_path):
+    for line_number, raw, truncated in _iter_lines(jsonl_path):
         if raw is None:
+            if not truncated:
+                warnings.append(
+                    ParserWarning(
+                        code="malformed_json",
+                        detail="failed to parse JSON",
+                        line_number=line_number,
+                        path=jsonl_path,
+                    )
+                )
             continue
         line_type = raw.get("type")
         if line_type == "user":
@@ -114,20 +123,28 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
 
 
 def _iter_lines(path: Path):
-    """Yield (line_number, parsed_dict) for each line in the file.
+    """Yield (line_number, parsed_dict_or_None, is_last_line_truncated).
 
-    Yields (line_number, None) for lines that cannot be parsed; the caller
-    decides how to record those.
+    For a final line that lacks a newline AND fails JSON parse, the third
+    tuple element is True — the caller can drop it silently. For
+    mid-file JSON failures, the third element is False — the caller
+    records a malformed_json warning.
     """
-    with path.open("r", encoding="utf-8", errors="replace") as f:
-        for line_number, line in enumerate(f, start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                yield line_number, json.loads(stripped)
-            except json.JSONDecodeError:
-                yield line_number, None
+    raw_bytes = path.read_bytes()
+    lines = raw_bytes.decode("utf-8", errors="replace").splitlines(keepends=True)
+
+    for i, line in enumerate(lines):
+        line_number = i + 1
+        is_last = i == len(lines) - 1
+        ends_with_newline = line.endswith("\n")
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            yield line_number, json.loads(stripped), False
+        except json.JSONDecodeError:
+            truncated_final = is_last and not ends_with_newline
+            yield line_number, None, truncated_final
 
 
 def _parse_user_line(raw: dict) -> Turn | None:
