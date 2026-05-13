@@ -742,3 +742,31 @@ def test_orphan_subagent_file_warns_but_is_kept(session_dir):
     assert trace.subagents[0].parent_session_id == sid
     codes = [w.code for w in trace.warnings]
     assert "orphan_subagent_file" in codes
+
+
+# --- Task 20: max_subagent_depth circuit breaker ---
+
+
+def test_max_subagent_depth_circuit_breaker(session_dir):
+    """Nested subagents beyond max_subagent_depth are not parsed and a warning is emitted."""
+    sid = "root"
+    jsonl = session_dir / f"{sid}.jsonl"
+    jsonl.write_text("")
+
+    # Build a chain: root → child1 → child2
+    sub1 = session_dir / sid / "subagents"
+    sub1.mkdir(parents=True)
+    (sub1 / "agent-child1.jsonl").write_text("")
+
+    sub2 = session_dir / sid / "subagents" / "agent-child1" / "subagents"
+    sub2.mkdir(parents=True)
+    (sub2 / "agent-child2.jsonl").write_text("")
+
+    # max_subagent_depth=1 → root parses child1 but stops before child2.
+    trace = parse_session(jsonl, max_subagent_depth=1)
+    assert len(trace.subagents) == 1
+    child1 = trace.subagents[0]
+    assert child1.subagents == []  # not recursed into
+    # Warning emitted on child1.
+    depth_warnings = [w for w in child1.warnings if w.code == "max_subagent_depth"]
+    assert len(depth_warnings) == 1
