@@ -1,0 +1,34 @@
+diff --git a/alembic/env.py b/alembic/env.py
+index 0260188..c626256 100644
+--- a/alembic/env.py
++++ b/alembic/env.py
+@@ -6,7 +6,6 @@ from sqlalchemy import engine_from_config, pool
+ from app.config import DATABASE_URL
+ from app.db import Base
+ 
+-# Import all models so Alembic can see them
+ from app.models import *  # noqa: F403
+ 
+ config = context.config
+@@ -17,6 +16,8 @@ if config.config_file_name is not None:
+ 
+ target_metadata = Base.metadata
+ 
++_is_sqlite = DATABASE_URL.startswith("sqlite")
++
+ 
+ def run_migrations_offline():
+     url = config.get_main_option("sqlalchemy.url")
+@@ -25,6 +26,7 @@ def run_migrations_offline():
+         target_metadata=target_metadata,
+         literal_binds=True,
+         dialect_opts={"paramstyle": "named"},
++        render_as_batch=_is_sqlite,
+     )
+     with context.begin_transaction():
+         context.run_migrations()
+@@ -40,7 +42,7 @@ def run_migrations_online():
+         context.configure(
+             connection=connection,
+             target_metadata=target_metadat
+...[truncated]
