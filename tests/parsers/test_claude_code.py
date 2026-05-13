@@ -303,3 +303,30 @@ def test_tool_result_structured_field_populated_from_tool_use_result(write_jsonl
     tr = trace.turns[1].tool_results[0]
     assert tr.structured is not None
     assert tr.structured["file"]["filePath"] == "/a"
+
+
+# --- Task 9: Mixed [text, image] and text-block-list user content ---
+
+
+def test_user_line_with_text_and_image_blocks(write_jsonl):
+    """Mixed [text, image] arrays (seen in real data) dispatch to role='user'."""
+    content = [
+        {"type": "text", "text": "look at this:"},
+        {"type": "image", "source": {"media_type": "image/png", "data": "aGVsbG8="}},
+    ]
+    path = write_jsonl([make_user_line(uuid="u1", content=content)])
+    trace = parse_session(path)
+    assert len(trace.turns) == 1
+    turn = trace.turns[0]
+    assert turn.role == "user"
+    assert "look at this:" in turn.text
+    assert "<image:image/png," in turn.text
+
+
+def test_user_line_with_only_text_block_list(write_jsonl):
+    """Some user lines have content=[{type:text,...}] instead of a bare string."""
+    content = [{"type": "text", "text": "hello from a list"}]
+    path = write_jsonl([make_user_line(uuid="u1", content=content)])
+    trace = parse_session(path)
+    assert trace.turns[0].role == "user"
+    assert trace.turns[0].text == "hello from a list"
