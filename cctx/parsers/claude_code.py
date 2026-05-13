@@ -9,6 +9,7 @@ from pathlib import Path
 from cctx.models import (
     ParserError,
     SessionTrace,
+    ToolUse,
     Turn,
     Usage,
 )
@@ -120,6 +121,7 @@ def _parse_assistant_line(raw: dict) -> Turn | None:
     message = raw.get("message") or {}
     content_blocks = message.get("content") or []
 
+    tool_uses: list[ToolUse] = []
     text_parts: list[str] = []
     thinking_parts: list[str] = []
 
@@ -131,7 +133,17 @@ def _parse_assistant_line(raw: dict) -> Turn | None:
             text_parts.append(block.get("text", ""))
         elif block_type == "thinking":
             thinking_parts.append(block.get("thinking", ""))
-        # tool_use and server_tool_use handled in later tasks.
+        elif block_type == "tool_use":
+            tool_uses.append(
+                ToolUse(
+                    tool_name=block.get("name", ""),
+                    tool_use_id=block.get("id", ""),
+                    tool_input=block.get("input") if isinstance(block.get("input"), dict) else {},
+                )
+            )
+        elif block_type in ("server_tool_use", "advisor_tool_result"):
+            # Inline a marker so the text remains useful; structured handling deferred.
+            text_parts.append(f"<{block_type}:{block.get('id', '')}>")
 
     return Turn(
         turn_number=0,
@@ -140,7 +152,7 @@ def _parse_assistant_line(raw: dict) -> Turn | None:
         role="assistant",
         text="\n".join(text_parts),
         thinking="\n".join(thinking_parts),
-        tool_uses=[],
+        tool_uses=tool_uses,
         tool_results=[],
         usage=_parse_usage(message.get("usage")),
         model=message.get("model"),

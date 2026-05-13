@@ -161,3 +161,34 @@ def test_assistant_concatenates_multiple_text_blocks(write_jsonl):
     path = write_jsonl([line])
     trace = parse_session(path)
     assert trace.turns[0].text == "part one\npart two"
+
+
+# --- Task 7: Tool use blocks on assistant lines ---
+
+
+def test_single_tool_use_block(write_jsonl):
+    use = make_tool_use_block("toolu_1", "Read", {"file_path": "/x"})
+    path = write_jsonl([make_assistant_line(uuid="a1", tool_uses=[use])])
+    trace = parse_session(path)
+    turn = trace.turns[0]
+    assert len(turn.tool_uses) == 1
+    tu = turn.tool_uses[0]
+    assert tu.tool_name == "Read"
+    assert tu.tool_use_id == "toolu_1"
+    assert tu.tool_input == {"file_path": "/x"}
+    assert tu.subagent_session_id is None
+
+
+def test_multiple_parallel_tool_uses_in_one_message(write_jsonl):
+    """An assistant message firing 3 parallel tool calls produces ONE Turn with 3 tool_uses."""
+    uses = [
+        make_tool_use_block("toolu_1", "Read", {"file_path": "/a"}),
+        make_tool_use_block("toolu_2", "Read", {"file_path": "/b"}),
+        make_tool_use_block("toolu_3", "Grep", {"pattern": "foo"}),
+    ]
+    path = write_jsonl([make_assistant_line(uuid="a1", tool_uses=uses)])
+    trace = parse_session(path)
+    turn = trace.turns[0]
+    assert len(turn.tool_uses) == 3
+    assert [tu.tool_name for tu in turn.tool_uses] == ["Read", "Read", "Grep"]
+    assert [tu.tool_use_id for tu in turn.tool_uses] == ["toolu_1", "toolu_2", "toolu_3"]
