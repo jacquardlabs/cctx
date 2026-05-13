@@ -9,6 +9,7 @@ from pathlib import Path
 from cctx.models import (
     Attachment,
     ParserError,
+    ParserWarning,
     SessionTrace,
     ToolResult,
     ToolUse,
@@ -46,8 +47,9 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
 
     turns: list[Turn] = []
     attachments: list[Attachment] = []
+    warnings: list[ParserWarning] = []
 
-    for _line_number, raw in _iter_lines(jsonl_path):
+    for line_number, raw in _iter_lines(jsonl_path):
         if raw is None:
             continue
         line_type = raw.get("type")
@@ -70,6 +72,15 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
         elif line_type in _BOOKKEEPING_TYPES:
             # Known bookkeeping — drop silently.
             continue
+        else:
+            warnings.append(
+                ParserWarning(
+                    code="unknown_type",
+                    detail=str(line_type) if line_type else "<missing>",
+                    line_number=line_number,
+                    path=jsonl_path,
+                )
+            )
 
     _pair_tool_results(turns)
 
@@ -97,7 +108,7 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
         end_time=end_time,
         source_path=jsonl_path,
         subagent_meta={},
-        warnings=[],
+        warnings=warnings,
         subagent_parse_errors=[],
     )
 

@@ -454,3 +454,30 @@ def test_bookkeeping_types_dropped_silently(write_jsonl):
     assert len(trace.turns) == 1
     assert trace.turns[0].text == "real message"
     assert trace.warnings == []
+
+
+# --- Task 13: Warn-and-skip for unknown line types ---
+
+
+def test_unknown_line_type_produces_warning(write_jsonl):
+    lines = [
+        {"type": "tool_search_result", "uuid": "x1", "sessionId": "test"},
+        {"type": "memory_write", "uuid": "x2", "sessionId": "test"},
+        make_user_line(uuid="u1", content="real"),
+    ]
+    path = write_jsonl(lines)
+    trace = parse_session(path)
+    assert len(trace.turns) == 1
+    codes = [w.code for w in trace.warnings]
+    details = [w.detail for w in trace.warnings]
+    assert codes == ["unknown_type", "unknown_type"]
+    assert "tool_search_result" in details
+    assert "memory_write" in details
+
+
+def test_unknown_line_with_no_type_field_warns(write_jsonl):
+    """A JSONL line missing the 'type' field is also unknown."""
+    path = write_jsonl([{"uuid": "no-type"}])
+    trace = parse_session(path)
+    assert len(trace.warnings) == 1
+    assert trace.warnings[0].code == "unknown_type"
