@@ -45,6 +45,10 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
             turn = _parse_assistant_line(raw)
             if turn is not None:
                 turns.append(turn)
+        elif line_type == "system":
+            turn = _parse_system_line(raw)
+            if turn is not None:
+                turns.append(turn)
 
     _pair_tool_results(turns)
 
@@ -207,6 +211,29 @@ def _pair_tool_results(turns: list[Turn]) -> None:
         for result in turn.tool_results:
             if result.tool_use_id and not result.tool_name:
                 result.tool_name = by_id.get(result.tool_use_id, "")
+
+
+def _parse_system_line(raw: dict) -> Turn | None:
+    """Build a Turn from a `type: "system"` line (compaction notices, model swaps)."""
+    text = raw.get("content") or raw.get("message", {}).get("content") or ""
+    if isinstance(text, list):
+        text = _flatten_user_blocks(text)
+    return Turn(
+        turn_number=0,
+        uuid=raw.get("uuid", ""),
+        parent_uuid=raw.get("parentUuid"),
+        role="system",
+        text=str(text),
+        thinking="",
+        tool_uses=[],
+        tool_results=[],
+        usage=None,
+        model=None,
+        stop_reason=None,
+        timestamp=_parse_timestamp(raw.get("timestamp")),
+        duration_ms=None,
+        is_sidechain=bool(raw.get("isSidechain", False)),
+    )
 
 
 def _parse_assistant_line(raw: dict) -> Turn | None:

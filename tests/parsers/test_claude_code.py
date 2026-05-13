@@ -330,3 +330,24 @@ def test_user_line_with_only_text_block_list(write_jsonl):
     trace = parse_session(path)
     assert trace.turns[0].role == "user"
     assert trace.turns[0].text == "hello from a list"
+
+
+# --- Task 10: System lines ---
+
+
+def test_system_line_becomes_system_turn(write_jsonl):
+    line = {
+        "type": "system",
+        "uuid": "s1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "timestamp": "2026-05-13T02:00:00.000Z",
+        "sessionId": "test-session",
+        "content": "Compaction triggered at 95% context.",
+    }
+    path = write_jsonl([line])
+    trace = parse_session(path)
+    assert len(trace.turns) == 1
+    turn = trace.turns[0]
+    assert turn.role == "system"
+    assert "Compaction" in turn.text
