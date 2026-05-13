@@ -47,5 +47,8 @@ select = [
     "SIM", # simplify
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = ["E501"]
+
 [tool.ruff.format]
 quote-style = "double"
