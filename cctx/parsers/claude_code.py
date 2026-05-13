@@ -56,7 +56,16 @@ def parse_session(
     attachments: list[Attachment] = []
     warnings: list[ParserWarning] = []
 
-    for line_number, raw, truncated in _iter_lines(jsonl_path):
+    for line_number, raw, truncated, had_encoding_error in _iter_lines(jsonl_path):
+        if had_encoding_error:
+            warnings.append(
+                ParserWarning(
+                    code="encoding_error",
+                    detail=f"non-UTF-8 bytes replaced on line {line_number}",
+                    line_number=line_number,
+                    path=jsonl_path,
+                )
+            )
         if raw is None:
             if not truncated:
                 warnings.append(
@@ -99,6 +108,18 @@ def parse_session(
             )
 
     _pair_tool_results(turns)
+
+    # Validate parent_uuid references — warn on orphaned links (spec §9).
+    seen_uuids = {t.uuid for t in turns if t.uuid}
+    for turn in turns:
+        if turn.parent_uuid is not None and turn.parent_uuid not in seen_uuids:
+            warnings.append(
+                ParserWarning(
+                    code="orphan_parent",
+                    detail=f"parent_uuid {turn.parent_uuid} not seen in this session",
+                    path=jsonl_path,
+                )
+            )
 
     # Number turns 1-based and compute start/end.
     for i, turn in enumerate(turns, start=1):
@@ -166,12 +187,15 @@ def parse_session(
 
 
 def _iter_lines(path: Path):
-    """Yield (line_number, parsed_dict_or_None, is_last_line_truncated).
+    """Yield (line_number, parsed_dict_or_None, is_last_line_truncated, had_encoding_error).
 
     For a final line that lacks a newline AND fails JSON parse, the third
     tuple element is True — the caller can drop it silently. For
     mid-file JSON failures, the third element is False — the caller
     records a malformed_json warning.
+
+    The fourth element is True when the Unicode replacement character (U+FFFD)
+    was introduced by the errors='replace' decoding, indicating non-UTF-8 bytes.
     """
     raw_bytes = path.read_bytes()
     lines = raw_bytes.decode("utf-8", errors="replace").splitlines(keepends=True)
@@ -180,14 +204,15 @@ def _iter_lines(path: Path):
         line_number = i + 1
         is_last = i == len(lines) - 1
         ends_with_newline = line.endswith("\n")
+        had_encoding_error = "\ufffd" in line
         stripped = line.strip()
         if not stripped:
             continue
         try:
-            yield line_number, json.loads(stripped), False
+            yield line_number, json.loads(stripped), False, had_encoding_error
         except json.JSONDecodeError:
             truncated_final = is_last and not ends_with_newline
-            yield line_number, None, truncated_final
+            yield line_number, None, truncated_final, had_encoding_error
 
 
 def _parse_user_line(raw: dict) -> Turn | None:

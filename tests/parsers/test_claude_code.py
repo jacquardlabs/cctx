@@ -797,3 +797,61 @@ def test_performance_budget_6mb_under_500ms(write_jsonl):
     assert elapsed_ms < 500, (
         f"parsed {actual_size / 1_000_000:.2f}MB in {elapsed_ms:.1f}ms (budget: 500ms)"
     )
+
+
+# --- Gap 1: encoding_error warning ---
+
+
+def test_non_utf8_bytes_in_line_warns(tmp_path):
+    """A line containing non-UTF-8 bytes triggers an encoding_error warning."""
+    import json as json_mod
+
+    from tests.conftest import make_user_line
+
+    path = tmp_path / "encoding.jsonl"
+    good = json_mod.dumps(make_user_line(uuid="u1", content="before"))
+    # Inject non-UTF-8 bytes between two valid lines.
+    after = json_mod.dumps(make_user_line(uuid="u2", parent_uuid="u1", content="after"))
+    # Build the bad line: valid JSON prefix + 0xff 0xfe bytes + close
+    bad_prefix = b'{"type":"user","uuid":"bad","timestamp":"2026-05-13T02:00:00.000Z",'
+    bad_prefix += b'"sessionId":"x","isSidechain":false,"message":{"role":"user","content":"'
+    bad_suffix = b'"}}'
+    # Write as bytes so we can inject 0xff (invalid UTF-8).
+    payload = (
+        good.encode("utf-8")
+        + b"\n"
+        + bad_prefix
+        + b"\xff\xfe"
+        + bad_suffix
+        + b"\n"
+        + after.encode("utf-8")
+        + b"\n"
+    )
+    path.write_bytes(payload)
+
+    trace = parse_session(path)
+    # The replaced characters in the middle line still produce a parseable user message;
+    # the warning fires because the bytes weren't valid UTF-8.
+    codes = [w.code for w in trace.warnings]
+    assert "encoding_error" in codes
+
+
+# --- Gap 2: orphan_parent warning ---
+
+
+def test_orphan_parent_uuid_warns(write_jsonl):
+    """A Turn whose parent_uuid references a uuid not in the file gets a warning."""
+    from tests.conftest import make_user_line
+
+    path = write_jsonl(
+        [
+            make_user_line(uuid="u1", parent_uuid=None, content="first"),
+            # u2's parent_uuid points to "missing" which never appears.
+            make_user_line(uuid="u2", parent_uuid="missing-uuid", content="orphan"),
+        ]
+    )
+    trace = parse_session(path)
+    codes = [w.code for w in trace.warnings]
+    assert "orphan_parent" in codes
+    # Turn is still kept.
+    assert len(trace.turns) == 2
