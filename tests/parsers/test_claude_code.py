@@ -547,3 +547,65 @@ def test_initial_context_tokens_zero_when_no_assistant_turns(write_jsonl):
     path = write_jsonl([make_user_line(uuid="u1", content="hi then abandoned")])
     trace = parse_session(path)
     assert trace.initial_context_tokens == 0
+
+
+# --- Task 16: primary_model, tool_names_loaded, version, cwd ---
+
+
+def test_tool_names_loaded_from_mcp_attachment_and_observed_uses(write_jsonl):
+    mcp_attachment = {
+        "type": "attachment",
+        "uuid": "att1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "timestamp": "2026-05-13T02:00:00.000Z",
+        "sessionId": "test",
+        "attachment": {
+            "pendingMcpServers": True,
+            "addedNames": ["github-mcp", "sentry-mcp"],
+        },
+    }
+    path = write_jsonl(
+        [
+            mcp_attachment,
+            make_assistant_line(
+                uuid="a1",
+                tool_uses=[
+                    make_tool_use_block("toolu_1", "Read"),
+                    make_tool_use_block("toolu_2", "Bash"),
+                ],
+            ),
+        ]
+    )
+    trace = parse_session(path)
+    assert sorted(trace.tool_names_loaded) == sorted(["github-mcp", "sentry-mcp", "Read", "Bash"])
+
+
+def test_primary_model_is_most_frequent(write_jsonl):
+    path = write_jsonl(
+        [
+            make_assistant_line(uuid="a1", text="x", model="claude-sonnet-4-6"),
+            make_assistant_line(uuid="a2", parent_uuid="a1", text="y", model="claude-sonnet-4-6"),
+            make_assistant_line(uuid="a3", parent_uuid="a2", text="z", model="claude-opus-4-6"),
+        ]
+    )
+    trace = parse_session(path)
+    assert trace.primary_model == "claude-sonnet-4-6"
+
+
+def test_primary_model_none_with_no_assistant_turns(write_jsonl):
+    path = write_jsonl([make_user_line(uuid="u1", content="hi")])
+    trace = parse_session(path)
+    assert trace.primary_model is None
+
+
+def test_version_and_cwd_from_first_line_with_them(write_jsonl):
+    path = write_jsonl(
+        [
+            make_user_line(uuid="u1", content="hi", cwd="/Users/test/Projects/demo"),
+            make_assistant_line(uuid="a1", parent_uuid="u1", text="hello", version="2.1.138"),
+        ]
+    )
+    trace = parse_session(path)
+    assert trace.claude_code_version == "2.1.138"
+    assert trace.cwd == "/Users/test/Projects/demo"

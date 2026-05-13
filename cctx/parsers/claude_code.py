@@ -107,19 +107,25 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
             initial_context_tokens = turn.usage.cache_creation_5m + turn.usage.cache_creation_1h
             break
 
+    # Metadata pass.
+    primary_model = _most_common([t.model for t in turns if t.role == "assistant" and t.model])
+    claude_code_version = _first_present_field(jsonl_path, "version", turns)
+    observed_cwd = _first_present_field(jsonl_path, "cwd", turns) or project_path
+    tool_names_loaded = _collect_tool_names(turns, attachments)
+
     return SessionTrace(
         session_id=session_id,
         parent_session_id=None,
         project_path=project_path,
-        cwd=project_path,
-        primary_model=None,
-        claude_code_version=None,
+        cwd=observed_cwd,
+        primary_model=primary_model,
+        claude_code_version=claude_code_version,
         turns=turns,
         subagents=[],
         attachments=attachments,
         raw_tool_result_files=[],
         initial_context_tokens=initial_context_tokens,
-        tool_names_loaded=[],
+        tool_names_loaded=tool_names_loaded,
         start_time=start_time,
         end_time=end_time,
         source_path=jsonl_path,
@@ -267,6 +273,54 @@ def _pair_tool_results(turns: list[Turn]) -> None:
         for result in turn.tool_results:
             if result.tool_use_id and not result.tool_name:
                 result.tool_name = by_id.get(result.tool_use_id, "")
+
+
+def _most_common(values: list[str]) -> str | None:
+    """Return the most frequent value, or None if the list is empty."""
+    if not values:
+        return None
+    counts: dict[str, int] = {}
+    for v in values:
+        counts[v] = counts.get(v, 0) + 1
+    return max(counts.items(), key=lambda item: item[1])[0]
+
+
+def _first_present_field(jsonl_path: Path, field_name: str, turns: list[Turn]) -> str | None:
+    """Re-scan the file to find the first non-null value of a top-level field.
+
+    Cheap: stops at first hit. Used for fields we don't store on Turn (cwd, version).
+    """
+    with jsonl_path.open("r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            value = obj.get(field_name)
+            if value:
+                return str(value)
+    return None
+
+
+def _collect_tool_names(turns: list[Turn], attachments: list[Attachment]) -> list[str]:
+    """Union of MCP names from pendingMcpServers attachments + names observed in tool_uses."""
+    names: list[str] = []
+    seen: set[str] = set()
+    # MCP names from attachments.
+    for att in attachments:
+        if att.kind != "mcp_servers":
+            continue
+        for n in att.raw.get("addedNames", []) or []:
+            if isinstance(n, str) and n not in seen:
+                seen.add(n)
+                names.append(n)
+    # Observed tool uses.
+    for turn in turns:
+        for use in turn.tool_uses:
+            if use.tool_name and use.tool_name not in seen:
+                seen.add(use.tool_name)
+                names.append(use.tool_name)
+    return names
 
 
 def _parse_system_line(raw: dict) -> Turn | None:
