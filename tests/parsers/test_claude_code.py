@@ -430,3 +430,27 @@ def test_attachment_unknown_shape_classified_as_other_no_warning(write_jsonl):
     assert trace.attachments[0].kind == "other"
     assert trace.attachments[0].raw == payload
     assert trace.warnings == []  # unknown attachment shapes do NOT warn
+
+
+# --- Task 12: Drop bookkeeping types silently ---
+
+BOOKKEEPING_TYPES = [
+    "last-prompt",
+    "permission-mode",
+    "ai-title",
+    "custom-title",
+    "queue-operation",
+    "file-history-snapshot",
+    "pr-link",
+]
+
+
+def test_bookkeeping_types_dropped_silently(write_jsonl):
+    """Known bookkeeping types are dropped without warning."""
+    lines = [{"type": t, "sessionId": "test"} for t in BOOKKEEPING_TYPES]
+    lines.append(make_user_line(uuid="u1", content="real message"))
+    path = write_jsonl(lines)
+    trace = parse_session(path)
+    assert len(trace.turns) == 1
+    assert trace.turns[0].text == "real message"
+    assert trace.warnings == []

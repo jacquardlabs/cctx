@@ -16,6 +16,18 @@ from cctx.models import (
     Usage,
 )
 
+_BOOKKEEPING_TYPES = frozenset(
+    {
+        "last-prompt",
+        "permission-mode",
+        "ai-title",
+        "custom-title",
+        "queue-operation",
+        "file-history-snapshot",
+        "pr-link",
+    }
+)
+
 
 def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> SessionTrace:
     session_path = Path(session_path)
@@ -55,6 +67,9 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
             att = _parse_attachment_line(raw)
             if att is not None:
                 attachments.append(att)
+        elif line_type in _BOOKKEEPING_TYPES:
+            # Known bookkeeping — drop silently.
+            continue
 
     _pair_tool_results(turns)
 
