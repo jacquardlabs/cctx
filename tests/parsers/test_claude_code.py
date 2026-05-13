@@ -6,7 +6,7 @@ import pytest
 
 from cctx.models import ParserError
 from cctx.parsers.claude_code import parse_session
-from tests.conftest import make_user_line
+from tests.conftest import make_assistant_line, make_tool_use_block, make_user_line
 
 
 def test_missing_file_raises_parser_error(tmp_path):
@@ -100,3 +100,64 @@ def test_multiple_user_lines_numbered_in_order(write_jsonl):
     assert [t.turn_number for t in trace.turns] == [1, 2, 3]
     assert [t.text for t in trace.turns] == ["first", "second", "third"]
     assert trace.start_time != trace.end_time
+
+
+# --- Task 6: Assistant lines with text, thinking, and usage ---
+
+
+def test_assistant_line_text_and_thinking_separate(write_jsonl):
+    path = write_jsonl([make_assistant_line(uuid="a1", text="hello", thinking="reasoning…")])
+    trace = parse_session(path)
+    assert len(trace.turns) == 1
+    turn = trace.turns[0]
+    assert turn.role == "assistant"
+    assert turn.text == "hello"
+    assert turn.thinking == "reasoning…"
+    assert turn.model == "claude-sonnet-4-6"
+    assert turn.stop_reason == "end_turn"
+
+
+def test_assistant_usage_populated(write_jsonl):
+    path = write_jsonl(
+        [
+            make_assistant_line(
+                uuid="a1",
+                text="hi",
+                input_tokens=5,
+                output_tokens=15,
+                cache_creation_5m=100,
+                cache_creation_1h=200,
+                cache_read=50,
+            )
+        ]
+    )
+    trace = parse_session(path)
+    u = trace.turns[0].usage
+    assert u is not None
+    assert u.input_tokens == 5
+    assert u.output_tokens == 15
+    assert u.cache_creation_5m == 100
+    assert u.cache_creation_1h == 200
+    assert u.cache_read == 50
+    assert u.service_tier == "standard"
+
+
+def test_assistant_with_no_text_or_thinking(write_jsonl):
+    """Assistant message with only tool_use blocks — text/thinking are empty strings, not None."""
+    path = write_jsonl(
+        [make_assistant_line(uuid="a1", tool_uses=[make_tool_use_block("toolu_1", "Read")])]
+    )
+    trace = parse_session(path)
+    turn = trace.turns[0]
+    assert turn.text == ""
+    assert turn.thinking == ""
+
+
+def test_assistant_concatenates_multiple_text_blocks(write_jsonl):
+    """Multiple text blocks in the same message are joined."""
+    line = make_assistant_line(uuid="a1", text="part one")
+    # Add a second text block manually.
+    line["message"]["content"].append({"type": "text", "text": "part two"})
+    path = write_jsonl([line])
+    trace = parse_session(path)
+    assert trace.turns[0].text == "part one\npart two"

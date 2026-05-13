@@ -10,6 +10,7 @@ from cctx.models import (
     ParserError,
     SessionTrace,
     Turn,
+    Usage,
 )
 
 
@@ -36,6 +37,10 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
         line_type = raw.get("type")
         if line_type == "user":
             turn = _parse_user_line(raw)
+            if turn is not None:
+                turns.append(turn)
+        elif line_type == "assistant":
+            turn = _parse_assistant_line(raw)
             if turn is not None:
                 turns.append(turn)
 
@@ -107,6 +112,83 @@ def _parse_user_line(raw: dict) -> Turn | None:
         timestamp=_parse_timestamp(raw.get("timestamp")),
         duration_ms=None,
         is_sidechain=bool(raw.get("isSidechain", False)),
+    )
+
+
+def _parse_assistant_line(raw: dict) -> Turn | None:
+    """Build a Turn from a `type: "assistant"` JSONL line."""
+    message = raw.get("message") or {}
+    content_blocks = message.get("content") or []
+
+    text_parts: list[str] = []
+    thinking_parts: list[str] = []
+
+    for block in content_blocks:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if block_type == "text":
+            text_parts.append(block.get("text", ""))
+        elif block_type == "thinking":
+            thinking_parts.append(block.get("thinking", ""))
+        # tool_use and server_tool_use handled in later tasks.
+
+    return Turn(
+        turn_number=0,
+        uuid=raw.get("uuid", ""),
+        parent_uuid=raw.get("parentUuid"),
+        role="assistant",
+        text="\n".join(text_parts),
+        thinking="\n".join(thinking_parts),
+        tool_uses=[],
+        tool_results=[],
+        usage=_parse_usage(message.get("usage")),
+        model=message.get("model"),
+        stop_reason=message.get("stop_reason"),
+        timestamp=_parse_timestamp(raw.get("timestamp")),
+        duration_ms=None,
+        is_sidechain=bool(raw.get("isSidechain", False)),
+        error=("api_error" if raw.get("isApiErrorMessage") else None),
+    )
+
+
+def _parse_usage(raw: dict | None) -> Usage | None:
+    """Build a Usage from the message.usage dict.
+
+    Defensive sum of iterations[] if present and divergent — spec §5.2.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    iterations = raw.get("iterations")
+    if isinstance(iterations, list) and iterations:
+        # Sum across iterations defensively.
+        input_t = sum(it.get("input_tokens", 0) for it in iterations)
+        output_t = sum(it.get("output_tokens", 0) for it in iterations)
+        cache_read = sum(it.get("cache_read_input_tokens", 0) for it in iterations)
+        cache_5m = sum(
+            (it.get("cache_creation") or {}).get("ephemeral_5m_input_tokens", 0)
+            for it in iterations
+        )
+        cache_1h = sum(
+            (it.get("cache_creation") or {}).get("ephemeral_1h_input_tokens", 0)
+            for it in iterations
+        )
+    else:
+        input_t = raw.get("input_tokens", 0)
+        output_t = raw.get("output_tokens", 0)
+        cache_read = raw.get("cache_read_input_tokens", 0)
+        cache_obj = raw.get("cache_creation") or {}
+        cache_5m = cache_obj.get("ephemeral_5m_input_tokens", 0)
+        cache_1h = cache_obj.get("ephemeral_1h_input_tokens", 0)
+
+    return Usage(
+        input_tokens=input_t,
+        output_tokens=output_t,
+        cache_creation_5m=cache_5m,
+        cache_creation_1h=cache_1h,
+        cache_read=cache_read,
+        service_tier=raw.get("service_tier"),
     )
 
 
