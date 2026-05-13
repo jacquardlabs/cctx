@@ -573,37 +573,26 @@ def test_group_into_exchanges_multiple():
         _make_turn(6, "assistant"),
     ]
     result = group_into_exchanges(turns)
-    # Exchange 1: turns 1-4 (user + assistant + tool_result + assistant)
-    # Exchange 2: turns 5-6 (user + assistant)
-    assert len(result) == 2
-    assert len(result[0]) == 4
-    assert result[0][0].turn_number == 1
-    assert result[0][3].turn_number == 4
-    assert len(result[1]) == 2
-    assert result[1][0].turn_number == 5
-
-    # Verify: tool_result does NOT start a new exchange
-    tool_result_turn = result[0][2]
-    assert tool_result_turn.role == "tool_result"
+    # Exchange 1: turns 1-2 (user + assistant)
+    # Exchange 2: turns 3-4 (tool_result + assistant)
+    # Exchange 3: turns 5-6 (user + assistant)
+    assert [[t.turn_number for t in ex] for ex in result] == [[1, 2], [3, 4], [5, 6]]
 
 
-def test_group_into_exchanges_tool_result_does_not_split():
-    """tool_result turns are absorbed into the current exchange, not split."""
+def test_group_into_exchanges_tool_result_starts_new_exchange():
+    """A tool_result turn opens a new exchange, like a user turn does."""
     from cctx.models import group_into_exchanges
 
     turns = [
         _make_turn(1, "user"),
-        _make_turn(2, "tool_result"),
+        _make_turn(2, "assistant"),
         _make_turn(3, "tool_result"),
         _make_turn(4, "assistant"),
-        _make_turn(5, "user"),
     ]
     result = group_into_exchanges(turns)
-    # Exchange 1: turns 1-4
-    # Exchange 2: turn 5 (user with no following turns)
     assert len(result) == 2
-    assert len(result[0]) == 4
-    assert len(result[1]) == 1
+    assert [t.turn_number for t in result[0]] == [1, 2]
+    assert [t.turn_number for t in result[1]] == [3, 4]
 
 
 def test_group_into_exchanges_leading_non_user_turns():

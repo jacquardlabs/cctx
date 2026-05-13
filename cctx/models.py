@@ -226,12 +226,12 @@ class ProjectAnalysis:
 def group_into_exchanges(turns: list[Turn]) -> list[list[Turn]]:
     """Group a flat list of turns into render-time exchanges.
 
-    An exchange begins on each ``role == "user"`` turn and absorbs every
-    following non-user turn (assistant, tool_result, system) until the next
-    user turn.
+    An exchange begins on each ``role == "user"`` or ``role == "tool_result"``
+    turn and includes all subsequent assistant turns until the next
+    user/tool_result turn.
 
-    Leading non-user turns (e.g. an initial system notice before the first
-    user message) are gathered into their own exchange at index 0.
+    Leading non-user/tool_result turns (e.g. an initial system notice before
+    the first user message) are gathered into their own exchange at index 0.
 
     Returns an empty list for empty input.
     """
@@ -242,12 +242,10 @@ def group_into_exchanges(turns: list[Turn]) -> list[list[Turn]]:
     current: list[Turn] = []
 
     for turn in turns:
-        if turn.role == "user":
-            if current:
-                exchanges.append(current)
-            current = [turn]
-        else:
-            current.append(turn)
+        if turn.role in ("user", "tool_result") and current:
+            exchanges.append(current)
+            current = []
+        current.append(turn)
 
     if current:
         exchanges.append(current)
