@@ -154,7 +154,9 @@ def make_tool_use_block(tool_use_id: str, tool_name: str, tool_input: dict | Non
     }
 
 
-def make_tool_result_block(tool_use_id: str, content: str | list[dict], is_error: bool = False) -> dict:
+def make_tool_result_block(
+    tool_use_id: str, content: str | list[dict], is_error: bool = False
+) -> dict:
     """Construct a synthetic tool_result content block (lives inside a user line)."""
     block: dict = {
         "type": "tool_result",
