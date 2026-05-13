@@ -49,6 +49,10 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/conftest.py" = ["E501"]
+# scrub.py has regex declarations with inline comments that read better as
+# single lines than wrapped (E501), and intentionally-unused loop variables
+# kept for symmetry across passes (B007).
+"tests/fixtures/scrub.py" = ["E501", "B007"]
 
 [tool.ruff.format]
 quote-style = "double"
