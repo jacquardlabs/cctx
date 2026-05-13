@@ -6,7 +6,8 @@ Downloading: Lecture 01: What is an LLM
 [zoom] XgF6c08ReTWCanL7Vrg7Vgvgh8wpaJ_LfWt47UjxQgP2lrnBzWIy_g_QO6wZzVXy.Kesh8TyLlN2XyZH0: Downloading play webpage
 [zoom] XgF6c08ReTWCanL7Vrg7Vgvgh8wpaJ_LfWt47UjxQgP2lrnBzWIy_g_QO6wZzVXy.Kesh8TyLlN2XyZH0: Downloading play info JSON
 [info] XgF6c08ReTWCanL7Vrg7Vgvgh8wpaJ_LfWt47UjxQgP2lrnBzWIy_g_QO6wZzVXy.Kesh8TyLlN2XyZH0: Downloading 1 format(s): view_with_share
-[download] /Users/bryan/Downloads/AI Agents/Lecture 01: What is an LLM.mp4 has already been downloaded
-[download] 100% of  100.11MiB
-[zoom] Extracting URL: https://illinois.zoom.us/rec/share/oV5WFhZfA3qoWqt1VvALRcV2uAUgxorPL-fbDfJej5oD89mOY_Vo8S
+[download] /Users/test/Downloads/AI Agents/Lecture 01: What is an LLM.mp4 has already been downloaded
+
+[download] 100% of  100.11MiB
+[zoom] Extracting URL: https://illinois.zoom.us/rec/share/oV5WFhZfA3qoWqt1VvALRcV2uAUgxorPL-fbDfJej5oD89mOY_Vo8Se
 ...[truncated]

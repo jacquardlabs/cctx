@@ -32,6 +32,18 @@ _HOME_PATH = re.compile(r"/Users/[^/\"\s]+")
 _FIXTURES_ROOT = Path(__file__).parent / "claude_code"
 
 _SENSITIVE_KEYS = re.compile(r"api[_-]?key|secret|token|password|auth", re.IGNORECASE)
+# Match environment variable names and actual secret patterns
+_SECRET_PATTERNS = [
+    re.compile(r"ANTHROPIC_API_KEY", re.IGNORECASE),  # Env var name
+    re.compile(r"ANTHROPIC_KEY", re.IGNORECASE),  # Env var name
+    re.compile(r"GOOGLE_CLIENT_ID", re.IGNORECASE),  # Google OAuth var names
+    re.compile(r"GOOGLE_CLIENT_SECRET", re.IGNORECASE),  # Google OAuth var names
+    re.compile(r"(sk-[a-zA-Z0-9]+)", re.IGNORECASE),  # OpenAI/Anthropic key patterns
+    re.compile(r"(Bearer\s+[a-zA-Z0-9_\-\.]+)", re.IGNORECASE),
+    re.compile(r"(CLIENT_SECRET|CLIENT_ID)\s*[=:]\s*['\"]?[a-zA-Z0-9_\-\.]+['\"]?", re.IGNORECASE),
+    re.compile(r"api\d+-[a-zA-Z0-9]+", re.IGNORECASE),  # OAuth API endpoint references like api03-xyz
+    re.compile(r"[a-zA-Z0-9]+\.apps\.googleusercontent\.com", re.IGNORECASE),  # Google OAuth domains
+]
 
 
 def _walk(obj, parent=None, key=None):
@@ -63,6 +75,9 @@ def anonymize_line(obj: dict) -> dict:
             continue
         if isinstance(value, str):
             new_value = _HOME_PATH.sub("/Users/test", value)
+            # Redact secret patterns in string content
+            for pattern in _SECRET_PATTERNS:
+                new_value = pattern.sub("[SCRUBBED]", new_value)
             parent[key] = new_value
 
     # Targeted truncations.
@@ -121,9 +136,11 @@ def anonymize_session(src_jsonl: Path, slug: str) -> Path:
             tr_dst = sub_dst_root / "tool-results"
             tr_dst.mkdir(parents=True, exist_ok=True)
             for f in tr_src.glob("*.txt"):
-                data = f.read_bytes()
-                truncated = data[:1024] + (b"\n...[truncated]" if len(data) > 1024 else b"")
-                (tr_dst / f.name).write_bytes(truncated)
+                raw = f.read_text(encoding="utf-8", errors="replace")
+                sanitized = _HOME_PATH.sub("/Users/test", raw)
+                if len(sanitized) > 1024:
+                    sanitized = sanitized[:1024] + "\n...[truncated]"
+                (tr_dst / f.name).write_text(sanitized, encoding="utf-8")
 
     return dst_dir
 
