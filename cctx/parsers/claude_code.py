@@ -9,6 +9,7 @@ from pathlib import Path
 from cctx.models import (
     ParserError,
     SessionTrace,
+    ToolResult,
     ToolUse,
     Turn,
     Usage,
@@ -44,6 +45,8 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
             turn = _parse_assistant_line(raw)
             if turn is not None:
                 turns.append(turn)
+
+    _pair_tool_results(turns)
 
     # Number turns 1-based and compute start/end.
     for i, turn in enumerate(turns, start=1):
@@ -92,21 +95,44 @@ def _iter_lines(path: Path):
 
 
 def _parse_user_line(raw: dict) -> Turn | None:
-    """Build a Turn from a `type: "user"` JSONL line."""
+    """Build a Turn from a `type: "user"` JSONL line.
+
+    Pattern-matches on the set of content block types so heterogeneous arrays
+    don't fall through to the unknown-type path. tool_name on each ToolResult
+    is set to "" here; the pairing pass fills it from prior ToolUses.
+    """
     message = raw.get("message") or {}
     content = message.get("content")
 
-    text = content if isinstance(content, str) else ""
+    if isinstance(content, str):
+        text = content
+        tool_results: list[ToolResult] = []
+        role = "user"
+    elif isinstance(content, list):
+        block_types = {b.get("type") for b in content if isinstance(b, dict)}
+        if "tool_result" in block_types:
+            role = "tool_result"
+            text = ""  # tool_result lines have no narrative text
+            tool_results = _extract_tool_results(content, structured=raw.get("toolUseResult"))
+        else:
+            role = "user"
+            text = _flatten_user_blocks(content)
+            tool_results = []
+    else:
+        # Defensive: unexpected content shape — keep as empty user turn with a marker.
+        role = "user"
+        text = ""
+        tool_results = []
 
     return Turn(
-        turn_number=0,  # set by caller after collection
+        turn_number=0,
         uuid=raw.get("uuid", ""),
         parent_uuid=raw.get("parentUuid"),
-        role="user",
+        role=role,
         text=text,
         thinking="",
         tool_uses=[],
-        tool_results=[],
+        tool_results=tool_results,
         usage=None,
         model=None,
         stop_reason=None,
@@ -114,6 +140,73 @@ def _parse_user_line(raw: dict) -> Turn | None:
         duration_ms=None,
         is_sidechain=bool(raw.get("isSidechain", False)),
     )
+
+
+def _extract_tool_results(content: list, *, structured: dict | None) -> list[ToolResult]:
+    """Extract ToolResult objects from a list of content blocks.
+
+    `structured` is the parallel toolUseResult field; it's attached to every
+    ToolResult in this turn because a JSONL line carries one toolUseResult
+    even when there are multiple tool_result blocks. The decomposer can
+    inspect it; the parser doesn't try to split.
+    """
+    results: list[ToolResult] = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") != "tool_result":
+            continue
+        raw_content = block.get("content")
+        if isinstance(raw_content, str):
+            content_str = raw_content
+        elif isinstance(raw_content, list):
+            content_str = "\n".join(
+                b.get("text", "")
+                for b in raw_content
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+        else:
+            content_str = ""
+        results.append(
+            ToolResult(
+                tool_name="",  # filled by pairing pass
+                tool_use_id=block.get("tool_use_id", ""),
+                content=content_str,
+                structured=structured,
+                is_error=bool(block.get("is_error", False)),
+            )
+        )
+    return results
+
+
+def _flatten_user_blocks(content: list) -> str:
+    """Join text blocks and inline image placeholders for a user-role list-content message."""
+    parts: list[str] = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "text":
+            parts.append(block.get("text", ""))
+        elif btype == "image":
+            source = block.get("source") or {}
+            media_type = source.get("media_type", "?")
+            data = source.get("data", "")
+            size = len(data) if isinstance(data, str) else 0
+            parts.append(f"<image:{media_type},{size}B>")
+    return "\n".join(parts)
+
+
+def _pair_tool_results(turns: list[Turn]) -> None:
+    """Populate ToolResult.tool_name by matching tool_use_id against earlier ToolUses."""
+    by_id: dict[str, str] = {}
+    for turn in turns:
+        for use in turn.tool_uses:
+            if use.tool_use_id:
+                by_id[use.tool_use_id] = use.tool_name
+        for result in turn.tool_results:
+            if result.tool_use_id and not result.tool_name:
+                result.tool_name = by_id.get(result.tool_use_id, "")
 
 
 def _parse_assistant_line(raw: dict) -> Turn | None:

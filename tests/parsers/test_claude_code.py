@@ -6,7 +6,12 @@ import pytest
 
 from cctx.models import ParserError
 from cctx.parsers.claude_code import parse_session
-from tests.conftest import make_assistant_line, make_tool_use_block, make_user_line
+from tests.conftest import (
+    make_assistant_line,
+    make_tool_result_block,
+    make_tool_use_block,
+    make_user_line,
+)
 
 
 def test_missing_file_raises_parser_error(tmp_path):
@@ -192,3 +197,109 @@ def test_multiple_parallel_tool_uses_in_one_message(write_jsonl):
     assert len(turn.tool_uses) == 3
     assert [tu.tool_name for tu in turn.tool_uses] == ["Read", "Read", "Grep"]
     assert [tu.tool_use_id for tu in turn.tool_uses] == ["toolu_1", "toolu_2", "toolu_3"]
+
+
+# --- Task 8: User lines with tool_result content ---
+
+
+def test_user_line_with_tool_result_becomes_tool_result_role(write_jsonl):
+    block = make_tool_result_block("toolu_1", "file contents")
+    path = write_jsonl(
+        [
+            make_assistant_line(uuid="a1", tool_uses=[make_tool_use_block("toolu_1", "Read")]),
+            make_user_line(uuid="u1", parent_uuid="a1", content=[block]),
+        ]
+    )
+    trace = parse_session(path)
+    assert len(trace.turns) == 2
+    tr_turn = trace.turns[1]
+    assert tr_turn.role == "tool_result"
+    assert len(tr_turn.tool_results) == 1
+    tr = tr_turn.tool_results[0]
+    assert tr.tool_use_id == "toolu_1"
+    assert tr.content == "file contents"
+    assert tr.is_error is False
+    assert tr.tool_name == "Read"  # paired in from the originating ToolUse
+
+
+def test_tool_result_content_can_be_list_of_text_blocks(write_jsonl):
+    """tool_result.content is sometimes a list of {type, text} blocks; flatten to a string."""
+    block = make_tool_result_block(
+        "toolu_1",
+        [{"type": "text", "text": "line one"}, {"type": "text", "text": "line two"}],
+    )
+    path = write_jsonl(
+        [
+            make_assistant_line(uuid="a1", tool_uses=[make_tool_use_block("toolu_1", "Bash")]),
+            make_user_line(uuid="u1", parent_uuid="a1", content=[block]),
+        ]
+    )
+    trace = parse_session(path)
+    tr = trace.turns[1].tool_results[0]
+    assert tr.content == "line one\nline two"
+
+
+def test_three_parallel_tool_results_in_one_user_line(write_jsonl):
+    """Parallel tool calls produce one user line with multiple tool_result blocks."""
+    path = write_jsonl(
+        [
+            make_assistant_line(
+                uuid="a1",
+                tool_uses=[
+                    make_tool_use_block("toolu_1", "Read", {"file_path": "/a"}),
+                    make_tool_use_block("toolu_2", "Read", {"file_path": "/b"}),
+                    make_tool_use_block("toolu_3", "Grep", {"pattern": "x"}),
+                ],
+            ),
+            make_user_line(
+                uuid="u1",
+                parent_uuid="a1",
+                content=[
+                    make_tool_result_block("toolu_1", "a-contents"),
+                    make_tool_result_block("toolu_2", "b-contents"),
+                    make_tool_result_block("toolu_3", "no matches"),
+                ],
+            ),
+        ]
+    )
+    trace = parse_session(path)
+    assert len(trace.turns) == 2
+    tr_turn = trace.turns[1]
+    assert tr_turn.role == "tool_result"
+    assert [tr.tool_use_id for tr in tr_turn.tool_results] == ["toolu_1", "toolu_2", "toolu_3"]
+    assert [tr.tool_name for tr in tr_turn.tool_results] == ["Read", "Read", "Grep"]
+
+
+def test_tool_result_is_error_flag(write_jsonl):
+    block = make_tool_result_block("toolu_1", "tool execution failed", is_error=True)
+    path = write_jsonl(
+        [
+            make_assistant_line(uuid="a1", tool_uses=[make_tool_use_block("toolu_1", "Bash")]),
+            make_user_line(uuid="u1", parent_uuid="a1", content=[block]),
+        ]
+    )
+    trace = parse_session(path)
+    assert trace.turns[1].tool_results[0].is_error is True
+
+
+def test_tool_result_structured_field_populated_from_tool_use_result(write_jsonl):
+    """The parallel toolUseResult field on the line goes onto ToolResult.structured."""
+    block = make_tool_result_block("toolu_1", "short content")
+    line = make_user_line(
+        uuid="u1",
+        content=[block],
+        tool_use_result={
+            "type": "text",
+            "file": {"filePath": "/a", "content": "...", "numLines": 10},
+        },
+    )
+    path = write_jsonl(
+        [
+            make_assistant_line(uuid="a1", tool_uses=[make_tool_use_block("toolu_1", "Read")]),
+            line,
+        ]
+    )
+    trace = parse_session(path)
+    tr = trace.turns[1].tool_results[0]
+    assert tr.structured is not None
+    assert tr.structured["file"]["filePath"] == "/a"
