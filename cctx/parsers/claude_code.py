@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from cctx.models import (
+    Attachment,
     ParserError,
     SessionTrace,
     ToolResult,
@@ -32,6 +33,7 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
     project_path = _decode_project_path(project_dir.name)
 
     turns: list[Turn] = []
+    attachments: list[Attachment] = []
 
     for _line_number, raw in _iter_lines(jsonl_path):
         if raw is None:
@@ -49,6 +51,10 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
             turn = _parse_system_line(raw)
             if turn is not None:
                 turns.append(turn)
+        elif line_type == "attachment":
+            att = _parse_attachment_line(raw)
+            if att is not None:
+                attachments.append(att)
 
     _pair_tool_results(turns)
 
@@ -68,7 +74,7 @@ def parse_session(session_path: Path, *, max_subagent_depth: int = 4) -> Session
         claude_code_version=None,
         turns=turns,
         subagents=[],
-        attachments=[],
+        attachments=attachments,
         raw_tool_result_files=[],
         initial_context_tokens=0,
         tool_names_loaded=[],
@@ -234,6 +240,65 @@ def _parse_system_line(raw: dict) -> Turn | None:
         duration_ms=None,
         is_sidechain=bool(raw.get("isSidechain", False)),
     )
+
+
+def _parse_attachment_line(raw: dict) -> Attachment | None:
+    """Build an Attachment from a `type: "attachment"` line.
+
+    Classification is by payload-key shape, not by hookEvent (which is only
+    present on hook-output attachments). Unknown shapes are preserved with
+    kind="other" — no warning, attachments are inherently polymorphic.
+    """
+    payload = raw.get("attachment")
+    if not isinstance(payload, dict):
+        return None
+
+    kind = _classify_attachment_shape(payload)
+    content = _extract_attachment_content(kind, payload)
+    timestamp = raw.get("timestamp")
+
+    return Attachment(
+        kind=kind,
+        raw=payload,
+        content=content,
+        timestamp=_parse_timestamp(timestamp) if timestamp else None,
+        parent_uuid=raw.get("parentUuid"),
+    )
+
+
+def _classify_attachment_shape(payload: dict) -> str:
+    if "hookEvent" in payload:
+        return "hook_output"
+    if "pendingMcpServers" in payload:
+        return "mcp_servers"
+    if "skillCount" in payload:
+        return "skills"
+    if "allowedTools" in payload:
+        return "allowed_tools"
+    if "itemCount" in payload:
+        return "items"
+    return "other"
+
+
+def _extract_attachment_content(kind: str, payload: dict) -> str | None:
+    """Best-effort extraction of human-readable content from an attachment.
+
+    Returns None when nothing useful is present.
+    """
+    if kind == "hook_output":
+        stdout = payload.get("stdout") or ""
+        try:
+            parsed = json.loads(stdout)
+        except (json.JSONDecodeError, TypeError):
+            return stdout or None
+        hook_specific = parsed.get("hookSpecificOutput") or {}
+        return hook_specific.get("additionalContext") or stdout or None
+
+    if kind in ("skills", "items"):
+        c = payload.get("content")
+        return c if isinstance(c, str) and c else None
+
+    return None
 
 
 def _parse_assistant_line(raw: dict) -> Turn | None:

@@ -351,3 +351,82 @@ def test_system_line_becomes_system_turn(write_jsonl):
     turn = trace.turns[0]
     assert turn.role == "system"
     assert "Compaction" in turn.text
+
+
+# --- Task 11: Attachment classification ---
+
+
+def _make_attachment_line(payload: dict, uuid: str = "att1") -> dict:
+    return {
+        "type": "attachment",
+        "uuid": uuid,
+        "parentUuid": None,
+        "isSidechain": False,
+        "timestamp": "2026-05-13T02:00:00.000Z",
+        "sessionId": "test-session",
+        "attachment": payload,
+    }
+
+
+def test_attachment_hook_output_classified(write_jsonl):
+    payload = {
+        "hookEvent": "SessionStart",
+        "hookName": "SessionStart:startup",
+        "stdout": '{"hookSpecificOutput": {"additionalContext": "some text"}}',
+        "stderr": "",
+        "exitCode": 0,
+        "durationMs": 100,
+    }
+    path = write_jsonl([_make_attachment_line(payload)])
+    trace = parse_session(path)
+    assert len(trace.turns) == 0  # attachments are NOT turns
+    assert len(trace.attachments) == 1
+    a = trace.attachments[0]
+    assert a.kind == "hook_output"
+    assert a.raw == payload
+    assert a.content == "some text"
+
+
+def test_attachment_mcp_servers_classified(write_jsonl):
+    payload = {
+        "pendingMcpServers": True,
+        "addedLines": ["github-mcp", "sentry-mcp"],
+        "addedNames": ["github-mcp", "sentry-mcp"],
+        "readdedNames": [],
+        "removedNames": [],
+    }
+    path = write_jsonl([_make_attachment_line(payload)])
+    trace = parse_session(path)
+    assert trace.attachments[0].kind == "mcp_servers"
+
+
+def test_attachment_skills_classified(write_jsonl):
+    payload = {"skillCount": 3, "content": "- skill-a\n- skill-b\n- skill-c", "isInitial": True}
+    path = write_jsonl([_make_attachment_line(payload)])
+    trace = parse_session(path)
+    a = trace.attachments[0]
+    assert a.kind == "skills"
+    assert a.content == "- skill-a\n- skill-b\n- skill-c"
+
+
+def test_attachment_allowed_tools_classified(write_jsonl):
+    payload = {"allowedTools": ["Read", "Edit"]}
+    path = write_jsonl([_make_attachment_line(payload)])
+    trace = parse_session(path)
+    assert trace.attachments[0].kind == "allowed_tools"
+
+
+def test_attachment_items_classified(write_jsonl):
+    payload = {"itemCount": 2, "content": "items"}
+    path = write_jsonl([_make_attachment_line(payload)])
+    trace = parse_session(path)
+    assert trace.attachments[0].kind == "items"
+
+
+def test_attachment_unknown_shape_classified_as_other_no_warning(write_jsonl):
+    payload = {"someFutureKey": "value"}
+    path = write_jsonl([_make_attachment_line(payload)])
+    trace = parse_session(path)
+    assert trace.attachments[0].kind == "other"
+    assert trace.attachments[0].raw == payload
+    assert trace.warnings == []  # unknown attachment shapes do NOT warn
