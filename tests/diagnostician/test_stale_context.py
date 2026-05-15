@@ -111,9 +111,9 @@ def test_confidence_high_above_500k_token_turns():
     from cctx.diagnostician.patterns.stale_context import classify
     from cctx.models import Confidence, Severity
 
-    # 4160 words × 1.3 ≈ 5408 tokens × 120 stale turns ≈ 649K token-turns → HIGH
+    # ~2500 tokens × 200 billed assistant turns ≈ 500K token-turns → HIGH
     big_content = (_LARGE_CONTENT * 2)[:12000]
-    findings = classify(_stale_trace(n_silent_turns=120, content=big_content))
+    findings = classify(_stale_trace(n_silent_turns=200, content=big_content))
     assert len(findings) == 1
     assert findings[0].evidence["total_token_turns"] > 500_000
     assert findings[0].confidence is Confidence.HIGH
