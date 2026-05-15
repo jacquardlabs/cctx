@@ -61,6 +61,7 @@ select = [
 # Diagnostician test helpers build multi-arg make_* calls that read better
 # as single lines than split across lines.
 "tests/diagnostician/*.py" = ["E501"]
+"tests/exporters/*.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -71,3 +71,52 @@ def autopsy(target: Path, since: int | None) -> None:
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
         render_diagnosis(diagnosis)
+
+
+@cli.command()
+@click.argument("target", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["jsonl", "csv"]),
+    default="jsonl",
+    show_default=True,
+    help="Output format: jsonl (one object per session) or csv (one row per turn).",
+)
+@click.option(
+    "--out",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write output to FILE instead of stdout.",
+)
+@click.option(
+    "--no-content",
+    is_flag=True,
+    default=False,
+    help="Omit text content (finding summaries, patch diffs).",
+)
+def export(target: Path, fmt: str, out: Path | None, no_content: bool) -> None:
+    """Export session data in machine-readable format.
+
+    TARGET is a session JSONL file.
+    """
+    import sys
+
+    from cctx.exporters import csv as csv_mod
+    from cctx.exporters import jsonl as jsonl_mod
+
+    trace = parse_session(target)
+    diagnosis = diagnostician.run(trace)
+    diagnosis = claude_md.generate(diagnosis)
+    pairs = [(diagnosis, trace)]
+
+    if out is not None:
+        with open(out, "w", encoding="utf-8") as fh:
+            if fmt == "jsonl":
+                jsonl_mod.write(pairs, fh, include_content=not no_content)
+            else:
+                csv_mod.write(pairs, fh)
+    elif fmt == "jsonl":
+        jsonl_mod.write(pairs, sys.stdout, include_content=not no_content)
+    else:
+        csv_mod.write(pairs, sys.stdout)
