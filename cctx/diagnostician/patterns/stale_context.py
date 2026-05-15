@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from cctx.models import Confidence, Finding, FindingKind, Severity
 
 if TYPE_CHECKING:
-    from cctx.models import SessionTrace
+    from cctx.models import SessionTrace, Turn
 
 T_SIZE = 2_000   # token threshold
 N_STALE = 5      # turns before officially stale
@@ -33,7 +33,7 @@ def _make_3grams(text: str) -> set[tuple[str, ...]]:
     return {tuple(words[i : i + 3]) for i in range(len(words) - 2)}
 
 
-def _is_compaction(turn) -> bool:
+def _is_compaction(turn: "Turn") -> bool:
     return turn.role == "system" and "compact" in turn.text.lower()
 
 
