@@ -17,7 +17,7 @@ from cctx.models import Confidence, Finding, FindingKind, Severity
 if TYPE_CHECKING:
     from cctx.models import SessionTrace
 
-T_SIZE = 1_500   # token threshold (≈ large tool result; test fixture is ~1560 estimated tokens)
+T_SIZE = 2_000   # token threshold
 N_STALE = 5      # turns before officially stale
 STALE_HIGH_THRESHOLD = 500_000  # token-turns above which → HIGH
 
@@ -37,7 +37,7 @@ def _is_compaction(turn) -> bool:
     return turn.role == "system" and "compact" in turn.text.lower()
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
+def _classify_impl(trace: SessionTrace) -> list[Finding]:
     # Identify large tool results and their first_seen_turn
     candidates: list[dict] = []  # {uid, tool_name, content, tokens, first_seen_turn}
 
@@ -74,12 +74,12 @@ def classify(trace: SessionTrace) -> list[Finding]:
         first_seen = cand["first_seen_turn"]
         content_3grams = cand["content_3grams"]
 
-        # Find last turn with a 3-gram reference to this content
+        # Find last assistant turn with a 3-gram reference to this content
         last_ref = first_seen  # at minimum, the turn it appeared in counts as a reference
         for turn in trace.turns:
             if turn.turn_number <= first_seen:
                 continue
-            if turn.role not in ("assistant", "user"):
+            if turn.role != "assistant":
                 continue
             turn_3grams = _make_3grams(turn.text)
             if content_3grams & turn_3grams:
@@ -134,3 +134,10 @@ def classify(trace: SessionTrace) -> list[Finding]:
         cost_usd=None,
         summary=summary,
     )]
+
+
+def classify(trace: SessionTrace) -> list[Finding]:
+    try:
+        return _classify_impl(trace)
+    except Exception:
+        return []

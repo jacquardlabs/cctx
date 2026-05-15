@@ -10,8 +10,8 @@ from tests.diagnostician.conftest import (
     make_user_turn,
 )
 
-# A large content string: >2000 tokens. Using ~1600 words ≈ 2080 tokens at 1.3 factor.
-_LARGE_CONTENT = ("The search results show many TODO items across the codebase. " * 120).strip()
+# A large content string: >2000 tokens. 160 reps × 10 words × 1.3 = 2080 tokens at 1.3 factor.
+_LARGE_CONTENT = ("The search results show many TODO items across the codebase. " * 160).strip()
 # A 3-gram that appears in _LARGE_CONTENT, for reference detection tests
 _LARGE_CONTENT_3GRAM = "search results show"
 
@@ -101,7 +101,7 @@ def test_confidence_medium_below_500k_token_turns():
     from cctx.models import Confidence, Severity
 
     findings = classify(_stale_trace(n_silent_turns=6))
-    # With ~2000 tokens × 6 stale turns = ~12K token-turns → MEDIUM
+    # With ~2080 tokens × turns_stale → well below 500K → MEDIUM
     f = findings[0]
     assert f.confidence is Confidence.MEDIUM
     assert f.severity is Severity.MEDIUM
