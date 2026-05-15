@@ -10,8 +10,10 @@ cctx.renderers, cctx.exporters, cctx.tokenizer.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Low-level building blocks
@@ -160,62 +162,76 @@ class SessionTrace:
 
 
 # ---------------------------------------------------------------------------
-# Analysis-layer data model
+# Autopsy types — M2
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class Recommendation:
-    """A single actionable recommendation from an analyzer."""
-
-    title: str
-    description: str
-    config_change: str  # copy-pasteable config snippet
-    estimated_savings_per_session_usd: float
-    estimated_savings_per_week_usd: float
-    source_analyzer: str
+class FindingKind(str, Enum):
+    RETRY_LOOP    = "retry_loop"
+    SCOPE_CREEP   = "scope_creep"
+    STALE_CONTEXT = "stale_context"
 
 
-@dataclass
-class SessionSummary:
-    """Per-session summary produced by the aggregator."""
+class Severity(str, Enum):
+    HIGH   = "high"
+    MEDIUM = "medium"
+    LOW    = "low"
 
-    session_id: str
-    timestamp: datetime
-    duration_seconds: float
-    turn_count: int
-    total_cost_usd: float
-    total_input_tokens: int
-    total_output_tokens: int
-    context_at_end: int
-    compaction_triggered: bool
-    compaction_turn: int | None
-    tools_loaded: list[str]
-    tools_used: list[str]
-    component_token_turns: dict  # str → int or float; kept permissive per brief
-    waste_token_turns: int
-    loop_count: int
-    loop_waste_tokens: int
-    recommendations: list[str]
+
+class Confidence(str, Enum):
+    HIGH   = "high"
+    MEDIUM = "medium"
 
 
 @dataclass
-class ProjectAnalysis:
-    """Aggregated analysis across all sessions in a project."""
+class Finding:
+    kind:       FindingKind
+    severity:   Severity
+    confidence: Confidence
+    first_turn: int
+    last_turn:  int | None
+    evidence:   dict[str, Any]
+    cost_usd:   float | None
+    summary:    str
 
-    project_path: str
-    date_range: tuple[datetime, datetime]
-    sessions: list[SessionSummary]
-    total_cost: float
-    avg_cost_per_session: float
-    median_cost_per_session: float
-    p95_cost_per_session: float
-    total_waste_cost: float
-    waste_rate: float
-    tool_waste_rates: dict[str, float]
-    stale_content_rates: dict[str, float]
-    daily_trends: dict[str, list[float]]
-    recommendations: list[Recommendation]
+
+@dataclass
+class Patch:
+    target_file:      str
+    description:      str
+    unified_diff:     str
+    finding_kind:     FindingKind
+    evidence_summary: str
+
+
+@dataclass
+class Diagnosis:
+    session_id:      str
+    findings:        list[Finding]
+    inflection_turn: int | None
+    patches:         list[Patch]
+    total_cost_usd:  float
+    waste_cost_usd:  float
+    analysed_at:     datetime
+
+
+@dataclass
+class KindEvidence:
+    kind:              FindingKind
+    session_count:     int
+    total_waste_usd:   float
+    example_summaries: list[str]
+
+
+@dataclass
+class AggregateReport:
+    window:                 timedelta
+    sessions_analysed:      int
+    sessions_with_findings: int
+    total_cost_usd:         float
+    waste_cost_usd:         float
+    by_kind:                dict[FindingKind, KindEvidence]
+    patches:                list[Patch]
 
 
 # ---------------------------------------------------------------------------
