@@ -90,7 +90,14 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
         if turns_stale <= N_STALE:
             continue
 
-        token_turns = cand["tokens"] * turns_stale
+        # Cost is attributed only to API calls (assistant turns), not to
+        # user/tool_result turns. Using raw turn-number delta inflates waste
+        # by ~2× in typical alternating-turn sessions.
+        billed_stale = sum(
+            1 for t in trace.turns
+            if t.turn_number > last_ref and t.role == "assistant"
+        )
+        token_turns = cand["tokens"] * billed_stale
         stale_items.append({
             "tool_name": cand["tool_name"],
             "content_tokens": cand["tokens"],
