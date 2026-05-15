@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cctx autopsy — {{ diag.session_id }}</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+  font-size: 14px;
+  background: #0d1117;
+  color: #c9d1d9;
+  padding: 2rem 1rem;
+}
+main { max-width: 900px; margin: 0 auto; }
+h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: .25rem; }
+h2 { font-size: 1rem; color: #8b949e; text-transform: uppercase; letter-spacing: .08em; margin: 2rem 0 .75rem; }
+code { font-family: monospace; font-size: .85em; background: #161b22; padding: .1em .35em; border-radius: 3px; }
+a { color: #58a6ff; }
+
+/* --- Verdict card --- */
+.verdict-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+.verdict-card .meta { color: #8b949e; font-size: .8rem; margin-top: 1rem; }
+.verdict { font-size: 1.1rem; font-weight: 600; margin: .5rem 0 1rem; }
+.verdict.clean { color: #3fb950; }
+.verdict.bad   { color: #f85149; }
+dl.costs { display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; }
+dl.costs dt { color: #8b949e; }
+dl.costs dd { font-variant-numeric: tabular-nums; }
+
+/* --- Badges --- */
+.badge {
+  display: inline-block;
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .15em .5em;
+  border-radius: 3px;
+  margin-right: .3rem;
+  vertical-align: middle;
+}
+.badge.kind-retry_loop    { background: #f85149; color: #fff; }
+.badge.kind-scope_creep   { background: #d29922; color: #fff; }
+.badge.kind-stale_context { background: #388bfd; color: #fff; }
+.badge.sev-high   { background: #6e1507; color: #f85149; border: 1px solid #f85149; }
+.badge.sev-medium { background: #4d3500; color: #d29922; border: 1px solid #d29922; }
+.badge.sev-low    { background: #033a16; color: #3fb950; border: 1px solid #3fb950; }
+
+/* --- Findings / patches --- */
+details {
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  margin-bottom: .6rem;
+}
+details[open] { border-color: #58a6ff44; }
+summary {
+  list-style: none;
+  cursor: pointer;
+  padding: .75rem 1rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .35rem;
+  user-select: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: "▶";
+  font-size: .6rem;
+  color: #8b949e;
+  margin-right: .4rem;
+  transition: transform .15s;
+}
+details[open] summary::before { transform: rotate(90deg); }
+.summary-text { flex: 1; color: #c9d1d9; }
+.turns, .cost, .target { font-size: .75rem; color: #8b949e; }
+
+.finding-body, .patch-body {
+  padding: .75rem 1rem 1rem;
+  border-top: 1px solid #21262d;
+}
+.finding-body p { color: #8b949e; margin-bottom: .5rem; }
+
+pre.evidence, pre.diff {
+  background: #0d1117;
+  border: 1px solid #21262d;
+  border-radius: 4px;
+  padding: .75rem;
+  overflow-x: auto;
+  font-size: .8rem;
+  line-height: 1.5;
+  white-space: pre;
+}
+pre.diff .add { color: #3fb950; }
+pre.diff .del { color: #f85149; }
+
+.evidence-summary { color: #8b949e; font-size: .8rem; margin-bottom: .5rem; }
+
+/* diff line coloring via spans */
+
+/* --- Timeline --- */
+.timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: .5rem;
+}
+.turn-bar {
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .65rem;
+  font-weight: 600;
+  cursor: default;
+  border: 1px solid transparent;
+  background: #161b22;
+  color: #8b949e;
+}
+.turn-bar.role-user         { background: #0d2940; color: #58a6ff; border-color: #1f4068; }
+.turn-bar.role-assistant    { background: #0d2018; color: #3fb950; border-color: #1a3a28; }
+.turn-bar.role-tool_result  { background: #1c1c2e; color: #8b949e; border-color: #2d2d4a; }
+.turn-bar.flagged           { background: #4d0000; color: #f85149; border-color: #7a0000; font-weight: 900; }
+.timeline-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: .75rem;
+}
+.legend-item { display: flex; align-items: center; gap: .3rem; color: #8b949e; }
+.legend-item::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid;
+}
+.legend-item.user::before        { background: #0d2940; border-color: #1f4068; }
+.legend-item.assistant::before   { background: #0d2018; border-color: #1a3a28; }
+.legend-item.tool_result::before { background: #1c1c2e; border-color: #2d2d4a; }
+.legend-item.flagged::before     { background: #4d0000; border-color: #7a0000; }
+
+/* --- Footer --- */
+footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid #21262d;
+  color: #484f58;
+  font-size: .75rem;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- Verdict card -->
+  <div class="verdict-card">
+    <h1>cctx autopsy</h1>
+    <p><code>{{ diag.session_id }}</code></p>
+    {% if diag.findings %}
+    <p class="verdict bad">{{ diag.findings|length }} {{ "finding" if diag.findings|length == 1 else "findings" }} &middot; ${{ "%.4f"|format(diag.waste_cost_usd) }} waste</p>
+    {% else %}
+    <p class="verdict clean">Clean session</p>
+    {% endif %}
+    <dl class="costs">
+      <dt>Total cost</dt><dd>${{ "%.4f"|format(diag.total_cost_usd) }}</dd>
+      <dt>Waste attributed</dt><dd>${{ "%.4f"|format(diag.waste_cost_usd) }}</dd>
+      {% if diag.inflection_turn is not none %}<dt>Inflection turn</dt><dd>{{ diag.inflection_turn }}</dd>{% endif %}
+    </dl>
+    <p class="meta">Analysed {{ diag.analysed_at.strftime("%Y-%m-%d %H:%M UTC") }}</p>
+  </div>
+
+  <!-- Findings -->
+  {% if diag.findings %}
+  <section>
+    <h2>Findings</h2>
+    {% for f in diag.findings %}
+    <details class="finding">
+      <summary>
+        <span class="badge kind-{{ f.kind.value }}">{{ f.kind.value.replace("_", " ").upper() }}</span>
+        <span class="badge sev-{{ f.severity.value }}">{{ f.severity.value.upper() }}</span>
+        <span class="summary-text">{{ f.summary }}</span>
+        <span class="turns">turns {{ f.first_turn }}{% if f.last_turn is not none and f.last_turn != f.first_turn %}–{{ f.last_turn }}{% endif %}</span>
+        {% if f.cost_usd is not none %}<span class="cost">${{ "%.4f"|format(f.cost_usd) }}</span>{% endif %}
+      </summary>
+      <div class="finding-body">
+        <p><strong>Confidence:</strong> {{ f.confidence.value }}</p>
+        {% if f.evidence %}
+        <pre class="evidence">{{ f.evidence | to_json }}</pre>
+        {% endif %}
+      </div>
+    </details>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <!-- Patches -->
+  {% if diag.patches %}
+  <section>
+    <h2>Recommended CLAUDE.md patches</h2>
+    {% for p in diag.patches %}
+    <details class="patch">
+      <summary>
+        <span class="badge kind-{{ p.finding_kind.value }}">{{ p.finding_kind.value.replace("_", " ").upper() }}</span>
+        <span class="summary-text">{{ p.description }}</span>
+        <span class="target">{{ p.target_file }}</span>
+      </summary>
+      <div class="patch-body">
+        <p class="evidence-summary">{{ p.evidence_summary }}</p>
+        <pre class="diff">{{ p.unified_diff }}</pre>
+      </div>
+    </details>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <!-- Turn timeline -->
+  <section>
+    <h2>Turn timeline</h2>
+    <div class="timeline">
+      {% for turn in trace.turns %}
+      {% set is_flagged = turn.turn_number in flagged %}
+      <div class="turn-bar role-{{ turn.role }}{% if is_flagged %} flagged{% endif %}"
+           title="Turn {{ turn.turn_number }}: {{ turn.role }}{% if is_flagged %} — {{ flagged[turn.turn_number]|map(attribute='kind')|map(attribute='value')|join(', ') }}{% endif %}">{{ turn.turn_number }}</div>
+      {% endfor %}
+    </div>
+    <div class="timeline-legend">
+      <span class="legend-item user">user</span>
+      <span class="legend-item assistant">assistant</span>
+      <span class="legend-item tool_result">tool result</span>
+      <span class="legend-item flagged">flagged</span>
+    </div>
+  </section>
+
+</main>
+<footer>
+  <p>Generated by <a href="https://github.com/jacquardlabs/cctx">cctx</a> &middot; {{ diag.analysed_at.strftime("%Y-%m-%d") }}</p>
+</footer>
+</body>
+</html>
