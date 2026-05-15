@@ -2,6 +2,7 @@
 
 render_diagnosis(diagnosis, console=None) -> None
 render_aggregate(report, console=None) -> None
+render_harvest_results(results, dry_run=False, console=None) -> None
 
 Uses rich for formatting. Accepts an optional Console for testing.
 """
@@ -10,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.rule import Rule
 from rich.syntax import Syntax
 from rich.table import Table
@@ -116,3 +118,50 @@ def render_aggregate(report: AggregateReport, *, console: Console | None = None)
             con.print(f"\n{patch.description}")
             syntax = Syntax(patch.unified_diff, "diff", theme="monokai", word_wrap=True)
             con.print(syntax)
+
+
+def render_harvest_results(
+    results: list,  # list[ApplyResult] — avoid circular import
+    *,
+    dry_run: bool = False,
+    console: Console | None = None,
+) -> None:
+    """Render harvest ApplyResult list to terminal."""
+    from cctx.harvest import ApplyStatus
+
+    con = console or _default_console()
+
+    if not results:
+        con.print("No patches to apply. Session looks clean.")
+        return
+
+    total = len(results)
+    for i, result in enumerate(results, start=1):
+        if result.status == ApplyStatus.SKIPPED:
+            con.print(
+                Text(
+                    f"already present ({result.message.removeprefix('already present: ')}) "
+                    f"— skipping",
+                    style="dim",
+                )
+            )
+            continue
+
+        title_style = "red" if result.status == ApplyStatus.APPLIED else "dim"
+        title = f"Patch {i} of {total} — {result.patch.finding_kind.value}"
+        syntax = Syntax(result.patch.unified_diff, "diff", theme="monokai", word_wrap=True)
+        panel = Panel(
+            syntax,
+            title=title,
+            title_align="left",
+            border_style=title_style,
+            subtitle=Text(result.patch.evidence_summary, style="dim"),
+            subtitle_align="left",
+        )
+        con.print(panel)
+
+    applied_count = sum(1 for r in results if r.status == ApplyStatus.APPLIED)
+    if dry_run:
+        con.print("Dry run complete. No changes made.")
+    else:
+        con.print(f"Applied {applied_count} patch(es).")
