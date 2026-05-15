@@ -31,11 +31,15 @@ def _similarity_key(tool_name: str, tool_input: dict) -> str:
 def _is_error(result: ToolResult) -> bool:
     if result.is_error:
         return True
-    c = result.content.lower()
-    return c.startswith("error:") or c.startswith("failed") or "error:" in c[:80]
+    c = result.content
+    return (
+        c.startswith("Error:")
+        or c.startswith("error:")
+        or c.startswith("FAILED")
+    )
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
+def _classify_impl(trace: SessionTrace) -> list[Finding]:
     # Build tool_use_id → (ToolResult, turn_number) map
     result_map: dict[str, tuple[ToolResult, int]] = {}
     for turn in trace.turns:
@@ -132,3 +136,10 @@ def classify(trace: SessionTrace) -> list[Finding]:
         cost_usd=None,
         summary=summary,
     )]
+
+
+def classify(trace: SessionTrace) -> list[Finding]:
+    try:
+        return _classify_impl(trace)
+    except Exception:
+        return []

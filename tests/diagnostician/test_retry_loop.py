@@ -125,3 +125,35 @@ def test_summary_mentions_tool_and_turns():
     findings = classify(_edit_trace_with_retry(2))
     assert "Edit" in findings[0].summary
     assert "fail" in findings[0].summary.lower() or "×" in findings[0].summary
+
+
+def test_error_detected_by_error_prefix():
+    """is_error=False but content starts with 'Error:' — should detect loop."""
+    from cctx.diagnostician.patterns.retry_loop import classify
+    from cctx.models import FindingKind
+
+    turns = [
+        make_user_turn(1),
+        make_assistant_turn(2, tool_uses=[make_tool_use("tu01", "Bash", {"command": "ls"})]),
+        make_tool_result_turn(3, tool_results=[make_tool_result("tu01", "Bash", "Error: permission denied", is_error=False)]),
+        make_assistant_turn(4, tool_uses=[make_tool_use("tu02", "Bash", {"command": "ls"})]),
+        make_tool_result_turn(5, tool_results=[make_tool_result("tu02", "Bash", "Error: permission denied", is_error=False)]),
+    ]
+    findings = classify(make_trace(turns))
+    assert len(findings) == 1
+    assert findings[0].kind is FindingKind.RETRY_LOOP
+
+
+def test_substring_error_not_detected_without_flag():
+    """Content containing 'error:' but not starting with it — NOT an error."""
+    from cctx.diagnostician.patterns.retry_loop import classify
+
+    turns = [
+        make_user_turn(1),
+        make_assistant_turn(2, tool_uses=[make_tool_use("tu01", "Bash", {"command": "ls"})]),
+        make_tool_result_turn(3, tool_results=[make_tool_result("tu01", "Bash", "Warning: encountered error: 42", is_error=False)]),
+        make_assistant_turn(4, tool_uses=[make_tool_use("tu02", "Bash", {"command": "ls"})]),
+        make_tool_result_turn(5, tool_results=[make_tool_result("tu02", "Bash", "Warning: encountered error: 42", is_error=False)]),
+    ]
+    # Content doesn't start with "Error:" / "error:" / "FAILED" and is_error=False
+    assert classify(make_trace(turns)) == []
