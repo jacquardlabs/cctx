@@ -4,6 +4,8 @@ from __future__ import annotations
 import csv as _csv
 from typing import IO, TYPE_CHECKING
 
+from cctx.pricing import price_per_tok as _price_per_tok
+
 if TYPE_CHECKING:
     from cctx.models import Diagnosis, SessionTrace
 
@@ -19,21 +21,6 @@ COLUMNS = [
     "is_inflection_turn",
 ]
 
-_INPUT_PRICE_PER_MTOK: dict[str, float] = {
-    "claude-opus-4": 15.0,
-    "claude-sonnet-4": 3.0,
-    "claude-haiku-4": 0.8,
-}
-_DEFAULT_PRICE_PER_MTOK = 3.0
-
-
-def _price_per_tok(model: str | None) -> float:
-    if model is not None:
-        for prefix, price in _INPUT_PRICE_PER_MTOK.items():
-            if model.startswith(prefix):
-                return price / 1_000_000
-    return _DEFAULT_PRICE_PER_MTOK / 1_000_000
-
 
 def export_turn_rows(diagnosis: Diagnosis, trace: SessionTrace) -> list[dict[str, str]]:
     finding_at: dict[int, list[str]] = {}
@@ -43,7 +30,15 @@ def export_turn_rows(diagnosis: Diagnosis, trace: SessionTrace) -> list[dict[str
     rows = []
     for turn in trace.turns:
         input_tokens = turn.usage.input_tokens if turn.usage else 0
-        cost_usd = input_tokens * _price_per_tok(turn.model) if turn.usage else 0.0
+        if turn.usage:
+            p = _price_per_tok(turn.model)
+            cost_usd = (
+                turn.usage.input_tokens * p
+                + turn.usage.cache_read * p * 0.1
+                + (turn.usage.cache_creation_5m + turn.usage.cache_creation_1h) * p * 1.25
+            )
+        else:
+            cost_usd = 0.0
         is_inflection = turn.turn_number == diagnosis.inflection_turn
         rows.append({
             "session_id": trace.session_id,

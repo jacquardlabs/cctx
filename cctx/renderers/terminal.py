@@ -121,7 +121,7 @@ def render_aggregate(report: AggregateReport, *, console: Console | None = None)
 
 
 def render_harvest_results(
-    results: list,  # list[ApplyResult] — avoid circular import
+    results: list,  # list[ApplyResult] — ApplyStatus is harvest-internal; imported lazily
     *,
     dry_run: bool = False,
     console: Console | None = None,
@@ -147,7 +147,12 @@ def render_harvest_results(
             )
             continue
 
-        title_style = "red" if result.status == ApplyStatus.APPLIED else "dim"
+        if result.status == ApplyStatus.APPLIED:
+            title_style = "green"
+        elif result.status == ApplyStatus.ERROR:
+            title_style = "red"
+        else:
+            title_style = "dim"
         title = f"Patch {i} of {total} — {result.patch.finding_kind.value}"
         syntax = Syntax(result.patch.unified_diff, "diff", theme="monokai", word_wrap=True)
         panel = Panel(

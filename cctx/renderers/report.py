@@ -35,6 +35,21 @@ def render_html(diag: Diagnosis, trace: SessionTrace) -> str:
     )
     env.filters["to_json"] = lambda v: json.dumps(v, indent=2, default=str)
 
+    def _diff_highlight(diff_text: str) -> str:
+        lines = []
+        for line in diff_text.splitlines():
+            from markupsafe import Markup, escape
+            escaped = escape(line)
+            if line.startswith("+") and not line.startswith("+++"):
+                lines.append(Markup(f'<span class="add">{escaped}</span>'))
+            elif line.startswith("-") and not line.startswith("---"):
+                lines.append(Markup(f'<span class="del">{escaped}</span>'))
+            else:
+                lines.append(escaped)
+        return Markup("\n".join(lines))
+
+    env.filters["diff_highlight"] = _diff_highlight
+
     tmpl = env.get_template("autopsy.html.j2")
     return tmpl.render(
         diag=diag,

@@ -290,3 +290,44 @@ def test_export_turn_rows_returns_correct_count() -> None:
 
     rows = export_turn_rows(diagnosis, trace)
     assert len(rows) == 3
+
+
+def test_csv_cost_includes_cache_read() -> None:
+    """Per-turn cost_usd must include cache_read at 10% of input rate."""
+    import dataclasses
+    from datetime import datetime, timezone
+
+    from cctx.exporters.csv import export_turn_rows
+    from cctx.models import Diagnosis, Usage
+    from tests.diagnostician.conftest import make_assistant_turn, make_trace, make_user_turn
+
+    # Sonnet rate = $3/MTok = 3e-6 per token
+    # 1000 input × 1.00 + 10000 cache_read × 0.10 = 2000 effective tokens × 3e-6 = $0.006
+    t = make_assistant_turn(2, text="ok")
+    t = dataclasses.replace(
+        t,
+        usage=Usage(
+            input_tokens=1_000,
+            output_tokens=20,
+            cache_creation_5m=0,
+            cache_creation_1h=0,
+            cache_read=10_000,
+            service_tier=None,
+        ),
+        model="claude-sonnet-4-6",
+    )
+    trace = make_trace([make_user_turn(1), t], model="claude-sonnet-4-6")
+    diag = Diagnosis(
+        session_id="test",
+        findings=[],
+        inflection_turn=None,
+        patches=[],
+        total_cost_usd=0.0,
+        waste_cost_usd=0.0,
+        analysed_at=datetime(2026, 5, 15, tzinfo=timezone.utc),
+    )
+    rows = export_turn_rows(diag, trace)
+    assistant_row = next(r for r in rows if r["role"] == "assistant")
+    cost = float(assistant_row["cost_usd"])
+    # 1000 × 3e-6 + 10000 × 3e-6 × 0.10 = 3e-3 + 3e-3 = 6e-3 = 0.006
+    assert abs(cost - 0.006) < 1e-6, f"Expected ~0.006 but got {cost}"
