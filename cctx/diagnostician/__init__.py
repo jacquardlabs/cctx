@@ -11,10 +11,14 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from cctx.diagnostician import inflection
 from cctx.diagnostician.patterns import retry_loop, scope_creep, stale_context
 from cctx.models import Diagnosis, Finding, FindingKind
+
+if TYPE_CHECKING:
+    from cctx.models import SessionTrace
 
 UTC = timezone.utc
 
@@ -44,7 +48,7 @@ def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
     return result
 
 
-def _compute_total_cost(trace, model: str | None) -> float:
+def _compute_total_cost(trace: SessionTrace, model: str | None) -> float:
     price = _price_per_tok(model)
     total = 0.0
     for turn in trace.turns:
@@ -53,7 +57,7 @@ def _compute_total_cost(trace, model: str | None) -> float:
     return round(total, 4)
 
 
-def run(trace) -> Diagnosis:
+def run(trace: SessionTrace) -> Diagnosis:
     """Diagnose a single SessionTrace. Returns Diagnosis with patches=[]."""
     findings: list[Finding] = [
         *retry_loop.classify(trace),

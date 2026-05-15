@@ -6,7 +6,11 @@ from datetime import datetime, timezone
 
 def _make_diagnosis(finding_kinds: list[str], waste: float = 0.0):
     from cctx.models import (
-        Confidence, Diagnosis, Finding, FindingKind, Severity,
+        Confidence,
+        Diagnosis,
+        Finding,
+        FindingKind,
+        Severity,
     )
 
     kind_map = {
@@ -54,7 +58,7 @@ def test_accumulate_single_session_retry_loop():
 
 
 def test_accumulate_counts_sessions_not_findings():
-    """Two diagnoses each with retry_loop → session_count=2, not 2."""
+    """Two diagnoses each with retry_loop → session_count=2 (once per session, not per finding)."""
     from cctx.models import FindingKind
     from cctx.recommender.evidence import accumulate
 
@@ -93,3 +97,43 @@ def test_accumulate_handles_no_findings_in_diagnosis():
     diagnoses = [_make_diagnosis([])]
     result = accumulate(diagnoses)
     assert result == {}
+
+
+def test_accumulate_deduplicates_same_kind_in_one_session():
+    """One session with two retry_loop findings → session_count=1, not 2."""
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
+    from cctx.recommender.evidence import accumulate
+
+    findings = [
+        Finding(
+            kind=FindingKind.RETRY_LOOP,
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            first_turn=2,
+            last_turn=5,
+            evidence={},
+            cost_usd=None,
+            summary="first retry",
+        ),
+        Finding(
+            kind=FindingKind.RETRY_LOOP,
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            first_turn=8,
+            last_turn=11,
+            evidence={},
+            cost_usd=None,
+            summary="second retry in same session",
+        ),
+    ]
+    diagnosis = Diagnosis(
+        session_id="multi-finding",
+        findings=findings,
+        inflection_turn=2,
+        patches=[],
+        total_cost_usd=1.0,
+        waste_cost_usd=0.0,
+        analysed_at=datetime(2026, 5, 14, tzinfo=timezone.utc),
+    )
+    result = accumulate([diagnosis])
+    assert result[FindingKind.RETRY_LOOP].session_count == 1

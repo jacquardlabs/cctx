@@ -48,7 +48,7 @@ _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
 }
 
 
-def _summarize(finding: Finding) -> str:
+def summarize(finding: Finding) -> str:
     ev = finding.evidence
     match finding.kind:
         case FindingKind.RETRY_LOOP:
@@ -89,7 +89,7 @@ def _make_patch(finding: Finding) -> Patch:
         description=description,
         unified_diff=diff_body,
         finding_kind=finding.kind,
-        evidence_summary=_summarize(finding),
+        evidence_summary=summarize(finding),
     )
 
 

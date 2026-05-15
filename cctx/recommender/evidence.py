@@ -9,12 +9,17 @@ Stores up to 3 example_summaries for the renderer.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from cctx.models import Diagnosis, FindingKind, KindEvidence
+from cctx.recommender.claude_md import summarize
+
+if TYPE_CHECKING:
+    from cctx.models import Finding
 
 
-def _summarize_finding(finding) -> str:
-    from cctx.recommender.claude_md import _summarize  # shared helper
-    return _summarize(finding)
+def _summarize_finding(finding: Finding) -> str:
+    return summarize(finding)
 
 
 def accumulate(diagnoses: list[Diagnosis]) -> dict[FindingKind, KindEvidence]:
