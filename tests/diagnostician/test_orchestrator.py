@@ -74,8 +74,8 @@ def test_stale_context_cost_usd_patched():
     from cctx import diagnostician
     from cctx.models import FindingKind
 
-    # Build a trace with a large stale result
-    _LARGE = ("grep output " * 200).strip()
+    # 160 × 10 words × 1.3 ≈ 2080 tokens — above T_SIZE=2000
+    _LARGE = ("The search results show many TODO items across the codebase. " * 160).strip()
     uid = "toolu_grep"
     turns = [
         make_user_turn(1),
@@ -97,9 +97,9 @@ def test_stale_context_cost_usd_patched():
 
     diagnosis = diagnostician.run(trace)
     stale = [f for f in diagnosis.findings if f.kind is FindingKind.STALE_CONTEXT]
-    if stale:
-        assert stale[0].cost_usd is not None
-        assert stale[0].cost_usd > 0
+    assert len(stale) == 1
+    assert stale[0].cost_usd is not None
+    assert stale[0].cost_usd > 0
 
 
 def test_retry_and_scope_both_detected():
