@@ -16,12 +16,15 @@ dependencies = [
     "rich-click>=1.8",
     "rich>=13.0",
     "anthropic>=0.25",
+    "textual>=0.59",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    "pytest-asyncio>=0.23",
+    "anyio[trio]",
 ]
 
 [project.scripts]
@@ -36,6 +39,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
