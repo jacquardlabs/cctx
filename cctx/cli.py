@@ -41,13 +41,23 @@ def cli() -> None:
     type=int,
     help="Cross-session mode: analyse all sessions modified within the last N days.",
 )
-def autopsy(target: Path, since: int | None) -> None:
+@click.option(
+    "--html",
+    "html_out",
+    default=None,
+    metavar="FILE",
+    type=click.Path(path_type=Path),
+    help="Write a self-contained HTML report to FILE (single-session only).",
+)
+def autopsy(target: Path, since: int | None, html_out: Path | None) -> None:
     """Diagnose a session or project directory.
 
     TARGET is a session JSONL file for single-session diagnosis,
     or a project directory for --since cross-session aggregation.
     """
     if since is not None:
+        if html_out is not None:
+            raise click.UsageError("--html is not supported with --since.")
         # Cross-session path
         project_dir = target if target.is_dir() else target.parent
         window = timedelta(days=since)
@@ -74,7 +84,12 @@ def autopsy(target: Path, since: int | None) -> None:
         trace = parse_session(target)
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
-        render_diagnosis(diagnosis)
+        if html_out is not None:
+            from cctx.renderers.report import render_html
+            html_out.write_text(render_html(diagnosis, trace), encoding="utf-8")
+            click.echo(f"HTML report written to {html_out}")
+        else:
+            render_diagnosis(diagnosis)
 
 
 @cli.command()

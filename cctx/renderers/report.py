@@ -1,0 +1,43 @@
+"""HTML report renderer for autopsy Diagnosis output.
+
+render_html(diag, trace) -> str
+  Returns a fully self-contained HTML string with inlined CSS.
+  No external resources; no JavaScript.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+if TYPE_CHECKING:
+    from cctx.models import Diagnosis, Finding, SessionTrace
+
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+
+def _flagged_index(findings: list[Finding]) -> dict[int, list[Finding]]:
+    index: dict[int, list[Finding]] = {}
+    for f in findings:
+        last = f.last_turn if f.last_turn is not None else f.first_turn
+        for tn in range(f.first_turn, last + 1):
+            index.setdefault(tn, []).append(f)
+    return index
+
+
+def render_html(diag: Diagnosis, trace: SessionTrace) -> str:
+    """Render a Diagnosis as a self-contained HTML report string."""
+    env = Environment(
+        loader=FileSystemLoader(_TEMPLATES_DIR),
+        autoescape=select_autoescape(["html"]),
+    )
+    env.filters["to_json"] = lambda v: json.dumps(v, indent=2, default=str)
+
+    tmpl = env.get_template("autopsy.html.j2")
+    return tmpl.render(
+        diag=diag,
+        trace=trace,
+        flagged=_flagged_index(diag.findings),
+    )
