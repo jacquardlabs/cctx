@@ -5,8 +5,9 @@ Commands:
   cctx autopsy <project> --since   Cross-session aggregation
   cctx export <session>            Export session data as JSONL or CSV
   cctx trace <session>             Interactive TUI trace viewer
+  cctx harvest <session>           Apply autopsy patches to CLAUDE.md
+  cctx harvest <project> --since   Cross-session harvest
 """
-
 from __future__ import annotations
 
 from datetime import timedelta
@@ -20,7 +21,7 @@ from cctx.models import AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
 from cctx.recommender import evidence as evidence_mod
-from cctx.renderers.terminal import render_aggregate, render_diagnosis
+from cctx.renderers.terminal import render_aggregate, render_diagnosis, render_harvest_results
 
 click.rich_click.USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True
@@ -140,3 +141,89 @@ def trace(target: Path) -> None:
     diagnosis = diagnostician.run(session)
     diagnosis = claude_md.generate(diagnosis)
     launch(session, diagnosis)
+
+
+@cli.command()
+@click.argument("target", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--since",
+    default=None,
+    metavar="DAYS",
+    type=int,
+    help="Cross-session mode: apply patches from sessions in the last N days.",
+)
+@click.option(
+    "--apply",
+    "apply_mode",
+    is_flag=True,
+    default=False,
+    help="Apply patches without interactive confirmation.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Print what would change and exit 0; do not write.",
+)
+@click.option(
+    "--target-dir",
+    default=None,
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Directory containing CLAUDE.md (default: cwd).",
+)
+def harvest(
+    target: Path,
+    since: int | None,
+    apply_mode: bool,
+    dry_run: bool,
+    target_dir: Path | None,
+) -> None:
+    """Apply autopsy patches to CLAUDE.md."""
+    from cctx.harvest import apply_patches, preview_patches
+
+    if apply_mode and dry_run:
+        raise click.UsageError("--apply and --dry-run are mutually exclusive.")
+
+    resolved_dir = target_dir or Path.cwd()
+    claude_md_path = resolved_dir / "CLAUDE.md"
+    click.echo(f"Target: {claude_md_path}")
+
+    if since is not None:
+        project_dir = target if target.is_dir() else target.parent
+        window = timedelta(days=since)
+        diagnoses = aggregate.run(project_dir, window=window)
+        ev = evidence_mod.accumulate(diagnoses)
+        patches = claude_md.generate_from_evidence(ev)
+    else:
+        if target.is_dir():
+            raise click.UsageError(
+                "TARGET is a directory. Use --since N for cross-session mode, "
+                "or pass a .jsonl file directly."
+            )
+        trace = parse_session(target)
+        diagnosis = diagnostician.run(trace)
+        diagnosis = claude_md.generate(diagnosis)
+        patches = diagnosis.patches
+
+    if not patches:
+        render_harvest_results([], dry_run=dry_run)
+        return
+
+    if dry_run:
+        results = preview_patches(patches, resolved_dir)
+        render_harvest_results(results, dry_run=True)
+        return
+
+    if apply_mode:
+        results = apply_patches(patches, resolved_dir)
+        render_harvest_results(results)
+        return
+
+    preview = preview_patches(patches, resolved_dir)
+    render_harvest_results(preview, dry_run=True)
+    applicable = sum(1 for r in preview if r.status.value == "applied")
+    if applicable == 0:
+        return
+    if click.confirm(f"Apply {applicable} patch(es)?"):
+        results = apply_patches(patches, resolved_dir)
+        render_harvest_results(results)
