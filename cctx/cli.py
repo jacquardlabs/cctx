@@ -3,7 +3,10 @@
 Commands:
   cctx autopsy <session>           Single-session diagnosis
   cctx autopsy <project> --since   Cross-session aggregation
+  cctx export <session>            Export session data as JSONL or CSV
+  cctx trace <session>             Interactive TUI trace viewer
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -120,3 +123,20 @@ def export(target: Path, fmt: str, out: Path | None, no_content: bool) -> None:
         jsonl_mod.write(pairs, sys.stdout, include_content=not no_content)
     else:
         csv_mod.write(pairs, sys.stdout)
+
+
+@cli.command()
+@click.argument("target", type=click.Path(exists=True, path_type=Path))
+def trace(target: Path) -> None:
+    """Open an interactive TUI trace viewer for a session.
+
+    TARGET is a session JSONL file.
+    """
+    from cctx.renderers.trace_tui import launch
+
+    if target.is_dir():
+        raise click.UsageError("TARGET must be a .jsonl session file, not a directory.")
+    session = parse_session(target)
+    diagnosis = diagnostician.run(session)
+    diagnosis = claude_md.generate(diagnosis)
+    launch(session, diagnosis)
