@@ -55,7 +55,11 @@ def _summarize(finding: Finding) -> str:
             occs = ev.get("occurrences", [])
             if occs:
                 first = occs[0]
-                return f"{first['call']}({first['key'][:40]}) failed {ev.get('loop_length', '?')}× between turns {first['turn']}–{occs[-1]['turn']}"
+                loop_len = ev.get("loop_length", "?")
+                return (
+                    f"{first['call']}({first['key'][:40]}) failed {loop_len}×"
+                    f" between turns {first['turn']}–{occs[-1]['turn']}"
+                )
             return finding.summary
         case FindingKind.SCOPE_CREEP:
             phrases = ev.get("phrases", [])

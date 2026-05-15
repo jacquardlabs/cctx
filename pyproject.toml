@@ -24,6 +24,9 @@ dev = [
     "ruff>=0.6",
 ]
 
+[project.scripts]
+cctx = "cctx.cli:cli"
+
 [tool.hatch.build.targets.wheel]
 packages = ["cctx"]
 

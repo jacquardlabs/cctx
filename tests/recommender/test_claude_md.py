@@ -1,10 +1,7 @@
 """Tests for cctx/recommender/claude_md.py."""
 from __future__ import annotations
 
-import dataclasses
 from datetime import datetime, timezone
-
-import pytest
 
 
 def _make_finding(kind_str: str, first_turn: int = 5, evidence: dict | None = None):
@@ -59,8 +56,8 @@ def test_generate_produces_one_patch_per_finding():
 
 
 def test_retry_loop_patch_targets_claude_md():
-    from cctx.recommender.claude_md import generate
     from cctx.models import FindingKind
+    from cctx.recommender.claude_md import generate
 
     result = generate(_make_diagnosis([_make_finding("retry_loop")]))
     patch = result.patches[0]
@@ -88,7 +85,8 @@ def test_stale_context_patch_has_hygiene_content():
 def test_evidence_summary_populated():
     from cctx.recommender.claude_md import generate
 
-    evidence = {"occurrences": [{"turn": 12, "key": "src/foo.py", "call": "Edit", "error": "not found"}], "loop_length": 2}
+    occ = {"turn": 12, "key": "src/foo.py", "call": "Edit", "error": "not found"}
+    evidence = {"occurrences": [occ], "loop_length": 2}
     result = generate(_make_diagnosis([_make_finding("retry_loop", evidence=evidence)]))
     assert result.patches[0].evidence_summary != ""
 

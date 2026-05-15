@@ -14,12 +14,14 @@ from tests.diagnostician.conftest import (
 def _retry_trace():
     """Edit(src/foo.py) fails twice — triggers retry_loop."""
     uid1, uid2 = "toolu_01", "toolu_02"
+    err = "Error: file not found"
+    fp = "src/foo.py"
     return make_trace([
         make_user_turn(1),
-        make_assistant_turn(2, tool_uses=[make_tool_use(uid1, "Edit", {"file_path": "src/foo.py"})]),
-        make_tool_result_turn(3, tool_results=[make_tool_result(uid1, "Edit", "Error: file not found", is_error=True)]),
-        make_assistant_turn(4, tool_uses=[make_tool_use(uid2, "Edit", {"file_path": "src/foo.py"})]),
-        make_tool_result_turn(5, tool_results=[make_tool_result(uid2, "Edit", "Error: file not found", is_error=True)]),
+        make_assistant_turn(2, tool_uses=[make_tool_use(uid1, "Edit", {"file_path": fp})]),
+        make_tool_result_turn(3, tool_results=[make_tool_result(uid1, "Edit", err, is_error=True)]),
+        make_assistant_turn(4, tool_uses=[make_tool_use(uid2, "Edit", {"file_path": fp})]),
+        make_tool_result_turn(5, tool_results=[make_tool_result(uid2, "Edit", err, is_error=True)]),
     ])
 
 
@@ -83,8 +85,14 @@ def test_stale_context_cost_usd_patched():
     for i in range(8):
         t = 4 + i * 2
         uid2 = f"toolu_s{i}"
-        turns.append(make_assistant_turn(t, tool_uses=[make_tool_use(uid2, "Read", {"file_path": f"f{i}.py"})]))
-        turns.append(make_tool_result_turn(t + 1, tool_results=[make_tool_result(uid2, "Read", "x")]))
+        turns.append(
+            make_assistant_turn(
+                t, tool_uses=[make_tool_use(uid2, "Read", {"file_path": f"f{i}.py"})]
+            )
+        )
+        turns.append(
+            make_tool_result_turn(t + 1, tool_results=[make_tool_result(uid2, "Read", "x")])
+        )
     trace = make_trace(turns, model="claude-sonnet-4-6")
 
     diagnosis = diagnostician.run(trace)
@@ -100,12 +108,17 @@ def test_retry_and_scope_both_detected():
     from cctx.models import FindingKind
 
     uid1, uid2 = "toolu_01", "toolu_02"
+    err = "Error: not found"
     turns = [
         make_user_turn(1),
-        make_assistant_turn(2, text="While I'm here, let me also fix formatting.", tool_uses=[make_tool_use(uid1, "Edit", {"file_path": "a.py"})]),
-        make_tool_result_turn(3, tool_results=[make_tool_result(uid1, "Edit", "Error: not found", is_error=True)]),
+        make_assistant_turn(
+            2,
+            text="While I'm here, let me also fix formatting.",
+            tool_uses=[make_tool_use(uid1, "Edit", {"file_path": "a.py"})],
+        ),
+        make_tool_result_turn(3, tool_results=[make_tool_result(uid1, "Edit", err, is_error=True)]),
         make_assistant_turn(4, tool_uses=[make_tool_use(uid2, "Edit", {"file_path": "a.py"})]),
-        make_tool_result_turn(5, tool_results=[make_tool_result(uid2, "Edit", "Error: not found", is_error=True)]),
+        make_tool_result_turn(5, tool_results=[make_tool_result(uid2, "Edit", err, is_error=True)]),
     ]
     diagnosis = diagnostician.run(make_trace(turns))
     kinds = {f.kind for f in diagnosis.findings}

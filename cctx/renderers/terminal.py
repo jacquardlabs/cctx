@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.rule import Rule
 from rich.syntax import Syntax
 from rich.table import Table
@@ -45,7 +44,11 @@ def render_diagnosis(diagnosis: Diagnosis, *, console: Console | None = None) ->
     con.print(Rule(f"cctx autopsy — session {diagnosis.session_id}"))
     cost_line = f"Session cost: ${diagnosis.total_cost_usd:.2f}"
     if diagnosis.waste_cost_usd > 0:
-        pct = diagnosis.waste_cost_usd / diagnosis.total_cost_usd * 100 if diagnosis.total_cost_usd else 0
+        pct = (
+            diagnosis.waste_cost_usd / diagnosis.total_cost_usd * 100
+            if diagnosis.total_cost_usd
+            else 0
+        )
         cost_line += f" | Attributed waste: ${diagnosis.waste_cost_usd:.2f} ({pct:.0f}%)"
     con.print(cost_line)
 
