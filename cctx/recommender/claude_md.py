@@ -115,7 +115,7 @@ def generate_from_evidence(
 
         if ev.session_count >= 2:
             evidence_line = (
-                f"+\n+Evidence: appeared in {ev.session_count} sessions "
+                f"\n+\n+Evidence: appeared in {ev.session_count} sessions "
                 f"(~${ev.total_waste_usd:.2f} wasted)."
             )
             diff_body = diff_body + evidence_line

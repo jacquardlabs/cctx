@@ -132,6 +132,6 @@ def test_generate_from_evidence_cross_session_appends_evidence_line():
     }
     patches = generate_from_evidence(evidence)
     assert len(patches) == 1
-    assert "Evidence:" in patches[0].unified_diff
+    assert "\n+Evidence:" in patches[0].unified_diff
     assert "8" in patches[0].unified_diff
     assert "4.30" in patches[0].unified_diff
