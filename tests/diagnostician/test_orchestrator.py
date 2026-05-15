@@ -1,6 +1,8 @@
 """Tests for cctx/diagnostician/__init__.py — run(trace) -> Diagnosis."""
 from __future__ import annotations
 
+import pytest
+
 from tests.diagnostician.conftest import (
     make_assistant_turn,
     make_tool_result,
@@ -9,6 +11,18 @@ from tests.diagnostician.conftest import (
     make_trace,
     make_user_turn,
 )
+
+
+def _make_usage(input_tokens=0, cache_read=0, cache_creation_5m=0, cache_creation_1h=0):
+    from cctx.models import Usage
+    return Usage(
+        input_tokens=input_tokens,
+        output_tokens=0,
+        cache_creation_5m=cache_creation_5m,
+        cache_creation_1h=cache_creation_1h,
+        cache_read=cache_read,
+        service_tier=None,
+    )
 
 
 def _retry_trace():
@@ -130,6 +144,50 @@ def test_stale_context_cost_usd_patched():
     assert len(stale) == 1
     assert stale[0].cost_usd is not None
     assert stale[0].cost_usd > 0
+
+
+def test_total_cost_includes_cache_read():
+    """_compute_total_cost includes cache_read at 10% and cache_writes at 125%."""
+    import dataclasses
+
+    from cctx import diagnostician
+
+    # Sonnet price = $3/MTok = 3e-6 per token
+    # input:        1_000 tokens × 1.00 = 1_000 effective tokens
+    # cache_read: 100_000 tokens × 0.10 = 10_000 effective tokens
+    # cache_write: 10_000 tokens × 1.25 = 12_500 effective tokens
+    # total effective = 23_500 × 3e-6 = $0.0705
+    t = make_assistant_turn(2, text="ok")
+    t = dataclasses.replace(
+        t,
+        usage=_make_usage(input_tokens=1_000, cache_read=100_000, cache_creation_5m=10_000),
+    )
+    trace = make_trace([make_user_turn(1), t], model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    assert diagnosis.total_cost_usd == pytest.approx(0.0705, abs=1e-4)
+
+
+def test_waste_never_exceeds_total_cost():
+    """waste_cost_usd is capped at total_cost_usd."""
+    from cctx import diagnostician
+
+    # Manufacture a session where naive waste would exceed total:
+    # large stale result + no cache reads → cheap total but high estimated waste
+    _LARGE = ("The search results show many TODO items across the codebase. " * 160).strip()
+    uid = "toolu_big"
+    turns = [
+        make_user_turn(1),
+        make_assistant_turn(2, tool_uses=[make_tool_use(uid, "Bash", {"command": "grep TODO ."})]),
+        make_tool_result_turn(3, tool_results=[make_tool_result(uid, "Bash", _LARGE)]),
+    ]
+    for i in range(20):
+        t = 4 + i * 2
+        uid2 = f"toolu_s{i}"
+        turns.append(make_assistant_turn(t, tool_uses=[make_tool_use(uid2, "Read", {"file_path": "x.py"})]))
+        turns.append(make_tool_result_turn(t + 1, tool_results=[make_tool_result(uid2, "Read", "ok")]))
+    trace = make_trace(turns)
+    diagnosis = diagnostician.run(trace)
+    assert diagnosis.waste_cost_usd <= diagnosis.total_cost_usd
 
 
 def test_retry_and_scope_both_detected():

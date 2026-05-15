@@ -49,11 +49,20 @@ def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
 
 
 def _compute_total_cost(trace: SessionTrace, model: str | None) -> float:
+    """Approximate total session cost including cache reads and writes.
+
+    Billing rates relative to base input price:
+      cache_read:  ×0.10  (read from prompt cache)
+      cache_write: ×1.25  (write to prompt cache, both 5-min and 1-hr TTLs)
+    """
     price = _price_per_tok(model)
     total = 0.0
     for turn in trace.turns:
         if turn.usage is not None:
             total += turn.usage.input_tokens * price
+            total += turn.usage.cache_read * price * 0.1
+            cache_writes = turn.usage.cache_creation_5m + turn.usage.cache_creation_1h
+            total += cache_writes * price * 1.25
     return round(total, 4)
 
 
@@ -71,6 +80,8 @@ def run(trace: SessionTrace) -> Diagnosis:
 
     total_cost = _compute_total_cost(trace, trace.primary_model)
     waste_cost = sum(f.cost_usd for f in findings if f.cost_usd is not None)
+    # Waste cannot exceed total session cost — cap as a logical invariant.
+    waste_cost = min(waste_cost, total_cost)
 
     return Diagnosis(
         session_id=trace.session_id,
