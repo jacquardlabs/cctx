@@ -62,6 +62,7 @@ def _make_diagnosis(findings=None, patches=None):
 
 def _render_to_string(diagnosis):
     from rich.console import Console
+
     from cctx.renderers.terminal import render_diagnosis
 
     buf = StringIO()
