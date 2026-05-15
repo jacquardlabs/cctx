@@ -375,146 +375,6 @@ def test_session_trace_nullable_times():
 
 
 # ---------------------------------------------------------------------------
-# Recommendation
-# ---------------------------------------------------------------------------
-
-
-def test_recommendation_instantiates_with_all_fields():
-    from cctx.models import Recommendation
-
-    r = Recommendation(
-        title="Enable tool search",
-        description="Two MCP servers loaded but never used.",
-        config_change="tool_search: true",
-        estimated_savings_per_session_usd=0.25,
-        estimated_savings_per_week_usd=8.20,
-        source_analyzer="waste",
-    )
-    assert r.title == "Enable tool search"
-    assert r.description == "Two MCP servers loaded but never used."
-    assert r.config_change == "tool_search: true"
-    assert r.estimated_savings_per_session_usd == 0.25
-    assert r.estimated_savings_per_week_usd == 8.20
-    assert r.source_analyzer == "waste"
-
-
-# ---------------------------------------------------------------------------
-# SessionSummary
-# ---------------------------------------------------------------------------
-
-
-def test_session_summary_instantiates():
-    from cctx.models import SessionSummary
-
-    ss = SessionSummary(
-        session_id="abc123",
-        timestamp=_utcnow(),
-        duration_seconds=272.5,
-        turn_count=25,
-        total_cost_usd=1.42,
-        total_input_tokens=100000,
-        total_output_tokens=12000,
-        context_at_end=142381,
-        compaction_triggered=True,
-        compaction_turn=12,
-        tools_loaded=["Read", "Bash", "Edit"],
-        tools_used=["Read", "Bash"],
-        component_token_turns={"system_prompt": 310000, "tool_descriptions": 602500},
-        waste_token_turns=602500,
-        loop_count=0,
-        loop_waste_tokens=0,
-        recommendations=["Enable tool search", "Add Grep truncation hook"],
-    )
-    assert ss.session_id == "abc123"
-    assert ss.compaction_triggered is True
-    assert ss.compaction_turn == 12
-    assert ss.loop_count == 0
-    assert ss.recommendations == ["Enable tool search", "Add Grep truncation hook"]
-
-
-def test_session_summary_compaction_turn_none():
-    from cctx.models import SessionSummary
-
-    ss = SessionSummary(
-        session_id="xyz",
-        timestamp=_utcnow(),
-        duration_seconds=60.0,
-        turn_count=5,
-        total_cost_usd=0.10,
-        total_input_tokens=5000,
-        total_output_tokens=1000,
-        context_at_end=6000,
-        compaction_triggered=False,
-        compaction_turn=None,
-        tools_loaded=[],
-        tools_used=[],
-        component_token_turns={},
-        waste_token_turns=0,
-        loop_count=0,
-        loop_waste_tokens=0,
-        recommendations=[],
-    )
-    assert ss.compaction_turn is None
-
-
-# ---------------------------------------------------------------------------
-# ProjectAnalysis
-# ---------------------------------------------------------------------------
-
-
-def test_project_analysis_instantiates_with_recommendations():
-    from cctx.models import ProjectAnalysis, Recommendation, SessionSummary
-
-    rec = Recommendation(
-        title="Enable tool search",
-        description="...",
-        config_change="tool_search: true",
-        estimated_savings_per_session_usd=0.25,
-        estimated_savings_per_week_usd=8.20,
-        source_analyzer="waste",
-    )
-    ss = SessionSummary(
-        session_id="abc",
-        timestamp=_utcnow(),
-        duration_seconds=100.0,
-        turn_count=10,
-        total_cost_usd=0.50,
-        total_input_tokens=50000,
-        total_output_tokens=5000,
-        context_at_end=55000,
-        compaction_triggered=False,
-        compaction_turn=None,
-        tools_loaded=["Read"],
-        tools_used=["Read"],
-        component_token_turns={},
-        waste_token_turns=0,
-        loop_count=0,
-        loop_waste_tokens=0,
-        recommendations=[],
-    )
-    pa = ProjectAnalysis(
-        project_path="/Users/test/Projects/demo",
-        date_range=(_utcnow(), _utcnow()),
-        sessions=[ss],
-        total_cost=0.50,
-        avg_cost_per_session=0.50,
-        median_cost_per_session=0.50,
-        p95_cost_per_session=0.50,
-        total_waste_cost=0.0,
-        waste_rate=0.0,
-        tool_waste_rates={"github-mcp": 0.89},
-        stale_content_rates={"grep": 0.91},
-        daily_trends={"cost": [0.5]},
-        recommendations=[rec],
-    )
-    assert pa.project_path == "/Users/test/Projects/demo"
-    assert len(pa.sessions) == 1
-    assert len(pa.recommendations) == 1
-    assert pa.recommendations[0].title == "Enable tool search"
-    assert pa.tool_waste_rates == {"github-mcp": 0.89}
-
-
-# ---------------------------------------------------------------------------
 # group_into_exchanges
 # ---------------------------------------------------------------------------
 
@@ -636,3 +496,152 @@ def test_no_third_party_imports():
     ]
     for pattern in forbidden:
         assert pattern not in text, f"Forbidden import found in models.py: {pattern!r}"
+
+
+# ---------------------------------------------------------------------------
+# Autopsy types — M2
+# ---------------------------------------------------------------------------
+
+
+def test_finding_kind_values():
+    from cctx.models import FindingKind
+
+    assert FindingKind.RETRY_LOOP.value == "retry_loop"
+    assert FindingKind.SCOPE_CREEP.value == "scope_creep"
+    assert FindingKind.STALE_CONTEXT.value == "stale_context"
+
+
+def test_severity_and_confidence_are_str_enums():
+    from cctx.models import Confidence, Severity
+
+    assert isinstance(Severity.HIGH, str)
+    assert Severity.HIGH == "high"
+    assert Confidence.MEDIUM == "medium"
+
+
+def test_finding_instantiates():
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+
+    f = Finding(
+        kind=FindingKind.RETRY_LOOP,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=12,
+        last_turn=16,
+        evidence={"occurrences": [], "loop_length": 3},
+        cost_usd=None,
+        summary="Edit(src/foo.py) failed 3× between turns 12–16",
+    )
+    assert f.kind is FindingKind.RETRY_LOOP
+    assert f.severity is Severity.HIGH
+    assert f.confidence is Confidence.HIGH
+    assert f.first_turn == 12
+    assert f.last_turn == 16
+    assert f.cost_usd is None
+
+
+def test_finding_last_turn_none():
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+
+    f = Finding(
+        kind=FindingKind.SCOPE_CREEP,
+        severity=Severity.MEDIUM,
+        confidence=Confidence.MEDIUM,
+        first_turn=5,
+        last_turn=None,
+        evidence={"phrases": []},
+        cost_usd=None,
+        summary="'while I'm here' at turn 5",
+    )
+    assert f.last_turn is None
+
+
+def test_patch_instantiates():
+    from cctx.models import FindingKind, Patch
+
+    p = Patch(
+        target_file="CLAUDE.md",
+        description="Add retry discipline rule",
+        unified_diff="+## Retry discipline\n+\n+Stop after two failures.",
+        finding_kind=FindingKind.RETRY_LOOP,
+        evidence_summary="Edit(src/foo.py) failed 3× between turns 12–16",
+    )
+    assert p.target_file == "CLAUDE.md"
+    assert p.finding_kind is FindingKind.RETRY_LOOP
+    assert "+## Retry discipline" in p.unified_diff
+
+
+def test_diagnosis_instantiates():
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
+
+    f = Finding(
+        kind=FindingKind.RETRY_LOOP,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=12,
+        last_turn=16,
+        evidence={},
+        cost_usd=None,
+        summary="test",
+    )
+    d = Diagnosis(
+        session_id="abc123",
+        findings=[f],
+        inflection_turn=12,
+        patches=[],
+        total_cost_usd=2.14,
+        waste_cost_usd=0.0,
+        analysed_at=_utcnow(),
+    )
+    assert d.session_id == "abc123"
+    assert len(d.findings) == 1
+    assert d.inflection_turn == 12
+    assert d.patches == []
+    assert d.waste_cost_usd == 0.0
+
+
+def test_diagnosis_no_findings():
+    from cctx.models import Diagnosis
+
+    d = Diagnosis(
+        session_id="clean",
+        findings=[],
+        inflection_turn=None,
+        patches=[],
+        total_cost_usd=0.50,
+        waste_cost_usd=0.0,
+        analysed_at=_utcnow(),
+    )
+    assert d.inflection_turn is None
+
+
+def test_kind_evidence_instantiates():
+    from cctx.models import FindingKind, KindEvidence
+
+    ev = KindEvidence(
+        kind=FindingKind.STALE_CONTEXT,
+        session_count=8,
+        total_waste_usd=4.30,
+        example_summaries=["22K-token Bash result stale 14 turns"],
+    )
+    assert ev.session_count == 8
+    assert ev.total_waste_usd == 4.30
+
+
+def test_aggregate_report_instantiates():
+    from datetime import timedelta
+
+    from cctx.models import AggregateReport, FindingKind, KindEvidence
+
+    ev = KindEvidence(FindingKind.RETRY_LOOP, 3, 0.0, [])
+    report = AggregateReport(
+        window=timedelta(days=7),
+        sessions_analysed=12,
+        sessions_with_findings=8,
+        total_cost_usd=24.10,
+        waste_cost_usd=4.30,
+        by_kind={FindingKind.RETRY_LOOP: ev},
+        patches=[],
+    )
+    assert report.sessions_analysed == 12
+    assert FindingKind.RETRY_LOOP in report.by_kind
