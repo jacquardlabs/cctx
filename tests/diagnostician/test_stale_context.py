@@ -130,11 +130,9 @@ def test_cost_usd_is_none_from_classifier():
 
 def test_compaction_resets_stale_count(tmp_path):
     """A compaction system turn resets staleness — item excluded from finding."""
-    from cctx.models import Turn
-    from datetime import timezone
-    from tests.diagnostician.conftest import _dt
-
     from cctx.diagnostician.patterns.stale_context import classify
+    from cctx.models import Turn
+    from tests.diagnostician.conftest import _dt
 
     uid = "toolu_grep_c"
     compaction_turn = Turn(

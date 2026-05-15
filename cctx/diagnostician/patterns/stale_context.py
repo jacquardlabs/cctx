@@ -33,7 +33,7 @@ def _make_3grams(text: str) -> set[tuple[str, ...]]:
     return {tuple(words[i : i + 3]) for i in range(len(words) - 2)}
 
 
-def _is_compaction(turn: "Turn") -> bool:
+def _is_compaction(turn: Turn) -> bool:
     return turn.role == "system" and "compact" in turn.text.lower()
 
 
@@ -43,10 +43,7 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
 
     for turn in trace.turns:
         for tr in turn.tool_results:
-            if tr.token_count > 0:
-                tokens = tr.token_count
-            else:
-                tokens = _estimate_tokens(tr.content)
+            tokens = tr.token_count if tr.token_count > 0 else _estimate_tokens(tr.content)
             if tokens < T_SIZE:
                 continue
             candidates.append({

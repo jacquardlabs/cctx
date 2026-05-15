@@ -72,7 +72,8 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     first_turn = min(p["turn"] for p in phrases_found)
     count = len(phrases_found)
     first_phrase = phrases_found[0]["phrase"]
-    summary = f"'{first_phrase}' at turn {first_turn} ({count} scope expansion{'s' if count > 1 else ''} total)"
+    plural = "s" if count > 1 else ""
+    summary = f"'{first_phrase}' at turn {first_turn} ({count} scope expansion{plural} total)"
 
     return [Finding(
         kind=FindingKind.SCOPE_CREEP,

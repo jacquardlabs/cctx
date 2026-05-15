@@ -58,6 +58,9 @@ select = [
 # single lines than wrapped (E501), and intentionally-unused loop variables
 # kept for symmetry across passes (B007).
 "tests/fixtures/scrub.py" = ["E501", "B007"]
+# Diagnostician test helpers build multi-arg make_* calls that read better
+# as single lines than split across lines.
+"tests/diagnostician/*.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

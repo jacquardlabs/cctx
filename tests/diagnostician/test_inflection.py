@@ -1,7 +1,7 @@
 """Tests for cctx/diagnostician/inflection.py."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import timezone
 
 UTC = timezone.utc
 
