@@ -10,6 +10,7 @@ Uses rich for formatting. Accepts an optional Console for testing.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich.console import Console
@@ -42,7 +43,12 @@ def _default_console() -> Console:
     return Console()
 
 
-def render_diagnosis(diagnosis: Diagnosis, *, console: Console | None = None) -> None:
+def render_diagnosis(
+    diagnosis: Diagnosis,
+    *,
+    session_path: Path | None = None,
+    console: Console | None = None,
+) -> None:
     con = console or _default_console()
 
     # Header
@@ -81,6 +87,14 @@ def render_diagnosis(diagnosis: Diagnosis, *, console: Console | None = None) ->
             con.print(f"Evidence: {patch.evidence_summary}")
             syntax = Syntax(patch.unified_diff, "diff", theme="monokai", word_wrap=True)
             con.print(syntax)
+
+    if session_path is not None:
+        con.print()
+        con.print(
+            Text("cctx trace ", style="bold")
+            + Text(str(session_path), style="dim")
+            + Text("  to step through this session interactively", style="dim")
+        )
 
 
 def render_aggregate(report: AggregateReport, *, console: Console | None = None) -> None:

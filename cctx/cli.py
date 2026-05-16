@@ -185,7 +185,7 @@ def autopsy(
             html_out.write_text(render_html(diagnosis, trace), encoding="utf-8")
             click.echo(f"HTML report written to {html_out}")
         else:
-            render_diagnosis(diagnosis)
+            render_diagnosis(diagnosis, session_path=target)
 
 
 @cli.command()
@@ -238,16 +238,51 @@ def export(target: Path, fmt: str, out: Path | None, no_content: bool) -> None:
 
 
 @cli.command()
-@click.argument("target", type=click.Path(exists=True, path_type=Path))
-def trace(target: Path) -> None:
+@click.argument(
+    "target",
+    required=False,
+    type=click.Path(path_type=Path),
+)
+@click.option(
+    "--latest",
+    is_flag=True,
+    default=False,
+    help="Open the most recent session in TARGET project (default: cwd).",
+)
+def trace(target: Path | None, latest: bool) -> None:
     """Open an interactive TUI trace viewer for a session.
 
-    TARGET is a session JSONL file.
+    TARGET is a session JSONL file or project directory.
+    Use --latest to automatically pick the most recent session.
     """
+    from cctx.discovery import find_project_dir
+    from cctx.discovery import latest_session as _latest_session
     from cctx.renderers.trace_tui import launch
 
+    if target is None:
+        if not latest:
+            raise click.UsageError(
+                "TARGET is required. Pass a session .jsonl file, a project directory, "
+                "or use --latest to pick the most recent session."
+            )
+        target = Path.cwd()
+
+    if not target.exists():
+        raise click.UsageError(f"Path does not exist: {target}")
+
     if target.is_dir():
-        raise click.UsageError("TARGET must be a .jsonl session file, not a directory.")
+        session_path = _latest_session(target)
+        if session_path is None:
+            project_dir = find_project_dir(target)
+            if project_dir is not None:
+                session_path = _latest_session(project_dir)
+        if session_path is None:
+            raise click.UsageError(
+                f"No Claude Code sessions found for {target}.\n"
+                "Check that ~/.claude/projects/ contains a matching directory."
+            )
+        target = session_path
+
     session = tokenize_session(parse_session(target))
     diagnosis = diagnostician.run(session)
     diagnosis = claude_md.generate(diagnosis)
