@@ -103,6 +103,30 @@ click.rich_click.USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True
 
 
+def _render_check_findings(findings: list, target_dir: Path) -> None:
+    """Print harvest --check results to stdout using rich."""
+    import rich_click as _click
+    from rich.console import Console
+    from rich.rule import Rule
+
+    con = Console()
+    claude_md_path = target_dir / "CLAUDE.md"
+    con.print(Rule(f"cctx harvest --check — {claude_md_path}"))
+    if not findings:
+        con.print("✓ CLAUDE.md looks clean — no dead references or empty sections.")
+        return
+    con.print(f"{len(findings)} issue(s) found:\n")
+    from cctx.harvest import CheckIssue
+    _ISSUE_LABEL = {
+        CheckIssue.DEAD_FILE_REF:  "dead file reference",
+        CheckIssue.DEAD_SKILL_REF: "dead skill reference",
+        CheckIssue.EMPTY_SECTION:  "empty section",
+    }
+    for f in findings:
+        label = _ISSUE_LABEL.get(f.issue, f.issue.value)
+        con.print(f"  [{f.heading}]  {label}: {f.detail}")
+
+
 @click.group()
 def cli() -> None:
     """cctx — find out why your Claude Code session went sideways."""
@@ -397,15 +421,29 @@ def trace(target: Path | None, latest: bool) -> None:
     type=click.Path(file_okay=False, path_type=Path),
     help="Directory containing CLAUDE.md (default: cwd).",
 )
+@click.option(
+    "--check",
+    "check_mode",
+    is_flag=True,
+    default=False,
+    help="Audit existing CLAUDE.md for dead references and empty sections. Exit 1 if findings.",
+)
 def harvest(
     target: Path,
     since: str | None,
     apply_mode: bool,
     dry_run: bool,
     target_dir: Path | None,
+    check_mode: bool,
 ) -> None:
     """Apply autopsy patches to CLAUDE.md."""
-    from cctx.harvest import apply_patches, preview_patches
+    from cctx.harvest import apply_patches, check_claude_md, preview_patches
+
+    if check_mode:
+        resolved_dir = target_dir or Path.cwd()
+        findings = check_claude_md(resolved_dir)
+        _render_check_findings(findings, resolved_dir)
+        raise SystemExit(1 if findings else 0)
 
     if apply_mode and dry_run:
         raise click.UsageError("--apply and --dry-run are mutually exclusive.")

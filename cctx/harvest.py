@@ -4,6 +4,7 @@ Public API:
     apply_patch(patch, target_dir) -> ApplyResult
     preview_patches(patches, target_dir) -> list[ApplyResult]
     apply_patches(patches, target_dir) -> list[ApplyResult]
+    check_claude_md(target_dir) -> list[CheckFinding]
 
 Layering rules (MUST respect):
 - Does NOT import click, rich_click, or anthropic.
@@ -20,6 +21,24 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cctx.models import Patch
+
+
+# ---------------------------------------------------------------------------
+# harvest --check types
+# ---------------------------------------------------------------------------
+
+
+class CheckIssue(str, Enum):
+    DEAD_FILE_REF = "dead_file_ref"   # backtick-quoted path that doesn't exist on disk
+    DEAD_SKILL_REF = "dead_skill_ref" # .claude/skills/ reference that doesn't exist
+    EMPTY_SECTION = "empty_section"   # ## heading with no content
+
+
+@dataclass
+class CheckFinding:
+    heading: str          # ## section where this was found ("(preamble)" if before first heading)
+    issue: CheckIssue
+    detail: str           # human-readable description
 
 
 class ApplyStatus(str, Enum):
@@ -171,3 +190,106 @@ def preview_patches(patches: list[Patch], target_dir: Path) -> list[ApplyResult]
 def apply_patches(patches: list[Patch], target_dir: Path) -> list[ApplyResult]:
     """Apply all applicable patches in sequence."""
     return [apply_patch(patch, target_dir) for patch in patches]
+
+
+# ---------------------------------------------------------------------------
+# harvest --check
+# ---------------------------------------------------------------------------
+
+# Matches backtick-quoted tokens that look like file paths with an extension.
+# We anchor on a leading backtick-word-backtick pattern to avoid false
+# positives on URLs, option names, etc.
+_FILE_REF_RE = re.compile(r"`([^`\s]+\.[a-z]{1,6}[^`]*)`")
+
+# Matches .claude/skills/ paths (with or without backticks)
+_SKILL_REF_RE = re.compile(r"[`']?([./]*\.claude/skills/[^\s`'\"]+)[`']?")
+
+_KNOWN_EXTENSIONS = {
+    ".py", ".ts", ".js", ".tsx", ".jsx", ".toml", ".yaml", ".yml",
+    ".json", ".md", ".sh", ".bash", ".fish", ".zsh",
+}
+
+
+def _parse_sections(content: str) -> list[tuple[str, str]]:
+    """Split markdown into (heading, body) pairs.
+
+    The text before the first ## heading is yielded as ("(preamble)", text).
+    """
+    sections: list[tuple[str, str]] = []
+    current_heading = "(preamble)"
+    current_lines: list[str] = []
+
+    for line in content.splitlines():
+        if line.startswith("## "):
+            sections.append((current_heading, "\n".join(current_lines)))
+            current_heading = line.rstrip()
+            current_lines = []
+        else:
+            current_lines.append(line)
+    sections.append((current_heading, "\n".join(current_lines)))
+    return sections
+
+
+def check_claude_md(target_dir: Path) -> list[CheckFinding]:
+    """Audit CLAUDE.md in target_dir for deterministically detectable issues.
+
+    Checks:
+      - Dead file references: backtick-quoted paths that don't exist on disk
+      - Dead skill references: .claude/skills/ paths that don't exist
+      - Empty sections: ## headings with no content
+
+    Returns an empty list if CLAUDE.md doesn't exist (not an error).
+    """
+    claude_md = target_dir / "CLAUDE.md"
+    if not claude_md.exists():
+        return []
+
+    content = claude_md.read_text(encoding="utf-8")
+    sections = _parse_sections(content)
+    findings: list[CheckFinding] = []
+
+    for heading, body in sections:
+        body_stripped = body.strip()
+
+        # Empty section (skip preamble — it's often intentionally sparse)
+        if heading != "(preamble)" and not body_stripped:
+            findings.append(CheckFinding(
+                heading=heading,
+                issue=CheckIssue.EMPTY_SECTION,
+                detail=f"{heading!r} has no content",
+            ))
+            continue
+
+        # Dead skill references
+        for match in _SKILL_REF_RE.finditer(body):
+            skill_path_str = match.group(1).lstrip("./")
+            # Try resolving from target_dir and from home
+            candidates = [
+                target_dir / skill_path_str,
+                Path.home() / skill_path_str,
+            ]
+            if not any(c.exists() for c in candidates):
+                findings.append(CheckFinding(
+                    heading=heading,
+                    issue=CheckIssue.DEAD_SKILL_REF,
+                    detail=f"skill not found: {match.group(1)!r}",
+                ))
+
+        # Dead file references (backtick-quoted paths with known extensions)
+        for match in _FILE_REF_RE.finditer(body):
+            token = match.group(1)
+            p = Path(token)
+            if p.suffix not in _KNOWN_EXTENSIONS:
+                continue
+            # Skip if it looks like a URL or template variable
+            if token.startswith("http") or "{" in token or "<" in token:
+                continue
+            candidate = target_dir / token
+            if not candidate.exists() and not Path(token).exists():
+                findings.append(CheckFinding(
+                    heading=heading,
+                    issue=CheckIssue.DEAD_FILE_REF,
+                    detail=f"file not found: {token!r}",
+                ))
+
+    return findings
