@@ -3,6 +3,8 @@
 render_diagnosis(diagnosis, console=None) -> None
 render_aggregate(report, console=None) -> None
 render_harvest_results(results, dry_run=False, console=None) -> None
+render_projects(projects, console=None) -> None
+render_sessions(project, console=None) -> None
 
 Uses rich for formatting. Accepts an optional Console for testing.
 """
@@ -20,6 +22,7 @@ from rich.text import Text
 from cctx.models import FindingKind, Severity
 
 if TYPE_CHECKING:
+    from cctx.discovery import ProjectInfo
     from cctx.models import AggregateReport, Diagnosis
 
 _SEVERITY_STYLE = {
@@ -170,3 +173,65 @@ def render_harvest_results(
         con.print("Dry run complete. No changes made.")
     else:
         con.print(f"Applied {applied_count} patch(es).")
+
+
+def render_projects(projects: list[ProjectInfo], *, console: Console | None = None) -> None:
+    con = console or _default_console()
+
+    if not projects:
+        con.print("No projects found in ~/.claude/projects/.")
+        return
+
+    con.print(Rule("cctx — projects"))
+    table = Table(show_header=True, box=None, pad_edge=False, show_edge=False)
+    table.add_column("Project", style="bold")
+    table.add_column("Sessions", justify="right", style="dim")
+    table.add_column("Last session", style="dim")
+
+    for proj in projects:
+        last = proj.latest_time.strftime("%Y-%m-%d") if proj.latest_time else "—"
+        table.add_row(
+            proj.display_name,
+            str(proj.session_count),
+            last,
+        )
+    con.print(table)
+    con.print()
+    con.print(
+        Text("cctx ls <project-path>", style="bold") +
+        Text("  to list sessions in a project", style="dim")
+    )
+    con.print(
+        Text("cctx autopsy --latest <project-path>", style="bold") +
+        Text("  to diagnose the most recent session", style="dim")
+    )
+
+
+def render_sessions(project: ProjectInfo, *, console: Console | None = None) -> None:
+    con = console or _default_console()
+
+    con.print(Rule(f"cctx — {project.display_name}"))
+    if not project.sessions:
+        con.print("No sessions found.")
+        return
+
+    table = Table(show_header=True, box=None, pad_edge=False, show_edge=False)
+    table.add_column("Session", style="bold")
+    table.add_column("Date", style="dim")
+    table.add_column("Branch", style="dim")
+    table.add_column("Path", style="dim")
+
+    for s in project.sessions:
+        date_str = s.start_time.strftime("%Y-%m-%d %H:%M") if s.start_time else "—"
+        table.add_row(
+            s.session_id[:8],
+            date_str,
+            s.git_branch or "—",
+            str(s.path),
+        )
+    con.print(table)
+    con.print()
+    con.print(
+        Text("cctx autopsy <path>", style="bold") +
+        Text("  to diagnose a session", style="dim")
+    )

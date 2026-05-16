@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from cctx import diagnostician
 from cctx.parsers.claude_code import parse_session
+from cctx.tokenizer import tokenize_session
 
 if TYPE_CHECKING:
     from cctx.models import Diagnosis
@@ -31,7 +32,7 @@ def run(project_dir: Path, window: timedelta) -> list[Diagnosis]:
         if mtime < cutoff:
             continue
         try:
-            trace = parse_session(path)
+            trace = tokenize_session(parse_session(path))
             diagnosis = diagnostician.run(trace)
             result.append(diagnosis)
         except Exception:
