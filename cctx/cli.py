@@ -1,6 +1,7 @@
 """cctx CLI — click + rich-click entry point.
 
 Commands:
+  cctx ls [project]                List projects or sessions
   cctx autopsy <session>           Single-session diagnosis
   cctx autopsy <project> --since   Cross-session aggregation
   cctx export <session>            Export session data as JSONL or CSV
@@ -21,7 +22,13 @@ from cctx.models import AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
 from cctx.recommender import evidence as evidence_mod
-from cctx.renderers.terminal import render_aggregate, render_diagnosis, render_harvest_results
+from cctx.renderers.terminal import (
+    render_aggregate,
+    render_diagnosis,
+    render_harvest_results,
+    render_projects,
+    render_sessions,
+)
 from cctx.tokenizer import tokenize_session
 
 click.rich_click.USE_RICH_MARKUP = True
@@ -33,14 +40,51 @@ def cli() -> None:
     """cctx — find out why your Claude Code session went sideways."""
 
 
+@cli.command("ls")
+@click.argument("project", required=False, type=click.Path(exists=True, path_type=Path))
+def ls(project: Path | None) -> None:
+    """List Claude Code projects and sessions.
+
+    With no arguments, lists all projects in ~/.claude/projects/.
+
+    With PROJECT (a local project directory), lists sessions for that project.
+    """
+    from cctx.discovery import ProjectInfo, find_project_dir, list_projects, list_sessions
+
+    if project is None:
+        projects = list_projects()
+        render_projects(projects)
+    else:
+        cwd = project if project.is_dir() else project.parent
+        project_dir = find_project_dir(cwd)
+        if project_dir is None:
+            raise click.UsageError(
+                f"No Claude Code sessions found for {cwd}.\n"
+                "Check that ~/.claude/projects/ contains a matching directory."
+            )
+        sessions = list_sessions(project_dir)
+        info = ProjectInfo(
+            project_dir=project_dir,
+            display_name=str(cwd).replace(str(Path.home()), "~"),
+            sessions=sessions,
+        )
+        render_sessions(info)
+
+
 @cli.command()
-@click.argument("target", type=click.Path(exists=True, path_type=Path))
+@click.argument("target", required=False, type=click.Path(path_type=Path))
 @click.option(
     "--since",
     default=None,
     metavar="DAYS",
     type=int,
     help="Cross-session mode: analyse all sessions modified within the last N days.",
+)
+@click.option(
+    "--latest",
+    is_flag=True,
+    default=False,
+    help="Diagnose the most recent session in TARGET project (default: cwd).",
 )
 @click.option(
     "--html",
@@ -50,12 +94,46 @@ def cli() -> None:
     type=click.Path(path_type=Path),
     help="Write a self-contained HTML report to FILE (single-session only).",
 )
-def autopsy(target: Path, since: int | None, html_out: Path | None) -> None:
+def autopsy(
+    target: Path | None,
+    since: int | None,
+    latest: bool,
+    html_out: Path | None,
+) -> None:
     """Diagnose a session or project directory.
 
     TARGET is a session JSONL file for single-session diagnosis,
     or a project directory for --since cross-session aggregation.
+
+    Use --latest to automatically pick the most recent session in a project.
     """
+    from cctx.discovery import find_project_dir
+    from cctx.discovery import latest_session as _latest_session
+
+    if latest:
+        if since is not None:
+            raise click.UsageError("--latest and --since are mutually exclusive.")
+        cwd = (target if target and target.is_dir() else Path.cwd())
+        project_dir = find_project_dir(cwd)
+        if project_dir is None:
+            raise click.UsageError(
+                f"No Claude Code sessions found for {cwd}.\n"
+                "Check that ~/.claude/projects/ contains a matching directory."
+            )
+        resolved = _latest_session(project_dir)
+        if resolved is None:
+            raise click.UsageError(f"No sessions found in {project_dir}.")
+        target = resolved
+
+    if target is None:
+        raise click.UsageError(
+            "TARGET is required. Pass a session .jsonl file, a project directory "
+            "(with --since), or use --latest to pick the most recent session."
+        )
+
+    if not target.exists():
+        raise click.UsageError(f"Path does not exist: {target}")
+
     if since is not None:
         if html_out is not None:
             raise click.UsageError("--html is not supported with --since.")
