@@ -134,6 +134,28 @@ Claude Code writes logs to `~/.claude/projects/<encoded-path>/<session-id>.jsonl
 
 `cctx ls` handles discovery automatically — you don't need to navigate the encoded directory structure by hand.
 
+## Using cctx in CI
+
+cctx is primarily a local forensic tool — it reads session logs from `~/.claude/projects/` on your machine. Those logs are personal conversation history and should not be committed to git or uploaded as build artifacts.
+
+**The one case where cctx belongs in CI:** when Claude Code itself runs inside a GitHub Actions job (agentic PR workflows, automated coding steps). In that case the JSONL logs are written on the runner during the job and cctx can analyse them as a post-step:
+
+```yaml
+- uses: anthropics/claude-code-action@v1
+  with:
+    # ... your agentic workflow config
+
+- name: Analyse session
+  run: |
+    pipx run cctx-cli autopsy --latest .
+```
+
+Commands that make sense as CI steps:
+- `cctx autopsy` — diagnose the session that just ran
+- `cctx export` — archive structured findings as a build artifact
+
+`cctx harvest` requires session logs AND writes to `CLAUDE.md` — neither step maps cleanly to CI. Run it locally after a session.
+
 ## License
 
 MIT
