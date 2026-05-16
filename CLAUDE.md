@@ -36,7 +36,7 @@ Recommender      ← turns Findings into Patches: copy-pasteable CLAUDE.md /
 Renderers        ← rich (terminal), Jinja2 (HTML report), textual (trace
                    TUI overlay).
   ↓
-Exporters        ← jsonl, csv, html, json.
+Exporters        ← jsonl, csv.
 ```
 
 ## Project layout
@@ -62,15 +62,16 @@ cctx/
 ├── recommender/
 │   ├── claude_md.py    # Finding -> Patch (CLAUDE.md diff proposals)
 │   └── evidence.py     # session-count + dollar evidence accumulation
+├── harvest.py          # SHIPPED. apply_patch, preview_patches, apply_patches —
+│                       # append-only, idempotent CLAUDE.md patching with
+│                       # fingerprint-based deduplication.
 ├── renderers/
 │   ├── terminal.py     # rich rendering of a Diagnosis
 │   ├── report.py       # Jinja2 HTML report (cctx autopsy --html)
 │   └── trace_tui.py    # textual TUI with autopsy findings overlaid
 └── exporters/
     ├── jsonl.py
-    ├── csv.py
-    ├── html.py
-    └── json.py
+    └── csv.py
 ```
 
 ## Layering rules (enforced by convention)
@@ -101,11 +102,11 @@ These came out of the brief, the parser brainstorming session, and the autopsy p
 
 1. **M0 — Project setup.** SHIPPED. (#1)
 2. **M1 — Foundation.** SHIPPED — parser, tokenizer, models, fixtures, CI. (#2–#6, plus PR #38)
-3. **M2 — Autopsy v0.** Single-session diagnosis + cross-session pattern detection. The wedge product. (#9, #10, #40–#49)
-4. **M3 — Trace TUI** with autopsy overlay. (#20, #21)
-5. **M4 — Export.** jsonl + csv + html + json. (#24, #27)
-6. **M5 — Harvest v1.** Promote autopsy findings to durable CLAUDE.md / rules / skill / ADR diffs. (Issues TBD after autopsy lands.)
-7. **M6 — Release v0.1.0.** README polish + PyPI publish. (#31, #32)
+3. **M2 — Autopsy v0.** SHIPPED — single-session diagnosis + cross-session pattern detection. The wedge product. (#9, #10, #40–#49)
+4. **M3 — Trace TUI** with autopsy overlay. SHIPPED. (PR #57)
+5. **M4 — Export.** SHIPPED — jsonl + csv exporters (html moved to autopsy --html; json deferred). (PR #54)
+6. **M5 — Harvest v1.** SHIPPED — CLAUDE.md target only in v0; promote autopsy findings to durable CLAUDE.md diffs. (PR #56)
+7. **M6 — Release v0.1.0.** Release prep underway — README, PRODUCT.md, DESIGN.md, version bump, PyPI publish. (#31, #32)
 
 Future, not yet milestoned:
 - **Memory hygiene** (`cctx harvest --check`) — audit existing CLAUDE.md and memory files for staleness / contradictions / dead skills.

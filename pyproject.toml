@@ -5,8 +5,8 @@ build-backend = "hatchling.build"
 [project]
 name = "cctx"
 version = "0.0.1"
-description = "Profile, debug, and optimize Claude Code and Agent SDK sessions"
-readme = "cctx-project-brief.md"
+description = "Diagnose Claude Code sessions — find what went wrong, what it cost, and what to add to CLAUDE.md"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Jacquard Labs" }]
