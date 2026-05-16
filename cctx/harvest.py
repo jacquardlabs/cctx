@@ -86,7 +86,8 @@ def _already_present(content: str, fingerprint: str) -> bool:
 
 
 def _is_supported_target(patch: Patch) -> bool:
-    return patch.target_file == "CLAUDE.md"
+    """Any .md file under target_dir is a valid target."""
+    return patch.target_file.endswith(".md")
 
 
 # ---------------------------------------------------------------------------
@@ -106,9 +107,11 @@ def apply_patch(patch: Patch, target_dir: Path) -> ApplyResult:
                 patch=patch,
                 status=ApplyStatus.SKIPPED,
                 target_path=target_path,
-                message=f"target not supported in v0: {patch.target_file}",
+                message=f"target not supported (must be a .md file): {patch.target_file}",
             )
 
+        # Create parent directories (e.g. .claude/rules/, .claude/skills/)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
         if not target_path.exists():
             target_path.touch()
 
@@ -158,7 +161,7 @@ def preview_patches(patches: list[Patch], target_dir: Path) -> list[ApplyResult]
                 patch=patch,
                 status=ApplyStatus.SKIPPED,
                 target_path=target_path,
-                message=f"target not supported in v0: {patch.target_file}",
+                message=f"target not supported (must be a .md file): {patch.target_file}",
             ))
             continue
 

@@ -205,10 +205,10 @@ def test_apply_patch_creates_file_if_missing(tmp_path: Path) -> None:
     assert "## Retry discipline" in content
 
 
-def test_unsupported_target_returns_skipped(tmp_path: Path) -> None:
+def test_non_md_target_returns_skipped(tmp_path: Path) -> None:
     from cctx.harvest import ApplyStatus, apply_patch
 
-    patch = _make_patch(target_file=".claude/rules/foo.md")
+    patch = _make_patch(target_file=".claude/config.json")
     target_dir = tmp_path / "project"
     target_dir.mkdir()
 
@@ -216,6 +216,49 @@ def test_unsupported_target_returns_skipped(tmp_path: Path) -> None:
 
     assert result.status == ApplyStatus.SKIPPED
     assert "not supported" in result.message
+
+
+def test_rules_target_creates_dir_and_file(tmp_path: Path) -> None:
+    from cctx.harvest import ApplyStatus, apply_patch
+
+    patch = _make_patch(target_file=".claude/rules/retry-discipline.md")
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+
+    result = apply_patch(patch, target_dir)
+
+    assert result.status == ApplyStatus.APPLIED
+    rules_file = target_dir / ".claude" / "rules" / "retry-discipline.md"
+    assert rules_file.exists()
+    assert "Retry discipline" in rules_file.read_text()
+
+
+def test_skills_target_creates_stub(tmp_path: Path) -> None:
+    from cctx.harvest import ApplyStatus, apply_patch
+
+    patch = _make_patch(target_file=".claude/skills/retry-guide.md")
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+
+    result = apply_patch(patch, target_dir)
+
+    assert result.status == ApplyStatus.APPLIED
+    skill_file = target_dir / ".claude" / "skills" / "retry-guide.md"
+    assert skill_file.exists()
+
+
+def test_new_target_idempotent(tmp_path: Path) -> None:
+    from cctx.harvest import ApplyStatus, apply_patch
+
+    patch = _make_patch(target_file=".claude/rules/discipline.md")
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+
+    r1 = apply_patch(patch, target_dir)
+    r2 = apply_patch(patch, target_dir)
+
+    assert r1.status == ApplyStatus.APPLIED
+    assert r2.status == ApplyStatus.SKIPPED
 
 
 def test_preview_patches_does_not_write(tmp_path: Path) -> None:
