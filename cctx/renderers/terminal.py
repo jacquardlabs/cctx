@@ -187,7 +187,6 @@ def render_projects(projects: list[ProjectInfo], *, console: Console | None = No
     table.add_column("Project", style="bold")
     table.add_column("Sessions", justify="right", style="dim")
     table.add_column("Last session", style="dim")
-    table.add_column("Path", style="dim")
 
     for proj in projects:
         last = proj.latest_time.strftime("%Y-%m-%d") if proj.latest_time else "—"
@@ -195,7 +194,6 @@ def render_projects(projects: list[ProjectInfo], *, console: Console | None = No
             proj.display_name,
             str(proj.session_count),
             last,
-            str(proj.project_dir),
         )
     con.print(table)
     con.print()

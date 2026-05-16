@@ -121,29 +121,35 @@ def autopsy(
     from cctx.discovery import find_project_dir
     from cctx.discovery import latest_session as _latest_session
 
-    if latest:
-        if since is not None:
-            raise click.UsageError("--latest and --since are mutually exclusive.")
-        cwd = (target if target and target.is_dir() else Path.cwd())
-        project_dir = find_project_dir(cwd)
-        if project_dir is None:
-            raise click.UsageError(
-                f"No Claude Code sessions found for {cwd}.\n"
-                "Check that ~/.claude/projects/ contains a matching directory."
-            )
-        resolved = _latest_session(project_dir)
-        if resolved is None:
-            raise click.UsageError(f"No sessions found in {project_dir}.")
-        target = resolved
+    if latest and since is not None:
+        raise click.UsageError("--latest and --since are mutually exclusive.")
 
     if target is None:
-        raise click.UsageError(
-            "TARGET is required. Pass a session .jsonl file, a project directory "
-            "(with --since), or use --latest to pick the most recent session."
-        )
+        if not latest:
+            raise click.UsageError(
+                "TARGET is required. Pass a session .jsonl file, a project directory, "
+                "or use --latest to pick the most recent session."
+            )
+        target = Path.cwd()
 
     if not target.exists():
         raise click.UsageError(f"Path does not exist: {target}")
+
+    # Resolve a directory to its latest session (explicit --latest or implicit when
+    # a directory is passed without --since).
+    if target.is_dir() and since is None:
+        # Accept both local project dirs (~/Projects/foo) and encoded claude dirs
+        session = _latest_session(target)  # works if target IS the .claude/projects dir
+        if session is None:
+            project_dir = find_project_dir(target)
+            if project_dir is not None:
+                session = _latest_session(project_dir)
+        if session is None:
+            raise click.UsageError(
+                f"No Claude Code sessions found for {target}.\n"
+                "Check that ~/.claude/projects/ contains a matching directory."
+            )
+        target = session
 
     if since is not None:
         if html_out is not None:
