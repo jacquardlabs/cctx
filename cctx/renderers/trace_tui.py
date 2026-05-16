@@ -238,7 +238,11 @@ def launch(trace: SessionTrace, diagnosis: Diagnosis) -> None:  # noqa: C901
             for t in trace.turns:
                 is_flagged = t.turn_number in flagged
                 findings = flagged.get(t.turn_number, [])
-                tokens = str(t.usage.input_tokens) if t.usage else ""
+                tokens = (
+                    f"{t.usage.input_tokens + t.usage.cache_creation_5m + t.usage.cache_creation_1h + t.usage.cache_read:,}"
+                    if t.usage
+                    else ""
+                )
                 model = t.model or ""
                 flags = ", ".join(f.kind.value for f in findings)
 
