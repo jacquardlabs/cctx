@@ -1,15 +1,14 @@
 Output demo.gif
 Set FontSize 14
-Set Width 120
-Set Height 40
+Set Width 1200
+Set Height 600
 Set Theme "Catppuccin Mocha"
 
 Type "cctx ls"
 Enter
-Sleep 1500ms
+Sleep 2000ms
 
-# Edit the path below to a real session file on your machine before recording.
-# Run `cctx ls` first to find one, then copy a path from the output.
-Type "cctx autopsy ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl"
+Type "cctx autopsy --latest ~/Projects/cctx"
 Enter
-Sleep 4000ms
+Sleep 3000ms
+Sleep 6000ms
