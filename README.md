@@ -3,8 +3,8 @@
 Diagnose your Claude Code sessions — find out when they went wrong, why they cost what they did, and what to add to your `CLAUDE.md` so it doesn't happen again.
 
 [![CI](https://github.com/jacquardlabs/cctx/actions/workflows/ci.yml/badge.svg)](https://github.com/jacquardlabs/cctx/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/cctx)](https://pypi.org/project/cctx/)
-[![Python](https://img.shields.io/badge/python-3.10_%7C_3.11_%7C_3.12_%7C_3.13-blue)](https://pypi.org/project/cctx/)
+[![PyPI](https://img.shields.io/pypi/v/cctx-cli)](https://pypi.org/project/cctx-cli/)
+[![Python](https://img.shields.io/badge/python-3.10_%7C_3.11_%7C_3.12_%7C_3.13-blue)](https://pypi.org/project/cctx-cli/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ![demo](demo.gif)
@@ -12,13 +12,13 @@ Diagnose your Claude Code sessions — find out when they went wrong, why they c
 ## Install
 
 ```bash
-pipx install cctx
+pipx install cctx-cli
 ```
 
 Or with pip:
 
 ```bash
-pip install cctx
+pip install cctx-cli
 ```
 
 `pipx` is recommended — it installs cctx in an isolated environment so its dependencies don't conflict with your projects.

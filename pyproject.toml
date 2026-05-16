@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cctx"
+name = "cctx-cli"
 version = "0.1.0"
 description = "Diagnose Claude Code sessions — find what went wrong, what it cost, and what to add to CLAUDE.md"
 readme = "README.md"
