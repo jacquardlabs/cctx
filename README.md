@@ -4,7 +4,7 @@ Diagnose your Claude Code sessions — find out when they went wrong, why they c
 
 [![CI](https://github.com/jacquardlabs/cctx/actions/workflows/ci.yml/badge.svg)](https://github.com/jacquardlabs/cctx/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/cctx)](https://pypi.org/project/cctx/)
-[![Python](https://img.shields.io/pypi/pyversions/cctx)](https://pypi.org/project/cctx/)
+[![Python](https://img.shields.io/badge/python-3.10_%7C_3.11_%7C_3.12_%7C_3.13-blue)](https://pypi.org/project/cctx/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ![demo](demo.gif)
