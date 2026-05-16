@@ -20,6 +20,7 @@ from cctx.diagnostician import aggregate
 from cctx.models import AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
+from cctx.tokenizer import tokenize_session
 from cctx.recommender import evidence as evidence_mod
 from cctx.renderers.terminal import render_aggregate, render_diagnosis, render_harvest_results
 
@@ -81,7 +82,7 @@ def autopsy(target: Path, since: int | None, html_out: Path | None) -> None:
                 "TARGET is a directory. Use --since N for cross-session mode, "
                 "or pass a .jsonl file directly."
             )
-        trace = parse_session(target)
+        trace = tokenize_session(parse_session(target))
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
         if html_out is not None:
@@ -124,7 +125,7 @@ def export(target: Path, fmt: str, out: Path | None, no_content: bool) -> None:
     from cctx.exporters import csv as csv_mod
     from cctx.exporters import jsonl as jsonl_mod
 
-    trace = parse_session(target)
+    trace = tokenize_session(parse_session(target))
     diagnosis = diagnostician.run(trace)
     diagnosis = claude_md.generate(diagnosis)
     pairs = [(diagnosis, trace)]
@@ -152,7 +153,7 @@ def trace(target: Path) -> None:
 
     if target.is_dir():
         raise click.UsageError("TARGET must be a .jsonl session file, not a directory.")
-    session = parse_session(target)
+    session = tokenize_session(parse_session(target))
     diagnosis = diagnostician.run(session)
     diagnosis = claude_md.generate(diagnosis)
     launch(session, diagnosis)
@@ -215,7 +216,7 @@ def harvest(
                 "TARGET is a directory. Use --since N for cross-session mode, "
                 "or pass a .jsonl file directly."
             )
-        trace = parse_session(target)
+        trace = tokenize_session(parse_session(target))
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
         patches = diagnosis.patches
