@@ -147,8 +147,10 @@ cctx is primarily a local forensic tool — it reads session logs from `~/.claud
 
 - name: Analyse session
   run: |
-    pipx run cctx-cli autopsy --latest .
+    pipx run cctx-cli autopsy --latest . --github-summary
 ```
+
+`--github-summary` appends a markdown findings report to the GitHub Actions job summary UI. Omit it to just print to stdout.
 
 Commands that make sense as CI steps:
 - `cctx autopsy` — diagnose the session that just ran

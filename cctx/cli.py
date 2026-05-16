@@ -172,11 +172,19 @@ def ls(project: Path | None) -> None:
     type=click.Path(path_type=Path),
     help="Write a self-contained HTML report to FILE (single-session only).",
 )
+@click.option(
+    "--github-summary",
+    "github_summary",
+    is_flag=True,
+    default=False,
+    help="Append findings as markdown to $GITHUB_STEP_SUMMARY (single-session only).",
+)
 def autopsy(
     target: Path | None,
     since: str | None,
     latest: bool,
     html_out: Path | None,
+    github_summary: bool,
 ) -> None:
     """Diagnose a session or project directory.
 
@@ -221,6 +229,8 @@ def autopsy(
     if since is not None:
         if html_out is not None:
             raise click.UsageError("--html is not supported with --since.")
+        if github_summary:
+            raise click.UsageError("--github-summary is not supported with --since.")
         # Cross-session path
         project_dir = target if target.is_dir() else target.parent
         start, end, label = parse_since(since)
@@ -251,7 +261,10 @@ def autopsy(
             from cctx.renderers.report import render_html
             html_out.write_text(render_html(diagnosis, trace), encoding="utf-8")
             click.echo(f"HTML report written to {html_out}")
-        else:
+        if github_summary:
+            from cctx.renderers.github import write_github_summary
+            write_github_summary(diagnosis)
+        if html_out is None and not github_summary:
             render_diagnosis(diagnosis, session_path=target)
 
 
