@@ -2,87 +2,137 @@
 
 Diagnose your Claude Code sessions — find out when they went wrong, why they cost what they did, and what to add to your `CLAUDE.md` so it doesn't happen again.
 
+[![CI](https://github.com/jacquardlabs/cctx/actions/workflows/ci.yml/badge.svg)](https://github.com/jacquardlabs/cctx/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/cctx)](https://pypi.org/project/cctx/)
+[![Python](https://img.shields.io/pypi/pyversions/cctx)](https://pypi.org/project/cctx/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+![demo](demo.gif)
+
 ## Install
 
+```bash
+pipx install cctx
 ```
+
+Or with pip:
+
+```bash
 pip install cctx
 ```
 
+`pipx` is recommended — it installs cctx in an isolated environment so its dependencies don't conflict with your projects.
+
 ## Quick start
 
-Point cctx at a session file from `~/.claude/projects/`:
+```bash
+cctx ls                   # find your sessions
+cctx autopsy --latest     # diagnose the most recent one
+```
 
-```
-cctx autopsy ~/.claude/projects/<project>/<session>.jsonl
-```
+cctx is a forensic tool. You reach for it after a session — when something felt off, when the cost was higher than expected, or on a weekly review pass. It reads the JSONL logs Claude Code writes to `~/.claude/projects/` and produces findings with attributed cost and copy-pasteable `CLAUDE.md` patches.
 
 ## Commands
 
-### `cctx autopsy <session>` — diagnose a session
+### `cctx ls` — list projects and sessions
 
-Runs three pattern classifiers (retry loop, scope creep, stale context) and shows findings with attributed cost.
-
-```
-cctx autopsy ~/.claude/projects/myapp/abc123.jsonl
-```
-
-Options:
-- `--html FILE` — write a self-contained HTML report instead of terminal output
-
-### `cctx autopsy <project> --since N` — cross-session patterns
-
-Analyse all sessions in a project directory modified in the last N days.
-
-```
-cctx autopsy ~/.claude/projects/myapp --since 7
+```bash
+cctx ls                    # list all Claude Code projects
+cctx ls ~/Projects/myapp   # list sessions for a specific project
 ```
 
-### `cctx harvest <session>` — apply patches to CLAUDE.md
+### `cctx autopsy` — diagnose a session
 
-After autopsy finds issues, harvest proposes copy-pasteable CLAUDE.md additions.
+```bash
+# Most recent session in the current directory
+cctx autopsy --latest
 
+# Specific session file
+cctx autopsy ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl
+
+# All sessions from the last 7 days
+cctx autopsy ~/Projects/myapp --since 7
+
+# Write a self-contained HTML report
+cctx autopsy ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --html report.html
 ```
-cctx harvest ~/.claude/projects/myapp/abc123.jsonl --dry-run
-cctx harvest ~/.claude/projects/myapp/abc123.jsonl --apply
+
+Runs three pattern classifiers (retry loop, scope creep, stale context) and prints findings with attributed cost. Use `--since N` to aggregate patterns across multiple sessions in a project.
+
+### `cctx harvest` — apply patches to CLAUDE.md
+
+```bash
+# Interactive: preview then confirm
+cctx harvest ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl
+
+# Preview only — don't write anything
+cctx harvest ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --dry-run
+
+# Apply without confirmation
+cctx harvest ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --apply
+
+# Cross-session: patches from the last 7 days of sessions
+cctx harvest ~/Projects/myapp --since 7
 ```
 
-### `cctx export <session>` — export session data
+Turns autopsy findings into copy-pasteable `CLAUDE.md` additions. Patches are idempotent — running harvest twice on the same session won't duplicate entries. Use `--target-dir DIR` to specify which directory's `CLAUDE.md` to patch (default: current working directory).
 
-Export session analysis as JSONL or CSV for external tools.
+### `cctx export` — export session data
 
+```bash
+# CSV to file
+cctx export ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --format csv --out session.csv
+
+# JSONL to stdout
+cctx export ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --format jsonl
+
+# Omit patch text and finding summaries (smaller output for scripted use)
+cctx export ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --format jsonl --no-content
 ```
-cctx export ~/.claude/projects/myapp/abc123.jsonl --format csv --out session.csv
+
+Dumps session analysis as JSONL (one object per session) or CSV (one row per turn) for use in external tools.
+
+### `cctx trace` — interactive TUI
+
+```bash
+cctx trace ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl
 ```
 
-### `cctx trace <session>` — interactive TUI
-
-Step through the session turn by turn with findings overlaid.
-
-```
-cctx trace ~/.claude/projects/myapp/abc123.jsonl
-```
+Steps through a session turn by turn in a terminal UI with autopsy findings overlaid. Press `q` to quit.
 
 ## What cctx detects
 
-| Pattern | What it means |
-|---|---|
-| **Retry loop** | The same tool call failing 2+ times with no successful fix |
-| **Scope creep** | Assistant expanding scope mid-task ("while I'm here, let me also...") |
-| **Stale context** | Large tool results sitting in context long after they're useful |
+| Pattern | What it means | How it wastes money |
+|---|---|---|
+| **Retry loop** | The same tool call failing 2+ times with no successful fix | Repeated identical API calls burn input tokens |
+| **Scope creep** | Assistant expanding scope mid-task without being asked | Unnecessary extra turns and tool calls |
+| **Stale context** | Large tool results sitting in context long after their last reference | `content_tokens × billed_turns_stale` — a 22K grep result still present 14 turns later costs ~308K token-turns |
 
 ## Cost attribution
 
-cctx estimates session cost using Anthropic's billing rates (input, cache reads at 10%, cache writes at 125%). Stale context waste is attributed as `content_tokens × billed_turns_stale`. These are approximations; actual API billing may differ slightly.
+cctx estimates session cost using Anthropic's published billing rates:
+
+- Input tokens: standard rate
+- Cache reads: 10% of the input rate
+- Cache writes: 125% of the input rate
+
+Stale-context waste is attributed turn by turn: every turn a large result stays in context after its last reference counts against waste.
+
+These are **approximations** (~85–95% of actual API billing). The gap is internal prompt framing that isn't observable in the JSONL logs. cctx shows estimated costs, not billing-exact figures.
 
 ## Requirements
 
 - Python 3.10+
-- Claude Code session logs at `~/.claude/projects/`
-- No API key required for analysis (optional for exact token counting)
+- Claude Code session logs at `~/.claude/projects/` (written automatically by Claude Code)
+- No API key required for analysis
+
+An `ANTHROPIC_API_KEY` is optional. When set, cctx can call the Anthropic API for exact token counts. Without it, cctx uses the token counts already recorded in the JSONL logs (the default and recommended mode for most users).
 
 ## Session log location
 
-Claude Code writes session logs to `~/.claude/projects/<url-encoded-project-path>/<session-id>.jsonl`. The project path is URL-encoded with `-` replacing `/`, so `/Users/you/Projects/myapp` becomes `-Users-you-Projects-myapp`.
+Claude Code writes logs to `~/.claude/projects/<encoded-path>/<session-id>.jsonl`. The project path is URL-encoded with `-` replacing `/`, so `/Users/you/Projects/myapp` becomes `-Users-you-Projects-myapp`.
+
+`cctx ls` handles discovery automatically — you don't need to navigate the encoded directory structure by hand.
 
 ## License
 
