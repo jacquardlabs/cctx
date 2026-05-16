@@ -18,6 +18,7 @@ import rich_click as click
 
 from cctx import diagnostician
 from cctx.diagnostician import aggregate
+from cctx.discovery import complete_project as _complete_project
 from cctx.models import AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
@@ -41,7 +42,12 @@ def cli() -> None:
 
 
 @cli.command("ls")
-@click.argument("project", required=False, type=click.Path(exists=True, path_type=Path))
+@click.argument(
+    "project",
+    required=False,
+    type=click.Path(exists=True, path_type=Path),
+    shell_complete=lambda c, p, i: _complete_project(c, p, i),
+)
 def ls(project: Path | None) -> None:
     """List Claude Code projects and sessions.
 
@@ -72,7 +78,12 @@ def ls(project: Path | None) -> None:
 
 
 @cli.command()
-@click.argument("target", required=False, type=click.Path(path_type=Path))
+@click.argument(
+    "target",
+    required=False,
+    type=click.Path(path_type=Path),
+    shell_complete=lambda c, p, i: _complete_project(c, p, i),
+)
 @click.option(
     "--since",
     default=None,
