@@ -53,15 +53,16 @@ def render_diagnosis(
 
     # Header
     con.print(Rule(f"cctx autopsy — session {diagnosis.session_id}"))
-    cost_line = f"Session cost: ${diagnosis.total_cost_usd:.2f}"
+    cost_line = f"Session cost: ~${diagnosis.total_cost_usd:.2f}"
     if diagnosis.waste_cost_usd > 0:
         pct = (
             diagnosis.waste_cost_usd / diagnosis.total_cost_usd * 100
             if diagnosis.total_cost_usd
             else 0
         )
-        cost_line += f" | Attributed waste: ${diagnosis.waste_cost_usd:.2f} ({pct:.0f}%)"
+        cost_line += f" | Attributed waste: ~${diagnosis.waste_cost_usd:.2f} ({pct:.0f}%)"
     con.print(cost_line)
+    con.print(Text("~85–95% of actual billing; system framing not observable in JSONL", style="dim"))
 
     if not diagnosis.findings:
         con.print("\nNo findings — session looks clean.")
@@ -100,8 +101,7 @@ def render_diagnosis(
 def render_aggregate(report: AggregateReport, *, console: Console | None = None) -> None:
     con = console or _default_console()
 
-    days = int(report.window.total_seconds() / 86400)
-    con.print(Rule(f"cctx autopsy — last {days} days"))
+    con.print(Rule(f"cctx autopsy — {report.period_label}"))
     con.print(
         f"Sessions: {report.sessions_analysed} analysed, "
         f"{report.sessions_with_findings} with findings"

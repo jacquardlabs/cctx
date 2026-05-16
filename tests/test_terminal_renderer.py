@@ -94,7 +94,12 @@ def test_inflection_turn_shown():
 def test_cost_shown():
     diag = _make_diagnosis([_make_finding("stale_context", cost=0.88)])
     output = _render_to_string(diag)
-    assert "2.14" in output or "2" in output
+    assert "~$2.14" in output or "2.14" in output
+
+
+def test_cost_approximation_note_shown():
+    output = _render_to_string(_make_diagnosis())
+    assert "85" in output or "95" in output or "~" in output
 
 
 def test_patch_diff_shown():

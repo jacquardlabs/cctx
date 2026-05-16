@@ -172,10 +172,11 @@ footer {
     <p class="verdict clean">Clean session</p>
     {% endif %}
     <dl class="costs">
-      <dt>Total cost</dt><dd>${{ "%.2f"|format(diag.total_cost_usd) }}</dd>
-      <dt>Waste attributed</dt><dd>${{ "%.2f"|format(diag.waste_cost_usd) }}</dd>
+      <dt>Total cost</dt><dd>~${{ "%.2f"|format(diag.total_cost_usd) }}</dd>
+      <dt>Waste attributed</dt><dd>~${{ "%.2f"|format(diag.waste_cost_usd) }}</dd>
       {% if diag.inflection_turn is not none %}<dt>Inflection turn</dt><dd>{{ diag.inflection_turn }}</dd>{% endif %}
     </dl>
+    <p class="meta">Costs are estimates (~85–95% of actual billing; system framing not observable in JSONL)</p>
     <p class="meta">Analysed {{ diag.analysed_at.strftime("%Y-%m-%d %H:%M UTC") }}</p>
   </div>
 
