@@ -100,3 +100,54 @@ def test_autopsy_since_runs_on_project_dir(runner, tmp_path):
     assert result.exit_code == 0
     # The aggregate header always shows sessions analysed
     assert "Sessions:" in result.output or "day" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# parse_since tests
+# ---------------------------------------------------------------------------
+
+def test_parse_since_integer():
+    from cctx.cli import parse_since
+    start, end, label = parse_since("7")
+    assert label == "last 7 days"
+    assert (end - start).days == 7
+
+
+def test_parse_since_days_suffix():
+    from cctx.cli import parse_since
+    start, end, label = parse_since("14d")
+    assert label == "last 14 days"
+    assert (end - start).days == 14
+
+
+def test_parse_since_weeks_suffix():
+    from cctx.cli import parse_since
+    start, end, label = parse_since("2w")
+    assert label == "last 14 days"
+    assert (end - start).days == 14
+
+
+def test_parse_since_absolute_date():
+    from cctx.cli import parse_since
+    from datetime import timezone
+    start, end, label = parse_since("2026-05-01")
+    assert start.year == 2026 and start.month == 5 and start.day == 1
+    assert start.tzinfo == timezone.utc
+    assert "2026-05-01" in label
+
+
+def test_parse_since_date_range():
+    from cctx.cli import parse_since
+    from datetime import timezone
+    start, end, label = parse_since("2026-05-01..2026-05-15")
+    assert start.year == 2026 and start.month == 5 and start.day == 1
+    assert end.year == 2026 and end.month == 5 and end.day == 15
+    assert "2026-05-01" in label and "2026-05-15" in label
+
+
+def test_parse_since_invalid():
+    import pytest
+    import click
+    from cctx.cli import parse_since
+    with pytest.raises(click.UsageError):
+        parse_since("not-a-date")

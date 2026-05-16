@@ -225,7 +225,7 @@ class KindEvidence:
 
 @dataclass
 class AggregateReport:
-    window:                 timedelta
+    period_label:           str  # human-readable, e.g. "last 7 days" or "2026-05-01..2026-05-15"
     sessions_analysed:      int
     sessions_with_findings: int
     total_cost_usd:         float

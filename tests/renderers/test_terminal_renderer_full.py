@@ -6,7 +6,6 @@ Console(record=True) + export_text(styles=True) to capture ANSI style info.
 """
 from __future__ import annotations
 
-from datetime import timedelta  # noqa: F401 — used in _make_aggregate_report
 from io import StringIO
 
 # ---------------------------------------------------------------------------
@@ -39,7 +38,7 @@ def _make_aggregate_report(by_kind=None, patches=None, window_days=7):
         by_kind = {}
 
     return AggregateReport(
-        window=timedelta(days=window_days),
+        period_label=f"last {window_days} days",
         sessions_analysed=3,
         sessions_with_findings=2,
         total_cost_usd=4.50,

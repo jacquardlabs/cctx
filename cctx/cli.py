@@ -11,10 +11,77 @@ Commands:
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import rich_click as click
+
+UTC = timezone.utc
+
+
+def parse_since(value: str) -> tuple[datetime, datetime, str]:
+    """Parse --since value into (start, end, label) UTC datetimes.
+
+    Formats accepted:
+      "7"               → last 7 days
+      "7d"              → last 7 days
+      "2w"              → last 14 days
+      "2026-05-01"      → since that date (UTC midnight) until now
+      "2026-05-01..2026-05-15"  → explicit range (end is inclusive, midnight)
+    """
+    now = datetime.now(UTC)
+    stripped = value.strip()
+
+    # Date range: "YYYY-MM-DD..YYYY-MM-DD"
+    if ".." in stripped:
+        parts = stripped.split("..", 1)
+        if len(parts) != 2:
+            raise click.UsageError(f"Invalid --since range '{value}'. Expected YYYY-MM-DD..YYYY-MM-DD")
+        try:
+            start = datetime.fromisoformat(parts[0].strip()).replace(tzinfo=UTC)
+            end = datetime.fromisoformat(parts[1].strip()).replace(tzinfo=UTC)
+            end = end.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            raise click.UsageError(f"Invalid date in --since '{value}'. Expected YYYY-MM-DD..YYYY-MM-DD")
+        return start, end, f"{parts[0].strip()}..{parts[1].strip()}"
+
+    # Absolute date: "YYYY-MM-DD"
+    if len(stripped) == 10 and stripped[4] == "-" and stripped[7] == "-":
+        try:
+            start = datetime.fromisoformat(stripped).replace(tzinfo=UTC)
+        except ValueError:
+            raise click.UsageError(f"Invalid date '{value}'. Expected YYYY-MM-DD")
+        return start, now, f"since {stripped}"
+
+    # Relative: "7", "7d", "2w"
+    stripped_lower = stripped.lower()
+    if stripped_lower.endswith("w"):
+        try:
+            weeks = int(stripped_lower[:-1])
+        except ValueError:
+            raise click.UsageError(f"Invalid --since value '{value}'. Expected integer weeks, e.g. 2w")
+        delta = timedelta(weeks=weeks)
+        label = f"last {weeks * 7} days"
+    elif stripped_lower.endswith("d"):
+        try:
+            days = int(stripped_lower[:-1])
+        except ValueError:
+            raise click.UsageError(f"Invalid --since value '{value}'. Expected integer days, e.g. 7d")
+        delta = timedelta(days=days)
+        label = f"last {days} days"
+    else:
+        try:
+            days = int(stripped)
+        except ValueError:
+            raise click.UsageError(
+                f"Invalid --since value '{value}'. "
+                "Use an integer (7), a shorthand (7d, 2w), or a date (2026-05-01) "
+                "or range (2026-05-01..2026-05-15)."
+            )
+        delta = timedelta(days=days)
+        label = f"last {days} days"
+
+    return now - delta, now, label
 
 from cctx import diagnostician
 from cctx.diagnostician import aggregate
@@ -87,9 +154,9 @@ def ls(project: Path | None) -> None:
 @click.option(
     "--since",
     default=None,
-    metavar="DAYS",
-    type=int,
-    help="Cross-session mode: analyse all sessions modified within the last N days.",
+    metavar="PERIOD",
+    type=str,
+    help="Cross-session mode: 7, 7d, 2w, 2026-05-01, or 2026-05-01..2026-05-15.",
 )
 @click.option(
     "--latest",
@@ -107,7 +174,7 @@ def ls(project: Path | None) -> None:
 )
 def autopsy(
     target: Path | None,
-    since: int | None,
+    since: str | None,
     latest: bool,
     html_out: Path | None,
 ) -> None:
@@ -156,12 +223,12 @@ def autopsy(
             raise click.UsageError("--html is not supported with --since.")
         # Cross-session path
         project_dir = target if target.is_dir() else target.parent
-        window = timedelta(days=since)
-        diagnoses = aggregate.run(project_dir, window=window)
+        start, end, label = parse_since(since)
+        diagnoses = aggregate.run(project_dir, start, end)
         ev = evidence_mod.accumulate(diagnoses)
         patches = claude_md.generate_from_evidence(ev)
         report = AggregateReport(
-            window=window,
+            period_label=label,
             sessions_analysed=len(diagnoses),
             sessions_with_findings=sum(1 for d in diagnoses if d.findings),
             total_cost_usd=sum(d.total_cost_usd for d in diagnoses),
@@ -294,9 +361,9 @@ def trace(target: Path | None, latest: bool) -> None:
 @click.option(
     "--since",
     default=None,
-    metavar="DAYS",
-    type=int,
-    help="Cross-session mode: apply patches from sessions in the last N days.",
+    metavar="PERIOD",
+    type=str,
+    help="Cross-session mode: 7, 7d, 2w, 2026-05-01, or 2026-05-01..2026-05-15.",
 )
 @click.option(
     "--apply",
@@ -319,7 +386,7 @@ def trace(target: Path | None, latest: bool) -> None:
 )
 def harvest(
     target: Path,
-    since: int | None,
+    since: str | None,
     apply_mode: bool,
     dry_run: bool,
     target_dir: Path | None,
@@ -336,8 +403,8 @@ def harvest(
 
     if since is not None:
         project_dir = target if target.is_dir() else target.parent
-        window = timedelta(days=since)
-        diagnoses = aggregate.run(project_dir, window=window)
+        start, end, _label = parse_since(since)
+        diagnoses = aggregate.run(project_dir, start, end)
         ev = evidence_mod.accumulate(diagnoses)
         patches = claude_md.generate_from_evidence(ev)
     else:

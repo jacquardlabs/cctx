@@ -629,13 +629,11 @@ def test_kind_evidence_instantiates():
 
 
 def test_aggregate_report_instantiates():
-    from datetime import timedelta
-
     from cctx.models import AggregateReport, FindingKind, KindEvidence
 
     ev = KindEvidence(FindingKind.RETRY_LOOP, 3, 0.0, [])
     report = AggregateReport(
-        window=timedelta(days=7),
+        period_label="last 7 days",
         sessions_analysed=12,
         sessions_with_findings=8,
         total_cost_usd=24.10,
