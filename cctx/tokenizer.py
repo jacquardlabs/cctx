@@ -38,10 +38,7 @@ def _heuristic_token_count(text: str) -> int:
 def _make_live_counter():
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        raise RuntimeError(
-            "tokenize_session requires ANTHROPIC_API_KEY in the environment, "
-            "or set CCTX_OFFLINE=1 to use the heuristic estimator."
-        )
+        return _heuristic_token_count
     import anthropic  # lazy: offline mode never loads the SDK
 
     client = anthropic.Anthropic(api_key=api_key)

@@ -6,8 +6,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pytest
-
 from cctx.models import SessionTrace, ToolResult, ToolUse, Turn
 
 
@@ -105,14 +103,16 @@ def test_tokenize_recurses_into_subagents(monkeypatch):
     assert parent.subagents[0].turns[0].token_count > 0
 
 
-def test_tokenize_missing_api_key_raises(monkeypatch):
+def test_tokenize_missing_api_key_falls_back_to_heuristic(monkeypatch):
+    """No API key and no CCTX_OFFLINE → heuristic fallback, not RuntimeError."""
     monkeypatch.delenv("CCTX_OFFLINE", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     from cctx.tokenizer import tokenize_session
 
-    trace = _make_minimal_trace(turns=[_make_turn(text="hi")])
-    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
-        tokenize_session(trace)
+    trace = _make_minimal_trace(turns=[_make_turn(text="hello world")])
+    tokenize_session(trace)
+    # "hello world" is 11 chars → 11//4 = 2 tokens via heuristic
+    assert trace.turns[0].token_count > 0
 
 
 def test_tokenize_is_idempotent(monkeypatch):

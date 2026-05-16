@@ -135,3 +135,219 @@ def test_generate_from_evidence_cross_session_appends_evidence_line():
     assert "\n+Evidence:" in patches[0].unified_diff
     assert "8" in patches[0].unified_diff
     assert "4.30" in patches[0].unified_diff
+
+
+# ---------------------------------------------------------------------------
+# summarize() — uncovered match arms
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_scope_creep_with_phrases():
+    """SCOPE_CREEP with phrases evidence uses the phrase/turn branch."""
+    from cctx.recommender.claude_md import summarize
+
+    evidence = {
+        "phrases": [
+            {"turn": 4, "phrase": "let me also", "snippet": "while doing this let me also fix"},
+        ]
+    }
+    finding = _make_finding("scope_creep", evidence=evidence)
+    result = summarize(finding)
+    assert "let me also" in result
+    assert "4" in result
+
+
+def test_summarize_scope_creep_no_phrases_falls_back_to_summary():
+    """SCOPE_CREEP with empty phrases falls back to finding.summary."""
+    from cctx.recommender.claude_md import summarize
+
+    finding = _make_finding("scope_creep", evidence={"phrases": []})
+    result = summarize(finding)
+    assert result == finding.summary
+
+
+def test_summarize_stale_context_with_stale_items():
+    """STALE_CONTEXT with stale_items uses the worst-item branch."""
+    from cctx.recommender.claude_md import summarize
+
+    evidence = {
+        "stale_items": [
+            {
+                "tool_name": "Bash",
+                "content_tokens": 5000,
+                "first_seen_turn": 2,
+                "last_referenced_turn": 3,
+                "turns_stale": 8,
+                "token_turns": 40000,
+            }
+        ],
+        "total_token_turns": 40000,
+    }
+    finding = _make_finding("stale_context", evidence=evidence)
+    result = summarize(finding)
+    assert "Bash" in result
+    assert "8" in result  # turns_stale
+    assert "40,000" in result  # total_token_turns formatted
+
+
+def test_summarize_stale_context_includes_cost_when_present():
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+    from cctx.recommender.claude_md import summarize
+
+    evidence = {
+        "stale_items": [
+            {
+                "tool_name": "Bash",
+                "content_tokens": 22000,
+                "first_seen_turn": 1,
+                "last_referenced_turn": 2,
+                "turns_stale": 14,
+                "token_turns": 308000,
+            }
+        ],
+        "total_token_turns": 308000,
+    }
+    finding = Finding(
+        kind=FindingKind.STALE_CONTEXT,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=1,
+        last_turn=15,
+        evidence=evidence,
+        cost_usd=0.88,
+        summary="stale context",
+    )
+    result = summarize(finding)
+    assert "0.88" in result
+
+
+def test_summarize_stale_context_no_items_falls_back_to_summary():
+    from cctx.recommender.claude_md import summarize
+
+    finding = _make_finding("stale_context", evidence={"stale_items": []})
+    result = summarize(finding)
+    assert result == finding.summary
+
+
+def test_summarize_retry_loop_with_occurrences():
+    """RETRY_LOOP with occurrences uses the call/key/turn branch."""
+    from cctx.recommender.claude_md import summarize
+
+    evidence = {
+        "occurrences": [
+            {"turn": 3, "key": "src/foo.py", "call": "Edit", "error": "Error: not found"},
+            {"turn": 5, "key": "src/foo.py", "call": "Edit", "error": "Error: not found"},
+        ],
+        "loop_length": 2,
+    }
+    finding = _make_finding("retry_loop", evidence=evidence)
+    result = summarize(finding)
+    assert "Edit" in result
+    assert "src/foo.py" in result
+    assert "2" in result  # loop_length
+
+
+# ---------------------------------------------------------------------------
+# generate_from_evidence — kind not in _TEMPLATES guard
+# ---------------------------------------------------------------------------
+
+
+def test_generate_from_evidence_skips_unknown_kind(monkeypatch):
+    """generate_from_evidence silently skips kinds absent from _TEMPLATES."""
+    import cctx.recommender.claude_md as _mod
+    from cctx.models import FindingKind, KindEvidence
+
+    # Remove RETRY_LOOP from the template dict for this test only
+    original = dict(_mod._TEMPLATES)
+    monkeypatch.setitem(_mod._TEMPLATES, FindingKind.RETRY_LOOP, original[FindingKind.RETRY_LOOP])
+    patched = {k: v for k, v in original.items() if k != FindingKind.RETRY_LOOP}
+    monkeypatch.setattr(_mod, "_TEMPLATES", patched)
+
+    evidence = {
+        FindingKind.RETRY_LOOP: KindEvidence(
+            kind=FindingKind.RETRY_LOOP,
+            session_count=3,
+            total_waste_usd=1.00,
+            example_summaries=["example"],
+        ),
+        FindingKind.SCOPE_CREEP: KindEvidence(
+            kind=FindingKind.SCOPE_CREEP,
+            session_count=1,
+            total_waste_usd=0.05,
+            example_summaries=[],
+        ),
+    }
+    patches = _mod.generate_from_evidence(evidence)
+    # Only SCOPE_CREEP has a template; RETRY_LOOP is skipped
+    assert len(patches) == 1
+    assert patches[0].finding_kind is FindingKind.SCOPE_CREEP
+
+
+# ---------------------------------------------------------------------------
+# generate() — single-session with actual evidence-populated findings
+# ---------------------------------------------------------------------------
+
+
+def test_generate_retry_loop_evidence_summary_contains_call_and_key():
+    """generate() uses summarize() for evidence_summary; verify end-to-end."""
+    from cctx.recommender.claude_md import generate
+
+    evidence = {
+        "occurrences": [
+            {"turn": 3, "key": "file.py", "call": "Edit", "error": "Error: not found"},
+        ],
+        "loop_length": 1,
+    }
+    finding = _make_finding("retry_loop", evidence=evidence)
+    result = generate(_make_diagnosis([finding]))
+    assert "Edit" in result.patches[0].evidence_summary
+    assert "file.py" in result.patches[0].evidence_summary
+
+
+def test_generate_scope_creep_evidence_summary_contains_phrase():
+    from cctx.recommender.claude_md import generate
+
+    evidence = {
+        "phrases": [{"turn": 4, "phrase": "let me also", "snippet": "let me also fix X"}]
+    }
+    finding = _make_finding("scope_creep", evidence=evidence)
+    result = generate(_make_diagnosis([finding]))
+    assert "let me also" in result.patches[0].evidence_summary
+
+
+def test_generate_stale_context_evidence_summary_contains_tool_name():
+    from cctx.recommender.claude_md import generate
+
+    evidence = {
+        "stale_items": [
+            {
+                "tool_name": "Bash",
+                "content_tokens": 5000,
+                "first_seen_turn": 2,
+                "last_referenced_turn": 3,
+                "turns_stale": 8,
+                "token_turns": 40000,
+            }
+        ],
+        "total_token_turns": 40000,
+    }
+    finding = _make_finding("stale_context", evidence=evidence)
+    result = generate(_make_diagnosis([finding]))
+    assert "Bash" in result.patches[0].evidence_summary
+
+
+def test_generate_from_evidence_empty_example_summaries():
+    """evidence_summary is empty string when no example_summaries present."""
+    from cctx.models import FindingKind, KindEvidence
+    from cctx.recommender.claude_md import generate_from_evidence
+
+    evidence = {
+        FindingKind.SCOPE_CREEP: KindEvidence(
+            kind=FindingKind.SCOPE_CREEP,
+            session_count=2,
+            total_waste_usd=0.30,
+            example_summaries=[],
+        )
+    }
+    patches = generate_from_evidence(evidence)
+    assert patches[0].evidence_summary == ""

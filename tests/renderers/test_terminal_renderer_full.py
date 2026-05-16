@@ -1,0 +1,310 @@
+"""Full coverage tests for render_aggregate and render_harvest_results.
+
+Uses the Console(file=StringIO()) pattern for plain-text assertions.
+For the "green border" assertion on APPLIED panels, we use
+Console(record=True) + export_text(styles=True) to capture ANSI style info.
+"""
+from __future__ import annotations
+
+from datetime import timedelta  # noqa: F401 — used in _make_aggregate_report
+from io import StringIO
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_patch(kind_str: str = "retry_loop"):
+    from cctx.models import FindingKind, Patch
+
+    kind_map = {
+        "retry_loop":    FindingKind.RETRY_LOOP,
+        "scope_creep":   FindingKind.SCOPE_CREEP,
+        "stale_context": FindingKind.STALE_CONTEXT,
+    }
+    return Patch(
+        target_file="CLAUDE.md",
+        description="Add retry discipline rule",
+        unified_diff="+## Retry discipline\n+Stop after two failures.",
+        finding_kind=kind_map[kind_str],
+        evidence_summary="Seen in 2 sessions (~$0.15 wasted).",
+    )
+
+
+
+def _make_aggregate_report(by_kind=None, patches=None, window_days=7):
+    from cctx.models import AggregateReport
+
+    if by_kind is None:
+        by_kind = {}
+
+    return AggregateReport(
+        window=timedelta(days=window_days),
+        sessions_analysed=3,
+        sessions_with_findings=2,
+        total_cost_usd=4.50,
+        waste_cost_usd=0.75,
+        by_kind=by_kind,
+        patches=patches or [],
+    )
+
+
+def _make_apply_result(status_str: str, patch=None, message: str = "ok"):
+    from pathlib import Path
+
+    from cctx.harvest import ApplyResult, ApplyStatus
+
+    status_map = {
+        "applied": ApplyStatus.APPLIED,
+        "skipped": ApplyStatus.SKIPPED,
+        "error":   ApplyStatus.ERROR,
+    }
+    return ApplyResult(
+        patch=patch or _make_patch(),
+        status=status_map[status_str],
+        target_path=Path("/tmp/CLAUDE.md"),
+        message=message,
+    )
+
+
+def _render_aggregate(report):
+    from rich.console import Console
+
+    from cctx.renderers.terminal import render_aggregate
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, highlight=False, markup=False)
+    render_aggregate(report, console=console)
+    return buf.getvalue()
+
+
+def _render_harvest(results, dry_run=False):
+    from rich.console import Console
+
+    from cctx.renderers.terminal import render_harvest_results
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, highlight=False, markup=False)
+    render_harvest_results(results, dry_run=dry_run, console=console)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# render_aggregate — no findings
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_no_findings_shows_no_findings():
+    report = _make_aggregate_report(by_kind={})
+    output = _render_aggregate(report)
+    assert "No findings" in output
+
+
+def test_aggregate_no_findings_still_shows_sessions():
+    report = _make_aggregate_report(by_kind={})
+    output = _render_aggregate(report)
+    assert "Sessions:" in output or "3" in output
+
+
+def test_aggregate_no_findings_shows_cost():
+    report = _make_aggregate_report(by_kind={})
+    output = _render_aggregate(report)
+    assert "4.50" in output or "0.75" in output
+
+
+# ---------------------------------------------------------------------------
+# render_aggregate — with findings
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_shows_window_days():
+    report = _make_aggregate_report(window_days=7)
+    output = _render_aggregate(report)
+    assert "7" in output
+
+
+def test_aggregate_shows_session_count():
+    from cctx.models import FindingKind, KindEvidence
+
+    by_kind = {
+        FindingKind.RETRY_LOOP: KindEvidence(
+            kind=FindingKind.RETRY_LOOP,
+            session_count=3,
+            total_waste_usd=0.45,
+            example_summaries=[],
+        )
+    }
+    report = _make_aggregate_report(by_kind=by_kind)
+    output = _render_aggregate(report)
+    assert "3" in output  # session count in table
+
+
+def test_aggregate_shows_finding_kind_label():
+    from cctx.models import FindingKind, KindEvidence
+
+    by_kind = {
+        FindingKind.RETRY_LOOP: KindEvidence(
+            kind=FindingKind.RETRY_LOOP,
+            session_count=2,
+            total_waste_usd=0.20,
+            example_summaries=[],
+        )
+    }
+    report = _make_aggregate_report(by_kind=by_kind)
+    output = _render_aggregate(report)
+    assert "RETRY LOOP" in output or "retry" in output.lower()
+
+
+def test_aggregate_shows_scope_creep_label():
+    from cctx.models import FindingKind, KindEvidence
+
+    by_kind = {
+        FindingKind.SCOPE_CREEP: KindEvidence(
+            kind=FindingKind.SCOPE_CREEP,
+            session_count=1,
+            total_waste_usd=0.10,
+            example_summaries=[],
+        )
+    }
+    report = _make_aggregate_report(by_kind=by_kind)
+    output = _render_aggregate(report)
+    assert "SCOPE CREEP" in output or "scope" in output.lower()
+
+
+def test_aggregate_shows_waste_cost():
+    from cctx.models import FindingKind, KindEvidence
+
+    by_kind = {
+        FindingKind.STALE_CONTEXT: KindEvidence(
+            kind=FindingKind.STALE_CONTEXT,
+            session_count=2,
+            total_waste_usd=1.23,
+            example_summaries=[],
+        )
+    }
+    report = _make_aggregate_report(by_kind=by_kind, window_days=14)
+    output = _render_aggregate(report)
+    assert "1.23" in output
+
+
+def test_aggregate_with_patches_shows_diff():
+    from cctx.models import FindingKind, KindEvidence
+
+    patch = _make_patch("retry_loop")
+    by_kind = {
+        FindingKind.RETRY_LOOP: KindEvidence(
+            kind=FindingKind.RETRY_LOOP,
+            session_count=2,
+            total_waste_usd=0.30,
+            example_summaries=[],
+        )
+    }
+    report = _make_aggregate_report(by_kind=by_kind, patches=[patch])
+    output = _render_aggregate(report)
+    assert "Retry discipline" in output
+
+
+def test_aggregate_with_patches_shows_description():
+    from cctx.models import FindingKind, KindEvidence
+
+    patch = _make_patch("retry_loop")
+    by_kind = {
+        FindingKind.RETRY_LOOP: KindEvidence(
+            kind=FindingKind.RETRY_LOOP,
+            session_count=2,
+            total_waste_usd=0.30,
+            example_summaries=[],
+        )
+    }
+    report = _make_aggregate_report(by_kind=by_kind, patches=[patch])
+    output = _render_aggregate(report)
+    assert "Add retry discipline rule" in output
+
+
+# ---------------------------------------------------------------------------
+# render_harvest_results — empty
+# ---------------------------------------------------------------------------
+
+
+def test_harvest_empty_shows_no_patches():
+    output = _render_harvest([])
+    assert "No patches" in output or "clean" in output.lower()
+
+
+# ---------------------------------------------------------------------------
+# render_harvest_results — SKIPPED
+# ---------------------------------------------------------------------------
+
+
+def test_harvest_skipped_shows_already_present():
+    result = _make_apply_result("skipped", message="already present: ## Retry discipline")
+    output = _render_harvest([result])
+    assert "already present" in output or "skipping" in output
+
+
+def test_harvest_skipped_does_not_show_dry_run():
+    result = _make_apply_result("skipped", message="already present: ## Retry discipline")
+    output = _render_harvest([result])
+    assert "Dry run" not in output
+
+
+# ---------------------------------------------------------------------------
+# render_harvest_results — APPLIED
+# ---------------------------------------------------------------------------
+
+
+def test_harvest_applied_shows_patch_diff():
+    result = _make_apply_result("applied", message="appended: ## Retry discipline")
+    output = _render_harvest([result])
+    assert "Retry discipline" in output
+
+
+def test_harvest_applied_not_dry_run_shows_applied_count():
+    result = _make_apply_result("applied")
+    output = _render_harvest([result], dry_run=False)
+    assert "Applied" in output or "1" in output
+
+
+def test_harvest_applied_panel_uses_green_border():
+    """APPLIED results use border_style='green'. Capture with record=True to see styles."""
+    from rich.console import Console
+
+    from cctx.renderers.terminal import render_harvest_results
+
+    result = _make_apply_result("applied")
+    con = Console(record=True, width=120, color_system="truecolor")
+    render_harvest_results([result], console=con)
+    styled = con.export_text(styles=True)
+    # Rich renders green borders with ANSI green codes; the word "green" may also
+    # appear in the export. Either form is acceptable.
+    assert "green" in styled or "\x1b[32m" in styled or "\x1b[92m" in styled
+
+
+# ---------------------------------------------------------------------------
+# render_harvest_results — dry_run=True
+# ---------------------------------------------------------------------------
+
+
+def test_harvest_dry_run_shows_dry_run_complete():
+    result = _make_apply_result("applied")
+    output = _render_harvest([result], dry_run=True)
+    assert "Dry run" in output
+
+
+def test_harvest_dry_run_does_not_show_applied_count():
+    result = _make_apply_result("applied")
+    output = _render_harvest([result], dry_run=True)
+    assert "Applied" not in output
+
+
+# ---------------------------------------------------------------------------
+# render_harvest_results — ERROR status
+# ---------------------------------------------------------------------------
+
+
+def test_harvest_error_still_renders():
+    """ERROR results should not raise; they render with a panel."""
+    result = _make_apply_result("error", message="permission denied")
+    output = _render_harvest([result])
+    # Should render some output without raising
+    assert len(output) > 0

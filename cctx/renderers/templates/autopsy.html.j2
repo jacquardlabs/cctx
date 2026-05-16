@@ -167,13 +167,13 @@ footer {
     <h1>cctx autopsy</h1>
     <p><code>{{ diag.session_id }}</code></p>
     {% if diag.findings %}
-    <p class="verdict bad">{{ diag.findings|length }} {{ "finding" if diag.findings|length == 1 else "findings" }} &middot; ${{ "%.4f"|format(diag.waste_cost_usd) }} waste</p>
+    <p class="verdict bad">{{ diag.findings|length }} {{ "finding" if diag.findings|length == 1 else "findings" }} &middot; ${{ "%.2f"|format(diag.waste_cost_usd) }} waste</p>
     {% else %}
     <p class="verdict clean">Clean session</p>
     {% endif %}
     <dl class="costs">
-      <dt>Total cost</dt><dd>${{ "%.4f"|format(diag.total_cost_usd) }}</dd>
-      <dt>Waste attributed</dt><dd>${{ "%.4f"|format(diag.waste_cost_usd) }}</dd>
+      <dt>Total cost</dt><dd>${{ "%.2f"|format(diag.total_cost_usd) }}</dd>
+      <dt>Waste attributed</dt><dd>${{ "%.2f"|format(diag.waste_cost_usd) }}</dd>
       {% if diag.inflection_turn is not none %}<dt>Inflection turn</dt><dd>{{ diag.inflection_turn }}</dd>{% endif %}
     </dl>
     <p class="meta">Analysed {{ diag.analysed_at.strftime("%Y-%m-%d %H:%M UTC") }}</p>
@@ -216,7 +216,7 @@ footer {
       </summary>
       <div class="patch-body">
         <p class="evidence-summary">{{ p.evidence_summary }}</p>
-        <pre class="diff">{{ p.unified_diff }}</pre>
+        <pre class="diff">{{ p.unified_diff | diff_highlight }}</pre>
       </div>
     </details>
     {% endfor %}

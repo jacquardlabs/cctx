@@ -64,3 +64,39 @@ def test_cli_entrypoint_exists(runner):
 
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
+
+
+def test_autopsy_since_runs_on_project_dir(runner, tmp_path):
+    """Cross-session --since path: project dir with one valid JSONL → exit 0."""
+    import json
+
+    from cctx.cli import cli
+
+    # project_dir name doesn't matter for aggregate.run; it just globs *.jsonl
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+
+    session_id = "since-test-sess-01"
+    line = {
+        "type": "user",
+        "uuid": f"{session_id}-u1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "timestamp": "2026-05-14T10:00:00.000Z",
+        "sessionId": session_id,
+        "version": "2.1.138",
+        "cwd": "/Users/test/Projects/demo",
+        "gitBranch": "main",
+        "userType": "external",
+        "entrypoint": "cli",
+        "message": {"role": "user", "content": "hello"},
+    }
+    session_path = project_dir / f"{session_id}.jsonl"
+    session_path.write_text(json.dumps(line) + "\n")
+
+    result = runner.invoke(
+        cli, ["autopsy", str(project_dir), "--since", "7"], catch_exceptions=False
+    )
+    assert result.exit_code == 0
+    # The aggregate header always shows sessions analysed
+    assert "Sessions:" in result.output or "day" in result.output.lower()

@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cctx.models import FindingKind
+
 if TYPE_CHECKING:
     from cctx.models import Diagnosis, Finding, SessionTrace, Turn
 
@@ -26,9 +28,25 @@ if TYPE_CHECKING:
 
 
 def affected_turns(finding: Finding, trace: SessionTrace) -> frozenset[int]:
-    """Return turn numbers covered by a finding (first_turn..last_turn inclusive)."""
-    last = finding.last_turn if finding.last_turn is not None else finding.first_turn
-    return frozenset(range(finding.first_turn, last + 1))
+    """Return turn numbers covered by a finding using per-kind evidence extraction."""
+    ev = finding.evidence or {}
+    kind = finding.kind
+
+    if kind is FindingKind.RETRY_LOOP:
+        turns: set[int] = {occ["turn"] for occ in ev.get("occurrences", []) if "turn" in occ}
+    elif kind is FindingKind.SCOPE_CREEP:
+        turns = {ph["turn"] for ph in ev.get("phrases", []) if "turn" in ph}
+    elif kind is FindingKind.STALE_CONTEXT:
+        last = finding.last_turn if finding.last_turn is not None else finding.first_turn
+        turns = set()
+        for item in ev.get("stale_items", []):
+            if "last_referenced_turn" in item:
+                turns.update(range(item["last_referenced_turn"] + 1, last + 1))
+    else:
+        last = finding.last_turn if finding.last_turn is not None else finding.first_turn
+        turns = set(range(finding.first_turn, last + 1))
+
+    return frozenset(turns) if turns else frozenset({finding.first_turn})
 
 
 def verdict(diagnosis: Diagnosis) -> str:
