@@ -195,7 +195,12 @@ def test_cli_ls_no_args(tmp_path):
     _write_jsonl(proj / "s.jsonl", _session_line(cwd="/Users/test/Projects/myapp"))
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["ls"], catch_exceptions=False, env={"CCTX_OFFLINE": "1"})
+    result = runner.invoke(
+        cli,
+        ["ls"],
+        catch_exceptions=False,
+        env={"CCTX_OFFLINE": "1", "CCTX_PROJECTS_DIR": str(tmp_path)},
+    )
     assert result.exit_code == 0
     assert "myapp" in result.output or "Projects" in result.output
 

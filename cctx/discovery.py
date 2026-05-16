@@ -11,6 +11,7 @@ Public API:
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +43,8 @@ class ProjectInfo:
 
 
 def claude_projects_dir() -> Path:
+    if override := os.environ.get("CCTX_PROJECTS_DIR"):
+        return Path(override)
     return Path.home() / ".claude" / "projects"
 
 
