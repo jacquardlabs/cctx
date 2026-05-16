@@ -36,6 +36,8 @@ _KIND_LABEL = {
     FindingKind.RETRY_LOOP:    "RETRY LOOP",
     FindingKind.SCOPE_CREEP:   "SCOPE CREEP",
     FindingKind.STALE_CONTEXT: "STALE CONTEXT",
+    FindingKind.TOOL_THRASH:   "TOOL THRASH",
+    FindingKind.DEAD_END:      "DEAD END",
 }
 
 

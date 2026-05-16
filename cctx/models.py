@@ -170,6 +170,8 @@ class FindingKind(str, Enum):
     RETRY_LOOP    = "retry_loop"
     SCOPE_CREEP   = "scope_creep"
     STALE_CONTEXT = "stale_context"
+    TOOL_THRASH   = "tool_thrash"
+    DEAD_END      = "dead_end"
 
 
 class Severity(str, Enum):
