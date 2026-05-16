@@ -151,3 +151,82 @@ def test_parse_since_invalid():
     from cctx.cli import parse_since
     with pytest.raises(click.UsageError):
         parse_since("not-a-date")
+
+
+# ---------------------------------------------------------------------------
+# aggregate drilldown tests
+# ---------------------------------------------------------------------------
+
+def test_aggregate_drilldown_non_interactive(tmp_path, monkeypatch):
+    """In non-TTY mode (piped), _aggregate_drilldown exits without prompting."""
+    import sys
+    from cctx.cli import _aggregate_drilldown
+    from cctx.models import AggregateReport, FindingKind, KindEvidence
+
+    by_kind = {FindingKind.RETRY_LOOP: KindEvidence(FindingKind.RETRY_LOOP, 1, 0.1, [])}
+    report = AggregateReport(
+        period_label="last 7 days",
+        sessions_analysed=1,
+        sessions_with_findings=1,
+        total_cost_usd=1.0,
+        waste_cost_usd=0.1,
+        by_kind=by_kind,
+        patches=[],
+    )
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+    # Should not raise or prompt; returns None
+    assert _aggregate_drilldown(report, []) is None
+
+
+def test_aggregate_drilldown_no_kinds_skips():
+    """Empty by_kind → no prompt regardless of TTY state."""
+    from cctx.cli import _aggregate_drilldown
+    from cctx.models import AggregateReport
+
+    report = AggregateReport(
+        period_label="last 7 days",
+        sessions_analysed=0,
+        sessions_with_findings=0,
+        total_cost_usd=0.0,
+        waste_cost_usd=0.0,
+        by_kind={},
+        patches=[],
+    )
+    assert _aggregate_drilldown(report, []) is None
+
+
+def test_render_aggregate_drilldown_output():
+    """render_aggregate_drilldown shows per-session findings for the selected kind."""
+    from io import StringIO
+    from datetime import datetime, timezone
+    from rich.console import Console
+    from cctx.models import (
+        Confidence, Diagnosis, Finding, FindingKind, Severity,
+    )
+    from cctx.renderers.terminal import render_aggregate_drilldown
+
+    finding = Finding(
+        kind=FindingKind.RETRY_LOOP,
+        severity=Severity.MEDIUM,
+        confidence=Confidence.HIGH,
+        first_turn=2,
+        last_turn=4,
+        evidence={},
+        cost_usd=None,
+        summary="Edit(foo.py) failed 2× between turns 2–4",
+    )
+    diag = Diagnosis(
+        session_id="aabbccdd",
+        findings=[finding],
+        inflection_turn=2,
+        patches=[],
+        total_cost_usd=1.50,
+        waste_cost_usd=0.0,
+        analysed_at=datetime(2026, 5, 16, 12, 0, tzinfo=timezone.utc),
+    )
+    buf = StringIO()
+    console = Console(file=buf, width=120, highlight=False, markup=False)
+    render_aggregate_drilldown([diag], FindingKind.RETRY_LOOP, console=console)
+    output = buf.getvalue()
+    assert "aabbccdd" in output
+    assert "failed" in output.lower() or "Edit" in output

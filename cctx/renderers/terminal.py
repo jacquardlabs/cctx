@@ -139,6 +139,41 @@ def render_aggregate(report: AggregateReport, *, console: Console | None = None)
             con.print(syntax)
 
 
+def render_aggregate_drilldown(
+    diagnoses: list,
+    kind: FindingKind,
+    *,
+    console: Console | None = None,
+) -> None:
+    """Print per-session findings for a specific FindingKind."""
+    from cctx.models import Diagnosis  # local import — avoids circular at module level
+
+    con = console or _default_console()
+    label = _KIND_LABEL.get(kind, kind.value)
+    con.print(Rule(f"{label} — per-session detail"))
+
+    table = Table(show_header=True, box=None, pad_edge=False, show_edge=False)
+    table.add_column("Session", style="bold")
+    table.add_column("Cost", justify="right", style="dim")
+    table.add_column("Summary")
+
+    found = False
+    for d in diagnoses:
+        for f in d.findings:
+            if f.kind is kind:
+                table.add_row(
+                    d.session_id[:12],
+                    f"~${d.total_cost_usd:.2f}",
+                    f.summary,
+                )
+                found = True
+
+    if found:
+        con.print(table)
+    else:
+        con.print("No matching findings.")
+
+
 def render_harvest_results(
     results: list,  # list[ApplyResult] — ApplyStatus is harvest-internal; imported lazily
     *,

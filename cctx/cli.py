@@ -92,6 +92,7 @@ from cctx.recommender import claude_md
 from cctx.recommender import evidence as evidence_mod
 from cctx.renderers.terminal import (
     render_aggregate,
+    render_aggregate_drilldown,
     render_diagnosis,
     render_harvest_results,
     render_projects,
@@ -101,6 +102,29 @@ from cctx.tokenizer import tokenize_session
 
 click.rich_click.USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True
+
+
+def _aggregate_drilldown(report: AggregateReport, diagnoses: list) -> None:
+    """Prompt user to drill into a pattern from an aggregate report (TTY only)."""
+    import sys
+    if not report.by_kind or not sys.stdout.isatty():
+        return
+    kinds = list(report.by_kind.keys())
+    click.echo()
+    for i, kind in enumerate(kinds, 1):
+        from cctx.renderers.terminal import _KIND_LABEL
+        label = _KIND_LABEL.get(kind, kind.value)
+        click.echo(f"  {i}. {label}")
+    val = click.prompt(
+        "\nInspect pattern (1–N) or Enter to exit",
+        default="",
+        show_default=False,
+    )
+    val = val.strip()
+    if val and val.isdigit():
+        idx = int(val) - 1
+        if 0 <= idx < len(kinds):
+            render_aggregate_drilldown(diagnoses, kinds[idx])
 
 
 def _render_check_findings(findings: list, target_dir: Path) -> None:
@@ -271,6 +295,7 @@ def autopsy(
             patches=patches,
         )
         render_aggregate(report)
+        _aggregate_drilldown(report, diagnoses)
     else:
         # Single-session path
         if target.is_dir():

@@ -77,6 +77,13 @@ cctx harvest ~/Projects/myapp --since 7
 
 Turns autopsy findings into copy-pasteable `CLAUDE.md` additions. Patches are idempotent — running harvest twice on the same session won't duplicate entries. Use `--target-dir DIR` to specify which directory's `CLAUDE.md` to patch (default: current working directory).
 
+```bash
+# Audit existing CLAUDE.md for dead file references and empty sections
+cctx harvest . --check
+```
+
+`--check` reads the target `CLAUDE.md` without writing anything. Exits 1 if issues are found (dead file references, dead skill references, empty sections), 0 if clean. Useful as a CI step when `CLAUDE.md` is committed to the repo.
+
 ### `cctx export` — export session data
 
 ```bash
