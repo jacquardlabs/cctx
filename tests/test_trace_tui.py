@@ -76,7 +76,10 @@ def test_affected_turns_stale_context_range():
         confidence=Confidence.MEDIUM,
         first_turn=3,
         last_turn=7,
-        evidence={"stale_items": [{"last_referenced_turn": 2, "token_turns": 100}], "total_token_turns": 100},
+        evidence={
+            "stale_items": [{"last_referenced_turn": 2, "token_turns": 100}],
+            "total_token_turns": 100,
+        },
         cost_usd=None,
         summary="stale",
     )
@@ -86,9 +89,8 @@ def test_affected_turns_stale_context_range():
 
 def test_affected_turns_same_start_end():
     """first_turn == last_turn → single-element frozenset."""
-    from cctx.renderers.trace_tui import affected_turns
-
     from cctx.models import Confidence, Finding, FindingKind, Severity
+    from cctx.renderers.trace_tui import affected_turns
     trace = make_trace([make_user_turn(5)])
     f = Finding(
         kind=FindingKind.STALE_CONTEXT,
@@ -96,7 +98,10 @@ def test_affected_turns_same_start_end():
         confidence=Confidence.MEDIUM,
         first_turn=5,
         last_turn=5,
-        evidence={"stale_items": [{"last_referenced_turn": 4, "token_turns": 50}], "total_token_turns": 50},
+        evidence={
+            "stale_items": [{"last_referenced_turn": 4, "token_turns": 50}],
+            "total_token_turns": 50,
+        },
         cost_usd=None,
         summary="stale",
     )
@@ -105,8 +110,8 @@ def test_affected_turns_same_start_end():
 
 def test_affected_turns_retry_loop():
     """RETRY_LOOP finding uses occurrences[].turn — sparse turns, not a range."""
-    from cctx.renderers.trace_tui import affected_turns
     from cctx.models import Confidence, Finding, FindingKind, Severity
+    from cctx.renderers.trace_tui import affected_turns
 
     trace = make_trace([make_user_turn(i) for i in range(1, 10)])
     f = Finding(
@@ -115,7 +120,13 @@ def test_affected_turns_retry_loop():
         confidence=Confidence.HIGH,
         first_turn=3,
         last_turn=7,
-        evidence={"occurrences": [{"turn": 3, "key": "f.py", "call": "Edit", "error": "err"}, {"turn": 7, "key": "f.py", "call": "Edit", "error": "err"}], "loop_length": 2},
+        evidence={
+            "occurrences": [
+                {"turn": 3, "key": "f.py", "call": "Edit", "error": "err"},
+                {"turn": 7, "key": "f.py", "call": "Edit", "error": "err"},
+            ],
+            "loop_length": 2,
+        },
         cost_usd=None,
         summary="retry",
     )
@@ -125,8 +136,8 @@ def test_affected_turns_retry_loop():
 
 def test_affected_turns_scope_creep():
     """SCOPE_CREEP finding uses phrases[].turn."""
-    from cctx.renderers.trace_tui import affected_turns
     from cctx.models import Confidence, Finding, FindingKind, Severity
+    from cctx.renderers.trace_tui import affected_turns
 
     trace = make_trace([make_user_turn(i) for i in range(1, 10)])
     f = Finding(
@@ -144,8 +155,8 @@ def test_affected_turns_scope_creep():
 
 def test_affected_turns_empty_evidence_fallback():
     """Finding with empty evidence falls back to first_turn only."""
-    from cctx.renderers.trace_tui import affected_turns
     from cctx.models import Confidence, Finding, FindingKind, Severity
+    from cctx.renderers.trace_tui import affected_turns
 
     trace = make_trace([make_user_turn(i) for i in range(1, 5)])
     f = Finding(

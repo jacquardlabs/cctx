@@ -20,9 +20,9 @@ from cctx.diagnostician import aggregate
 from cctx.models import AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
-from cctx.tokenizer import tokenize_session
 from cctx.recommender import evidence as evidence_mod
 from cctx.renderers.terminal import render_aggregate, render_diagnosis, render_harvest_results
+from cctx.tokenizer import tokenize_session
 
 click.rich_click.USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True
