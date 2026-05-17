@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-05-17)
+
+### Chores
+
+- Add skip-existing to pypi publish action
+  ([`23d7e16`](https://github.com/jacquardlabs/cctx/commit/23d7e16e18074da3c25899ba98298100ad3c1ad3))
+
+### Features
+
+- M9 polish — verdict headline, --top N, --turn N
+  ([#83](https://github.com/jacquardlabs/cctx/pull/83),
+  [`b0d2f27`](https://github.com/jacquardlabs/cctx/commit/b0d2f273a373c5a2f52c9de3a3fb2721da59c4f5))
+
+- M9 polish — verdict headline, --top N, and --turn N
+  ([#83](https://github.com/jacquardlabs/cctx/pull/83),
+  [`b0d2f27`](https://github.com/jacquardlabs/cctx/commit/b0d2f273a373c5a2f52c9de3a3fb2721da59c4f5))
+
+### Refactoring
+
+- Cache verdict, fix markup=False bug, use reverse=True
+  ([#83](https://github.com/jacquardlabs/cctx/pull/83),
+  [`b0d2f27`](https://github.com/jacquardlabs/cctx/commit/b0d2f273a373c5a2f52c9de3a3fb2721da59c4f5))
+
+
 ## v1.0.0 (2026-05-17)
 
 ### Continuous Integration
