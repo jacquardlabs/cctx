@@ -225,6 +225,13 @@ class Diagnosis:
     waste_cost_usd:  float
     analysed_at:     datetime
 
+    @property
+    def verdict(self) -> str:
+        if not self.findings:
+            return "clean session"
+        seen = dict.fromkeys(f.kind for f in self.findings)
+        return " + ".join(KIND_LABEL[k] for k in seen)
+
 
 @dataclass
 class KindEvidence:

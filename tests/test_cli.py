@@ -309,3 +309,83 @@ def test_fail_on_findings_incompatible_with_since(runner):
         ["autopsy", str(FIXTURE_PATH.parent), "--since", "7", "--fail-on-findings"],
     )
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# --top N tests (#75)
+# ---------------------------------------------------------------------------
+
+
+def test_top_requires_since(runner, session_jsonl):
+    """--top without --since → non-zero exit (UsageError)."""
+    from cctx.cli import cli
+
+    result = runner.invoke(cli, ["autopsy", str(session_jsonl), "--top", "3"])
+    assert result.exit_code != 0
+    assert "since" in result.output.lower() or "Error" in result.output
+
+
+def test_top_with_since_accepted(runner, tmp_path):
+    """--top N with --since → exit 0."""
+    from cctx.cli import cli
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+    session_id = "top-test-sess"
+    line = {
+        "type": "user", "uuid": f"{session_id}-u1", "parentUuid": None,
+        "isSidechain": False, "timestamp": "2026-05-14T10:00:00.000Z",
+        "sessionId": session_id, "version": "2.1.138",
+        "cwd": "/Users/test/Projects/demo", "gitBranch": "main",
+        "userType": "external", "entrypoint": "cli",
+        "message": {"role": "user", "content": "hello"},
+    }
+    (project_dir / f"{session_id}.jsonl").write_text(json.dumps(line) + "\n")
+
+    result = runner.invoke(
+        cli, ["autopsy", str(project_dir), "--since", "7", "--top", "2"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# --turn N tests (#76)
+# ---------------------------------------------------------------------------
+
+
+def test_turn_incompatible_with_since(runner, tmp_path):
+    """--turn N + --since → non-zero exit (UsageError)."""
+    from cctx.cli import cli
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+    result = runner.invoke(
+        cli, ["autopsy", str(project_dir), "--since", "7", "--turn", "3"],
+    )
+    assert result.exit_code != 0
+    assert "since" in result.output.lower() or "Error" in result.output
+
+
+def test_turn_shows_turn_details(runner, session_jsonl):
+    """--turn 1 on a session with one turn prints turn details."""
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli, ["autopsy", str(session_jsonl), "--turn", "1"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Turn 1" in result.output
+
+
+def test_turn_out_of_range_shows_not_found(runner, session_jsonl):
+    """--turn 999 on a one-turn session shows 'not found' message."""
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli, ["autopsy", str(session_jsonl), "--turn", "999"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "not found" in result.output.lower() or "999" in result.output

@@ -24,7 +24,7 @@ from cctx.models import KIND_LABEL, FindingKind, Severity
 
 if TYPE_CHECKING:
     from cctx.discovery import ProjectInfo
-    from cctx.models import AggregateReport, Diagnosis
+    from cctx.models import AggregateReport, Diagnosis, SessionTrace
 
 _SEVERITY_STYLE = {
     Severity.HIGH:   "bold red",
@@ -49,6 +49,8 @@ def render_diagnosis(
 
     # Header
     con.print(Rule(f"cctx autopsy — session {diagnosis.session_id}"))
+    verdict_style = "bold green" if not diagnosis.findings else "bold red"
+    con.print(Text(f"Verdict: {diagnosis.verdict}", style=verdict_style))
     cost_line = f"Session cost: ~${diagnosis.total_cost_usd:.2f}"
     if diagnosis.waste_cost_usd > 0:
         pct = (
@@ -167,6 +169,51 @@ def render_aggregate_drilldown(
         con.print(table)
     else:
         con.print("No matching findings.")
+
+
+def render_turn(
+    trace: SessionTrace,
+    diagnosis: Diagnosis,
+    turn_num: int,
+    *,
+    console: Console | None = None,
+) -> None:
+    """Render details for a single turn N from a session."""
+    con = console or _default_console()
+
+    turn = next((t for t in trace.turns if t.turn_number == turn_num), None)
+    if turn is None:
+        con.print(f"[red]Turn {turn_num} not found (session has {len(trace.turns)} turns).[/red]")
+        return
+
+    con.print(Rule(f"Turn {turn_num} — {turn.role} — {turn.timestamp.strftime('%H:%M:%S')}"))
+
+    if turn.text:
+        preview = turn.text[:500]
+        if len(turn.text) > 500:
+            preview += f"\n… [{len(turn.text) - 500} more chars]"
+        con.print(preview)
+
+    for tu in turn.tool_uses:
+        con.print(Text(f"  tool_use: {tu.tool_name}", style="cyan"))
+
+    for tr in turn.tool_results:
+        style = "red" if tr.is_error else "dim"
+        preview = tr.content[:200] + ("…" if len(tr.content) > 200 else "")
+        con.print(Text(f"  tool_result ({tr.tool_name}): {preview}", style=style))
+
+    # Findings that span this turn
+    touching = [
+        f for f in diagnosis.findings
+        if f.first_turn <= turn_num <= (f.last_turn or f.first_turn)
+    ]
+    if touching:
+        con.print()
+        con.print(Text("Findings active at this turn:", style="bold"))
+        for finding in touching:
+            style = _SEVERITY_STYLE.get(finding.severity, "")
+            label = _KIND_LABEL.get(finding.kind, finding.kind.value.upper())
+            con.print(Text(f"  [{label}]", style=style), finding.summary)
 
 
 def render_harvest_results(
