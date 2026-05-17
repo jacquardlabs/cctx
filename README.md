@@ -28,9 +28,10 @@ pip install cctx-cli
 ```bash
 cctx ls                   # find your sessions
 cctx autopsy --latest     # diagnose the most recent one
+cctx watch                # live signals during an active session
 ```
 
-cctx is a forensic tool. You reach for it after a session — when something felt off, when the cost was higher than expected, or on a weekly review pass. It reads the JSONL logs Claude Code writes to `~/.claude/projects/` and produces findings with attributed cost and copy-pasteable `CLAUDE.md` patches.
+cctx is primarily a forensic tool. You reach for it after a session — when something felt off, when the cost was higher than expected, or on a weekly review pass. `cctx watch` runs during a session and surfaces patterns as they happen. It reads the JSONL logs Claude Code writes to `~/.claude/projects/` and produces findings with attributed cost and copy-pasteable `CLAUDE.md` patches.
 
 ## Commands
 
@@ -98,6 +99,15 @@ cctx export ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --format j
 ```
 
 Dumps session analysis as JSONL (one object per session) or CSV (one row per turn) for use in external tools.
+
+### `cctx watch` — live waste signals
+
+```bash
+cctx watch                    # watch the active session in cwd's project
+cctx watch ~/Projects/myapp   # watch a specific project
+```
+
+Tails the active session as it progresses and prints a single-line alert each time a new waste pattern is detected. Exits after 30s of session inactivity or Ctrl+C.
 
 ### `cctx trace` — interactive TUI
 

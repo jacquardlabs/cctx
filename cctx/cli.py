@@ -8,6 +8,7 @@ Commands:
   cctx trace <session>             Interactive TUI trace viewer
   cctx harvest <session>           Apply autopsy patches to CLAUDE.md
   cctx harvest <project> --since   Cross-session harvest
+  cctx watch [project]             Live waste signals during an active session
 """
 from __future__ import annotations
 
@@ -528,3 +529,20 @@ def harvest(
     if click.confirm(f"Apply {applicable} patch(es)?"):
         results = apply_patches(patches, resolved_dir)
         render_harvest_results(results)
+
+
+@cli.command()
+@click.argument(
+    "target",
+    required=False,
+    type=click.Path(path_type=Path),
+    shell_complete=lambda c, p, i: _complete_project(c, p, i),
+)
+def watch(target: Path | None) -> None:
+    """Watch an active Claude Code session for waste signals in real time.
+
+    TARGET is a project directory (defaults to cwd). New findings are printed
+    as they are detected. Exits after 30s of session inactivity or Ctrl+C.
+    """
+    from cctx.watcher import watch as _watch
+    _watch(target)
