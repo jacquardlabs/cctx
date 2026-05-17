@@ -548,3 +548,132 @@ def test_export_json_to_file(runner, session_jsonl, tmp_path):
     data = json.loads(out_path.read_text())
     assert isinstance(data, list)
     assert data[0]["session_id"] == "test-sess-01"
+
+
+# ---------------------------------------------------------------------------
+# project-specific patterns in --since output (#81)
+# ---------------------------------------------------------------------------
+
+
+def _write_pnpm_session(project_dir: Path, session_id: str) -> None:
+    """Write a session JSONL with the pnpm install → pnpm --filter failure/fix pattern."""
+    import json as _json
+    lines = [
+        {
+            "type": "user", "uuid": f"{session_id}-u1", "parentUuid": None,
+            "isSidechain": False, "timestamp": "2026-05-14T10:00:00.000Z",
+            "sessionId": session_id, "version": "2.1.138",
+            "cwd": "/Users/test/Projects/demo", "gitBranch": "main",
+            "userType": "external", "entrypoint": "cli",
+            "message": {"role": "user", "content": "build the project"},
+        },
+        {
+            "type": "assistant", "uuid": f"{session_id}-a1",
+            "parentUuid": f"{session_id}-u1", "isSidechain": False,
+            "timestamp": "2026-05-14T10:00:01.000Z",
+            "sessionId": session_id,
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "id": f"{session_id}-tu1",
+                              "name": "Bash", "input": {"command": "pnpm install"}}],
+                "model": "claude-sonnet-4-6", "stop_reason": "tool_use",
+                "usage": {"input_tokens": 100, "output_tokens": 5,
+                          "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+            },
+        },
+        {
+            "type": "user", "uuid": f"{session_id}-r1",
+            "parentUuid": f"{session_id}-a1", "isSidechain": False,
+            "timestamp": "2026-05-14T10:00:02.000Z",
+            "sessionId": session_id,
+            "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": f"{session_id}-tu1",
+                 "content": "Error: workspace required", "is_error": True}
+            ]},
+        },
+        {
+            "type": "assistant", "uuid": f"{session_id}-a2",
+            "parentUuid": f"{session_id}-r1", "isSidechain": False,
+            "timestamp": "2026-05-14T10:00:03.000Z",
+            "sessionId": session_id,
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "id": f"{session_id}-tu2",
+                              "name": "Bash", "input": {"command": "pnpm install"}}],
+                "model": "claude-sonnet-4-6", "stop_reason": "tool_use",
+                "usage": {"input_tokens": 120, "output_tokens": 5,
+                          "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+            },
+        },
+        {
+            "type": "user", "uuid": f"{session_id}-r2",
+            "parentUuid": f"{session_id}-a2", "isSidechain": False,
+            "timestamp": "2026-05-14T10:00:04.000Z",
+            "sessionId": session_id,
+            "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": f"{session_id}-tu2",
+                 "content": "Error: workspace required", "is_error": True}
+            ]},
+        },
+        {
+            "type": "assistant", "uuid": f"{session_id}-a3",
+            "parentUuid": f"{session_id}-r2", "isSidechain": False,
+            "timestamp": "2026-05-14T10:00:05.000Z",
+            "sessionId": session_id,
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "id": f"{session_id}-tu3",
+                              "name": "Bash", "input": {"command": "pnpm --filter app build"}}],
+                "model": "claude-sonnet-4-6", "stop_reason": "tool_use",
+                "usage": {"input_tokens": 130, "output_tokens": 5,
+                          "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+            },
+        },
+        {
+            "type": "user", "uuid": f"{session_id}-r3",
+            "parentUuid": f"{session_id}-a3", "isSidechain": False,
+            "timestamp": "2026-05-14T10:00:06.000Z",
+            "sessionId": session_id,
+            "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": f"{session_id}-tu3",
+                 "content": "Done", "is_error": False}
+            ]},
+        },
+    ]
+    path = project_dir / f"{session_id}.jsonl"
+    path.write_text("\n".join(_json.dumps(ln) for ln in lines) + "\n")
+
+
+def test_autopsy_since_shows_project_patterns(runner, tmp_path):
+    """--since with 3 sessions containing pnpm pattern → project patterns in output."""
+    from cctx.cli import cli
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+    for i in range(3):
+        _write_pnpm_session(project_dir, f"pnpm-sess-{i:02d}")
+
+    result = runner.invoke(
+        cli, ["autopsy", str(project_dir), "--since", "7"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Sessions:" in result.output
+    assert "Project-specific patterns" in result.output
+
+
+def test_autopsy_since_two_sessions_no_project_pattern(runner, tmp_path):
+    """--since with only 2 matching sessions → no project patterns table."""
+    from cctx.cli import cli
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+    for i in range(2):
+        _write_pnpm_session(project_dir, f"pnpm-sess-{i:02d}")
+
+    result = runner.invoke(
+        cli, ["autopsy", str(project_dir), "--since", "7"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "Project-specific patterns" not in result.output

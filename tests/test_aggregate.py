@@ -47,8 +47,9 @@ def test_run_returns_diagnoses_for_sessions_in_window(tmp_path):
     _write_session(tmp_path, "session-b")
 
     start, end = _now_and_window(7)
-    diagnoses = run(tmp_path, start, end)
-    assert len(diagnoses) == 2
+    pairs = run(tmp_path, start, end)
+    assert len(pairs) == 2
+    diagnoses = [d for d, _ in pairs]
     session_ids = {d.session_id for d in diagnoses}
     assert "session-a" in session_ids
     assert "session-b" in session_ids
@@ -64,9 +65,9 @@ def test_run_excludes_old_sessions(tmp_path):
     _write_session(tmp_path, "new-session")
 
     start, end = _now_and_window(7)
-    diagnoses = run(tmp_path, start, end)
-    assert len(diagnoses) == 1
-    assert diagnoses[0].session_id == "new-session"
+    pairs = run(tmp_path, start, end)
+    assert len(pairs) == 1
+    assert pairs[0][0].session_id == "new-session"
 
 
 def test_run_empty_dir(tmp_path):

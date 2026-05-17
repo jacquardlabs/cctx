@@ -9,7 +9,7 @@ cctx.renderers, cctx.exporters, cctx.tokenizer.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -172,6 +172,7 @@ class FindingKind(str, Enum):
     STALE_CONTEXT = "stale_context"
     TOOL_THRASH   = "tool_thrash"
     DEAD_END      = "dead_end"
+    PROJECT_PATTERN = "project_pattern"
 
 
 KIND_LABEL: dict[FindingKind, str] = {
@@ -180,6 +181,7 @@ KIND_LABEL: dict[FindingKind, str] = {
     FindingKind.STALE_CONTEXT: "STALE CONTEXT",
     FindingKind.TOOL_THRASH:   "TOOL THRASH",
     FindingKind.DEAD_END:      "DEAD END",
+    FindingKind.PROJECT_PATTERN: "PROJECT PATTERN",
 }
 
 
@@ -242,6 +244,17 @@ class KindEvidence:
 
 
 @dataclass
+class ProjectPattern:
+    tool_name:         str
+    failure_key:       str
+    fix_key:           str
+    session_count:     int
+    avg_wasted_turns:  float
+    total_waste_usd:   float
+    example_sessions:  list[str]
+
+
+@dataclass
 class AggregateReport:
     period_label:           str  # human-readable, e.g. "last 7 days" or "2026-05-01..2026-05-15"
     sessions_analysed:      int
@@ -250,6 +263,7 @@ class AggregateReport:
     waste_cost_usd:         float
     by_kind:                dict[FindingKind, KindEvidence]
     patches:                list[Patch]
+    project_patterns:       list[ProjectPattern] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

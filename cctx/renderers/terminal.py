@@ -112,22 +112,23 @@ def render_aggregate(report: AggregateReport, *, console: Console | None = None)
         f"Waste: ${report.waste_cost_usd:.2f}"
     )
 
-    if not report.by_kind:
+    if not report.by_kind and not report.project_patterns:
         con.print("\nNo findings across sessions.")
         return
 
     # Summary table
-    table = Table(title="Finding frequency")
-    table.add_column("Pattern")
-    table.add_column("Sessions", justify="right")
-    table.add_column("Waste ($)", justify="right")
-    for kind, ev in report.by_kind.items():
-        table.add_row(
-            _KIND_LABEL.get(kind, kind.value),
-            str(ev.session_count),
-            f"${ev.total_waste_usd:.2f}",
-        )
-    con.print(table)
+    if report.by_kind:
+        table = Table(title="Finding frequency")
+        table.add_column("Pattern")
+        table.add_column("Sessions", justify="right")
+        table.add_column("Waste ($)", justify="right")
+        for kind, ev in report.by_kind.items():
+            table.add_row(
+                _KIND_LABEL.get(kind, kind.value),
+                str(ev.session_count),
+                f"${ev.total_waste_usd:.2f}",
+            )
+        con.print(table)
 
     # Patches
     if report.patches:
@@ -136,6 +137,25 @@ def render_aggregate(report: AggregateReport, *, console: Console | None = None)
             con.print(f"\n{patch.description}")
             syntax = Syntax(patch.unified_diff, "diff", theme="monokai", word_wrap=True)
             con.print(syntax)
+
+    # Project-specific patterns
+    if report.project_patterns:
+        con.print()
+        pp_table = Table(title="Project-specific patterns")
+        pp_table.add_column("Failure", style="bold")
+        pp_table.add_column("Fix")
+        pp_table.add_column("Sessions", justify="right", style="dim")
+        pp_table.add_column("Avg turns", justify="right", style="dim")
+        pp_table.add_column("Waste", justify="right")
+        for pp in report.project_patterns:
+            pp_table.add_row(
+                pp.failure_key,
+                pp.fix_key,
+                str(pp.session_count),
+                f"{pp.avg_wasted_turns:.1f}",
+                f"~${pp.total_waste_usd:.2f}",
+            )
+        con.print(pp_table)
 
 
 def render_aggregate_drilldown(

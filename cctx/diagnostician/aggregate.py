@@ -1,10 +1,11 @@
 """Cross-session aggregator.
 
-run(project_dir, start, end) -> list[Diagnosis]
+run(project_dir, start, end) -> list[tuple[Diagnosis, SessionTrace]]
 
 Discovers session JSONL files in project_dir modified within [start, end],
-parses each one, runs the per-session diagnostician, and returns the list of
-Diagnoses. The CLI orchestrates the recommender call separately.
+parses each one, runs the per-session diagnostician, and returns
+(Diagnosis, SessionTrace) pairs. The CLI orchestrates recommender and
+project-specific detection separately.
 """
 from __future__ import annotations
 
@@ -17,12 +18,14 @@ from cctx.parsers.claude_code import parse_session
 from cctx.tokenizer import tokenize_session
 
 if TYPE_CHECKING:
-    from cctx.models import Diagnosis
+    from cctx.models import Diagnosis, SessionTrace
 
 UTC = timezone.utc
 
 
-def run(project_dir: Path, start: datetime, end: datetime) -> list[Diagnosis]:
+def run(
+    project_dir: Path, start: datetime, end: datetime
+) -> list[tuple[Diagnosis, SessionTrace]]:
     paths = sorted(project_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
 
     result = []
@@ -33,7 +36,7 @@ def run(project_dir: Path, start: datetime, end: datetime) -> list[Diagnosis]:
         try:
             trace = tokenize_session(parse_session(path))
             diagnosis = diagnostician.run(trace)
-            result.append(diagnosis)
+            result.append((diagnosis, trace))
         except Exception:
             continue  # skip corrupt sessions; don't fail the whole run
     return result

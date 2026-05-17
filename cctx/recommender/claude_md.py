@@ -1,7 +1,8 @@
 """Patch generator — turns Findings into copy-pasteable CLAUDE.md diffs.
 
 generate(diagnosis) -> Diagnosis   (single-session path)
-generate_from_evidence(evidence) -> list[Patch]   (cross-session path)
+generate_from_evidence(evidence) -> list[Patch]   (cross-session path, generic findings)
+generate_from_patterns(patterns) -> list[Patch]   (cross-session path, project patterns)
 """
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from typing import TYPE_CHECKING
 from cctx.models import FindingKind, Patch
 
 if TYPE_CHECKING:
-    from cctx.models import Diagnosis, Finding, KindEvidence
+    from cctx.models import Diagnosis, Finding, KindEvidence, ProjectPattern
 
 # ---------------------------------------------------------------------------
 # Patch templates (append-style unified diffs, v0)
@@ -127,5 +128,27 @@ def generate_from_evidence(
             unified_diff=diff_body,
             finding_kind=kind,
             evidence_summary=example,
+        ))
+    return patches
+
+
+def generate_from_patterns(patterns: list[ProjectPattern]) -> list[Patch]:
+    """Generate CLAUDE.md patches from cross-session ProjectPatterns."""
+    patches = []
+    for p in patterns:
+        diff = (
+            f"+## Project-specific: {p.tool_name}({p.failure_key})\n"
+            f"+When `{p.failure_key}` fails, use `{p.fix_key}` instead.\n"
+            f"+Re-discovered in {p.session_count} sessions "
+            f"(~${p.total_waste_usd:.2f} wasted)."
+        )
+        patches.append(Patch(
+            target_file="CLAUDE.md",
+            description=f"Project-specific: {p.failure_key} → {p.fix_key}",
+            unified_diff=diff,
+            finding_kind=FindingKind.PROJECT_PATTERN,
+            evidence_summary=(
+                f"Seen in {p.session_count} sessions, ~${p.total_waste_usd:.2f} wasted"
+            ),
         ))
     return patches
