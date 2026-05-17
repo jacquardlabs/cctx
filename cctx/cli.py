@@ -20,6 +20,7 @@ import rich_click as click
 
 from cctx import diagnostician
 from cctx.diagnostician import aggregate
+from cctx.diagnostician.patterns import project_specific
 from cctx.discovery import complete_project as _complete_project
 from cctx.models import KIND_LABEL, AggregateReport
 from cctx.parsers.claude_code import parse_session
@@ -363,7 +364,9 @@ def autopsy(
         ev = evidence_mod.accumulate(diagnoses)
         if top_n is not None:
             ev = dict(sorted(ev.items(), key=lambda x: x[1].session_count, reverse=True)[:top_n])
-        patches = claude_md.generate_from_evidence(ev)
+        patterns = project_specific.detect(pairs)
+        pattern_patches = claude_md.generate_from_patterns(patterns)
+        patches = claude_md.generate_from_evidence(ev) + pattern_patches
         report = AggregateReport(
             period_label=label,
             sessions_analysed=len(diagnoses),
@@ -372,6 +375,7 @@ def autopsy(
             waste_cost_usd=sum(d.waste_cost_usd for d in diagnoses),
             by_kind=ev,
             patches=patches,
+            project_patterns=patterns,
         )
         render_aggregate(report)
         _aggregate_drilldown(report, diagnoses)
