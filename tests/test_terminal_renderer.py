@@ -109,3 +109,103 @@ def test_patch_diff_shown():
     )
     output = _render_to_string(diag)
     assert "Retry discipline" in output or "CLAUDE.md" in output
+
+
+def test_verdict_shown_in_output():
+    diag = _make_diagnosis([_make_finding("retry_loop")])
+    output = _render_to_string(diag)
+    assert "Verdict" in output
+
+
+def test_verdict_clean_shown():
+    output = _render_to_string(_make_diagnosis())
+    assert "clean" in output.lower()
+
+
+# ---------------------------------------------------------------------------
+# render_turn (#76)
+# ---------------------------------------------------------------------------
+
+
+def _make_trace_with_turn(turn_number=3, role="assistant", text="some content"):
+    from datetime import datetime, timezone
+
+    from cctx.models import SessionTrace, Turn
+
+    t = Turn(
+        turn_number=turn_number,
+        uuid=f"uuid-{turn_number}",
+        parent_uuid=None,
+        role=role,
+        text=text,
+        thinking="",
+        tool_uses=[],
+        tool_results=[],
+        usage=None,
+        model="claude-sonnet-4-6",
+        stop_reason="end_turn",
+        timestamp=datetime(2026, 5, 14, 10, 30, 0, tzinfo=timezone.utc),
+        duration_ms=None,
+    )
+    from pathlib import Path
+    return SessionTrace(
+        session_id="trace-test",
+        parent_session_id=None,
+        project_path="/p",
+        cwd="/p",
+        primary_model="claude-sonnet-4-6",
+        claude_code_version=None,
+        turns=[t],
+        subagents=[],
+        attachments=[],
+        raw_tool_result_files=[],
+        initial_context_tokens=0,
+        tool_names_loaded=[],
+        start_time=t.timestamp,
+        end_time=t.timestamp,
+        source_path=Path("/p/trace-test.jsonl"),
+        subagent_meta={},
+        warnings=[],
+        subagent_parse_errors=[],
+    )
+
+
+def _render_turn_to_string(trace, diagnosis, turn_num):
+    from rich.console import Console
+
+    from cctx.renderers.terminal import render_turn
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, highlight=False, markup=False)
+    render_turn(trace, diagnosis, turn_num, console=console)
+    return buf.getvalue()
+
+
+def test_render_turn_shows_role_and_number():
+    trace = _make_trace_with_turn(turn_number=3, role="assistant", text="hello world")
+    diag = _make_diagnosis()
+    output = _render_turn_to_string(trace, diag, 3)
+    assert "Turn 3" in output
+    assert "assistant" in output
+
+
+def test_render_turn_shows_text():
+    trace = _make_trace_with_turn(text="important content here")
+    diag = _make_diagnosis()
+    output = _render_turn_to_string(trace, diag, 3)
+    assert "important content here" in output
+
+
+def test_render_turn_not_found():
+    trace = _make_trace_with_turn(turn_number=3)
+    diag = _make_diagnosis()
+    output = _render_turn_to_string(trace, diag, 99)
+    assert "not found" in output.lower() or "99" in output
+
+
+def test_render_turn_shows_active_finding():
+    trace = _make_trace_with_turn(turn_number=5)
+    finding = _make_finding("retry_loop")  # first_turn=5, last_turn=10
+    diag = _make_diagnosis([finding])
+    output = _render_turn_to_string(trace, diag, 5)
+    assert "retry" in output.lower() or "RETRY" in output

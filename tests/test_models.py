@@ -643,3 +643,57 @@ def test_aggregate_report_instantiates():
     )
     assert report.sessions_analysed == 12
     assert FindingKind.RETRY_LOOP in report.by_kind
+
+
+# ---------------------------------------------------------------------------
+# Diagnosis.verdict property (#74)
+# ---------------------------------------------------------------------------
+
+
+def _make_finding_of_kind(kind, first_turn=5):
+    from cctx.models import Confidence, Finding, Severity
+    return Finding(
+        kind=kind,
+        severity=Severity.MEDIUM,
+        confidence=Confidence.MEDIUM,
+        first_turn=first_turn,
+        last_turn=None,
+        evidence={},
+        cost_usd=None,
+        summary="test",
+    )
+
+
+def _make_diag(findings):
+    from cctx.models import Diagnosis
+    return Diagnosis(
+        session_id="abc",
+        findings=findings,
+        inflection_turn=None,
+        patches=[],
+        total_cost_usd=1.0,
+        waste_cost_usd=0.0,
+        analysed_at=_utcnow(),
+    )
+
+
+def test_verdict_clean_session():
+    d = _make_diag([])
+    assert d.verdict == "clean session"
+
+
+def test_verdict_single_finding():
+    from cctx.models import FindingKind
+    d = _make_diag([_make_finding_of_kind(FindingKind.RETRY_LOOP)])
+    assert d.verdict == "RETRY LOOP"
+
+
+def test_verdict_multiple_kinds_deduped_in_order():
+    from cctx.models import FindingKind
+    findings = [
+        _make_finding_of_kind(FindingKind.SCOPE_CREEP),
+        _make_finding_of_kind(FindingKind.RETRY_LOOP),
+        _make_finding_of_kind(FindingKind.SCOPE_CREEP),  # duplicate kind
+    ]
+    d = _make_diag(findings)
+    assert d.verdict == "SCOPE CREEP + RETRY LOOP"

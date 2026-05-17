@@ -31,6 +31,7 @@ from cctx.renderers.terminal import (
     render_harvest_results,
     render_projects,
     render_sessions,
+    render_turn,
 )
 from cctx.tokenizer import tokenize_session
 
@@ -245,6 +246,22 @@ def ls(project: Path | None) -> None:
     default=False,
     help="Exit 1 if any findings are detected (single-session only).",
 )
+@click.option(
+    "--top",
+    "top_n",
+    default=None,
+    metavar="N",
+    type=click.IntRange(min=1),
+    help="Show only the top N patterns by session count (--since mode only).",
+)
+@click.option(
+    "--turn",
+    "turn_num",
+    default=None,
+    metavar="N",
+    type=click.IntRange(min=1),
+    help="Show details for turn N (single-session only).",
+)
 def autopsy(
     target: Path | None,
     since: str | None,
@@ -252,6 +269,8 @@ def autopsy(
     html_out: Path | None,
     github_summary: bool,
     fail_on_findings: bool,
+    top_n: int | None,
+    turn_num: int | None,
 ) -> None:
     """Diagnose a session or project directory.
 
@@ -267,6 +286,10 @@ def autopsy(
         raise click.UsageError("--latest and --since are mutually exclusive.")
     if fail_on_findings and since is not None:
         raise click.UsageError("--fail-on-findings is not supported with --since.")
+    if top_n is not None and since is None:
+        raise click.UsageError("--top requires --since.")
+    if turn_num is not None and since is not None:
+        raise click.UsageError("--turn is not supported with --since.")
 
     if target is None:
         if not latest:
@@ -305,6 +328,8 @@ def autopsy(
         start, end, label = parse_since(since)
         diagnoses = aggregate.run(project_dir, start, end)
         ev = evidence_mod.accumulate(diagnoses)
+        if top_n is not None:
+            ev = dict(sorted(ev.items(), key=lambda x: x[1].session_count, reverse=True)[:top_n])
         patches = claude_md.generate_from_evidence(ev)
         report = AggregateReport(
             period_label=label,
@@ -327,14 +352,16 @@ def autopsy(
         trace = tokenize_session(parse_session(target))
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
-        if html_out is not None:
+        if turn_num is not None:
+            render_turn(trace, diagnosis, turn_num)
+        elif html_out is not None:
             from cctx.renderers.report import render_html
             html_out.write_text(render_html(diagnosis, trace), encoding="utf-8")
             click.echo(f"HTML report written to {html_out}")
-        if github_summary:
+        elif github_summary:
             from cctx.renderers.github import write_github_summary
             write_github_summary(diagnosis)
-        if html_out is None and not github_summary:
+        else:
             render_diagnosis(diagnosis, session_path=target)
         if fail_on_findings and diagnosis.findings:
             raise SystemExit(1)
