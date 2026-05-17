@@ -174,6 +174,15 @@ class FindingKind(str, Enum):
     DEAD_END      = "dead_end"
 
 
+KIND_LABEL: dict[FindingKind, str] = {
+    FindingKind.RETRY_LOOP:    "RETRY LOOP",
+    FindingKind.SCOPE_CREEP:   "SCOPE CREEP",
+    FindingKind.STALE_CONTEXT: "STALE CONTEXT",
+    FindingKind.TOOL_THRASH:   "TOOL THRASH",
+    FindingKind.DEAD_END:      "DEAD END",
+}
+
+
 class Severity(str, Enum):
     HIGH   = "high"
     MEDIUM = "medium"

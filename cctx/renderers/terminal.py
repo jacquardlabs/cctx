@@ -20,7 +20,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from cctx.models import FindingKind, Severity
+from cctx.models import KIND_LABEL, FindingKind, Severity
 
 if TYPE_CHECKING:
     from cctx.discovery import ProjectInfo
@@ -32,13 +32,7 @@ _SEVERITY_STYLE = {
     Severity.LOW:    "bold green",
 }
 
-_KIND_LABEL = {
-    FindingKind.RETRY_LOOP:    "RETRY LOOP",
-    FindingKind.SCOPE_CREEP:   "SCOPE CREEP",
-    FindingKind.STALE_CONTEXT: "STALE CONTEXT",
-    FindingKind.TOOL_THRASH:   "TOOL THRASH",
-    FindingKind.DEAD_END:      "DEAD END",
-}
+_KIND_LABEL = KIND_LABEL
 
 
 def _default_console() -> Console:

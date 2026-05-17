@@ -16,18 +16,10 @@ import time
 from pathlib import Path
 
 from cctx import diagnostician
-from cctx.models import Finding, FindingKind
+from cctx.models import KIND_LABEL, Finding, FindingKind
 
 _POLL_INTERVAL = 1.0    # seconds between size checks
 _IDLE_TIMEOUT  = 30.0   # seconds of no file growth before declaring session ended
-
-_KIND_LABEL: dict[FindingKind, str] = {
-    FindingKind.RETRY_LOOP:    "RETRY LOOP",
-    FindingKind.SCOPE_CREEP:   "SCOPE CREEP",
-    FindingKind.STALE_CONTEXT: "STALE CONTEXT",
-    FindingKind.TOOL_THRASH:   "TOOL THRASH",
-    FindingKind.DEAD_END:      "DEAD END",
-}
 
 
 def _finding_key(f: Finding) -> tuple[FindingKind, int]:
@@ -36,13 +28,17 @@ def _finding_key(f: Finding) -> tuple[FindingKind, int]:
 
 
 def _format_finding(f: Finding) -> str:
-    label = _KIND_LABEL.get(f.kind, f.kind.value.upper())
+    label = KIND_LABEL.get(f.kind, f.kind.value.upper())
     sev = f.severity.value.upper()
     return f"[{label}] {sev} — {f.summary}"
 
 
 def _find_active_session(project_dir: Path) -> Path | None:
-    """Return the most recently modified JSONL in project_dir, or None."""
+    """Return the most recently modified JSONL in project_dir, or None.
+
+    Uses st_mtime (not embedded session start_time) so that a currently-active
+    session sorts above older completed sessions regardless of their timestamps.
+    """
     candidates = list(project_dir.glob("*.jsonl"))
     if not candidates:
         return None
@@ -60,7 +56,7 @@ def _parse_trace(session_path: Path):
         return tokenize_session(parse_session(session_path))
     finally:
         if env_backup is None:
-            del os.environ["CCTX_OFFLINE"]
+            os.environ.pop("CCTX_OFFLINE", None)
         else:
             os.environ["CCTX_OFFLINE"] = env_backup
 
@@ -126,7 +122,7 @@ def watch(target: Path | None = None) -> None:
 
     if not target.exists():
         print(f"Path does not exist: {target}", file=sys.stderr)
-        sys.exit(1)
+        raise SystemExit(1)
 
     if target.is_dir():
         # Is it already an encoded project dir with JSONL files?
@@ -140,7 +136,7 @@ def watch(target: Path | None = None) -> None:
                     "Check that ~/.claude/projects/ contains a matching directory.",
                     file=sys.stderr,
                 )
-                sys.exit(1)
+                raise SystemExit(1)
     else:
         project_dir = target.parent
 

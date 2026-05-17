@@ -87,7 +87,7 @@ def parse_since(value: str) -> tuple[datetime, datetime, str]:
 from cctx import diagnostician
 from cctx.diagnostician import aggregate
 from cctx.discovery import complete_project as _complete_project
-from cctx.models import AggregateReport
+from cctx.models import AggregateReport, KIND_LABEL
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
 from cctx.recommender import evidence as evidence_mod
@@ -113,8 +113,7 @@ def _aggregate_drilldown(report: AggregateReport, diagnoses: list) -> None:
     kinds = list(report.by_kind.keys())
     click.echo()
     for i, kind in enumerate(kinds, 1):
-        from cctx.renderers.terminal import _KIND_LABEL
-        label = _KIND_LABEL.get(kind, kind.value)
+        label = KIND_LABEL.get(kind, kind.value)
         click.echo(f"  {i}. {label}")
     val = click.prompt(
         "\nInspect pattern (1–N) or Enter to exit",
@@ -122,15 +121,16 @@ def _aggregate_drilldown(report: AggregateReport, diagnoses: list) -> None:
         show_default=False,
     )
     val = val.strip()
-    if val and val.isdigit():
-        idx = int(val) - 1
-        if 0 <= idx < len(kinds):
-            render_aggregate_drilldown(diagnoses, kinds[idx])
+    if not val:
+        return
+    if val.isdigit() and 0 <= (idx := int(val) - 1) < len(kinds):
+        render_aggregate_drilldown(diagnoses, kinds[idx])
+    else:
+        click.echo(f"Invalid selection: {val!r}")
 
 
 def _render_check_findings(findings: list, target_dir: Path) -> None:
     """Print harvest --check results to stdout using rich."""
-    import rich_click as _click
     from rich.console import Console
     from rich.rule import Rule
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+
+from tests.conftest import make_user_line
 
 
 # ---------------------------------------------------------------------------
@@ -19,20 +21,7 @@ def _write_session_line(path: Path, obj: dict) -> None:
 
 
 def _minimal_line(session_id: str = "test-sess") -> dict:
-    return {
-        "type": "user",
-        "uuid": f"{session_id}-u1",
-        "parentUuid": None,
-        "isSidechain": False,
-        "timestamp": "2026-05-16T10:00:00.000Z",
-        "sessionId": session_id,
-        "version": "2.1.138",
-        "cwd": "/tmp/demo",
-        "gitBranch": "main",
-        "userType": "external",
-        "entrypoint": "cli",
-        "message": {"role": "user", "content": "hello"},
-    }
+    return make_user_line(f"{session_id}-u1", session_id=session_id, cwd="/tmp/demo")
 
 
 # ---------------------------------------------------------------------------
@@ -97,24 +86,16 @@ def test_find_active_session_empty_dir(tmp_path: Path) -> None:
     assert _find_active_session(tmp_path) is None
 
 
-def test_parse_trace_sets_offline(tmp_path: Path) -> None:
+def test_parse_trace_sets_offline(tmp_path: Path, monkeypatch) -> None:
     """_parse_trace forces CCTX_OFFLINE=1 to avoid API calls."""
-    import os
     from cctx.watcher import _parse_trace
 
+    monkeypatch.delenv("CCTX_OFFLINE", raising=False)
     session_path = tmp_path / "sess.jsonl"
     _write_session_line(session_path, _minimal_line())
 
-    # Even without ANTHROPIC_API_KEY or CCTX_OFFLINE, should not raise
-    env_before = os.environ.get("CCTX_OFFLINE")
-    try:
-        trace = _parse_trace(session_path)
-        assert trace is not None
-    finally:
-        if env_before is None:
-            os.environ.pop("CCTX_OFFLINE", None)
-        else:
-            os.environ["CCTX_OFFLINE"] = env_before
+    trace = _parse_trace(session_path)
+    assert trace is not None
 
 
 def test_tail_exits_on_idle(tmp_path: Path, monkeypatch) -> None:
@@ -158,7 +139,7 @@ def test_tail_reports_new_findings_once(tmp_path: Path, monkeypatch) -> None:
     call_count = {"n": 0}
 
     def _fake_diag(trace):
-        call_count["n"] += 1
+        call_count["n"] += 1  # must be called >1× for dedup to be exercised
         return Diagnosis(
             session_id="x",
             findings=[finding],
@@ -179,6 +160,7 @@ def test_tail_reports_new_findings_once(tmp_path: Path, monkeypatch) -> None:
     printed_calls = [str(c) for c in mock_print.call_args_list]
     finding_lines = [c for c in printed_calls if "RETRY LOOP" in c]
     assert len(finding_lines) == 1, f"Finding printed {len(finding_lines)}× (expected 1)"
+    assert call_count["n"] >= 1, "diagnostician was never called"
 
 
 # ---------------------------------------------------------------------------
