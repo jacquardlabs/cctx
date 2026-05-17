@@ -329,7 +329,7 @@ def autopsy(
         diagnoses = aggregate.run(project_dir, start, end)
         ev = evidence_mod.accumulate(diagnoses)
         if top_n is not None:
-            ev = dict(sorted(ev.items(), key=lambda x: -x[1].session_count)[:top_n])
+            ev = dict(sorted(ev.items(), key=lambda x: x[1].session_count, reverse=True)[:top_n])
         patches = claude_md.generate_from_evidence(ev)
         report = AggregateReport(
             period_label=label,

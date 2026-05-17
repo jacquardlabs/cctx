@@ -49,8 +49,9 @@ def render_diagnosis(
 
     # Header
     con.print(Rule(f"cctx autopsy — session {diagnosis.session_id}"))
+    verdict = diagnosis.verdict
     verdict_style = "bold green" if not diagnosis.findings else "bold red"
-    con.print(Text(f"Verdict: {diagnosis.verdict}", style=verdict_style))
+    con.print(Text(f"Verdict: {verdict}", style=verdict_style))
     cost_line = f"Session cost: ~${diagnosis.total_cost_usd:.2f}"
     if diagnosis.waste_cost_usd > 0:
         pct = (
@@ -183,15 +184,19 @@ def render_turn(
 
     turn = next((t for t in trace.turns if t.turn_number == turn_num), None)
     if turn is None:
-        con.print(f"[red]Turn {turn_num} not found (session has {len(trace.turns)} turns).[/red]")
+        con.print(Text(
+            f"Turn {turn_num} not found (session has {len(trace.turns)} turns).",
+            style="red",
+        ))
         return
 
     con.print(Rule(f"Turn {turn_num} — {turn.role} — {turn.timestamp.strftime('%H:%M:%S')}"))
 
-    if turn.text:
-        preview = turn.text[:500]
-        if len(turn.text) > 500:
-            preview += f"\n… [{len(turn.text) - 500} more chars]"
+    text = turn.text
+    if text:
+        preview = text[:500]
+        if len(text) > 500:
+            preview += f"\n… [{len(text) - 500} more chars]"
         con.print(preview)
 
     for tu in turn.tool_uses:
@@ -199,7 +204,8 @@ def render_turn(
 
     for tr in turn.tool_results:
         style = "red" if tr.is_error else "dim"
-        preview = tr.content[:200] + ("…" if len(tr.content) > 200 else "")
+        content = tr.content
+        preview = content[:200] + ("…" if len(content) > 200 else "")
         con.print(Text(f"  tool_result ({tr.tool_name}): {preview}", style=style))
 
     # Findings that span this turn
