@@ -209,3 +209,75 @@ def test_render_turn_shows_active_finding():
     diag = _make_diagnosis([finding])
     output = _render_turn_to_string(trace, diag, 5)
     assert "retry" in output.lower() or "RETRY" in output
+
+
+# ---------------------------------------------------------------------------
+# render_aggregate project patterns (#81)
+# ---------------------------------------------------------------------------
+
+
+def _make_aggregate_report_with_pattern():
+    from cctx.models import AggregateReport, ProjectPattern
+
+    pp = ProjectPattern(
+        tool_name="Bash",
+        failure_key="pnpm install",
+        fix_key="pnpm --filter app",
+        session_count=7,
+        avg_wasted_turns=12.3,
+        total_waste_usd=4.20,
+        example_sessions=["s1", "s2", "s3"],
+    )
+    return AggregateReport(
+        period_label="last 30 days",
+        sessions_analysed=41,
+        sessions_with_findings=7,
+        total_cost_usd=22.0,
+        waste_cost_usd=4.20,
+        by_kind={},
+        patches=[],
+        project_patterns=[pp],
+    )
+
+
+def _render_aggregate_to_string(report):
+    from io import StringIO
+    from rich.console import Console
+    from cctx.renderers.terminal import render_aggregate
+    buf = StringIO()
+    console = Console(file=buf, width=120, highlight=False, markup=False)
+    render_aggregate(report, console=console)
+    return buf.getvalue()
+
+
+def test_render_aggregate_shows_project_patterns_table():
+    output = _render_aggregate_to_string(_make_aggregate_report_with_pattern())
+    assert "pnpm install" in output
+    assert "pnpm --filter app" in output
+
+
+def test_render_aggregate_project_pattern_shows_session_count():
+    output = _render_aggregate_to_string(_make_aggregate_report_with_pattern())
+    assert "7" in output
+
+
+def test_render_aggregate_no_patterns_no_extra_table():
+    from cctx.models import AggregateReport
+    report = AggregateReport(
+        period_label="last 7 days",
+        sessions_analysed=2,
+        sessions_with_findings=0,
+        total_cost_usd=1.0,
+        waste_cost_usd=0.0,
+        by_kind={},
+        patches=[],
+    )
+    output = _render_aggregate_to_string(report)
+    assert "Project-specific" not in output
+
+
+def test_render_aggregate_patterns_visible_even_when_by_kind_empty():
+    """Project patterns table renders even when there are no per-session findings."""
+    output = _render_aggregate_to_string(_make_aggregate_report_with_pattern())
+    # by_kind is empty but pattern table should still appear
+    assert "pnpm install" in output
