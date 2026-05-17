@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import IO
 
 import rich_click as click
 
@@ -219,6 +220,14 @@ def ls(project: Path | None) -> None:
     help="Cross-session mode: 7, 7d, 2w, 2026-05-01, or 2026-05-01..2026-05-15.",
 )
 @click.option(
+    "--until",
+    "until_date",
+    default=None,
+    metavar="DATE",
+    type=str,
+    help="End date for --since window (YYYY-MM-DD). Requires --since.",
+)
+@click.option(
     "--latest",
     is_flag=True,
     default=False,
@@ -262,15 +271,24 @@ def ls(project: Path | None) -> None:
     type=click.IntRange(min=1),
     help="Show details for turn N (single-session only).",
 )
+@click.option(
+    "--json",
+    "json_out",
+    is_flag=True,
+    default=False,
+    help="Output diagnosis as JSON to stdout (single-session only).",
+)
 def autopsy(
     target: Path | None,
     since: str | None,
+    until_date: str | None,
     latest: bool,
     html_out: Path | None,
     github_summary: bool,
     fail_on_findings: bool,
     top_n: int | None,
     turn_num: int | None,
+    json_out: bool,
 ) -> None:
     """Diagnose a session or project directory.
 
@@ -290,6 +308,10 @@ def autopsy(
         raise click.UsageError("--top requires --since.")
     if turn_num is not None and since is not None:
         raise click.UsageError("--turn is not supported with --since.")
+    if until_date is not None and since is None:
+        raise click.UsageError("--until requires --since.")
+    if json_out and since is not None:
+        raise click.UsageError("--json is not supported with --since.")
 
     if target is None:
         if not latest:
@@ -326,6 +348,16 @@ def autopsy(
         # Cross-session path
         project_dir = target if target.is_dir() else target.parent
         start, end, label = parse_since(since)
+        if until_date is not None:
+            try:
+                end = datetime.fromisoformat(until_date.strip()).replace(
+                    tzinfo=UTC, hour=23, minute=59, second=59
+                )
+            except ValueError:
+                raise click.UsageError(
+                    f"Invalid --until date '{until_date}'. Expected YYYY-MM-DD."
+                ) from None
+            label = f"{label} until {until_date.strip()}"
         diagnoses = aggregate.run(project_dir, start, end)
         ev = evidence_mod.accumulate(diagnoses)
         if top_n is not None:
@@ -352,7 +384,12 @@ def autopsy(
         trace = tokenize_session(parse_session(target))
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
-        if turn_num is not None:
+        if json_out:
+            import json as _json
+
+            from cctx.exporters.jsonl import export_diagnosis as _export_diag
+            click.echo(_json.dumps(_json.loads(_export_diag(diagnosis, trace)), indent=2))
+        elif turn_num is not None:
             render_turn(trace, diagnosis, turn_num)
         elif html_out is not None:
             from cctx.renderers.report import render_html
@@ -372,10 +409,10 @@ def autopsy(
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["jsonl", "csv"]),
+    type=click.Choice(["jsonl", "csv", "json"]),
     default="jsonl",
     show_default=True,
-    help="Output format: jsonl (one object per session) or csv (one row per turn).",
+    help="Output format: jsonl (one object per session), csv (one row per turn), or json (array).",
 )
 @click.option(
     "--out",
@@ -397,6 +434,7 @@ def export(target: Path, fmt: str, out: Path | None, no_content: bool) -> None:
     import sys
 
     from cctx.exporters import csv as csv_mod
+    from cctx.exporters import json as json_mod
     from cctx.exporters import jsonl as jsonl_mod
 
     trace = tokenize_session(parse_session(target))
@@ -404,16 +442,19 @@ def export(target: Path, fmt: str, out: Path | None, no_content: bool) -> None:
     diagnosis = claude_md.generate(diagnosis)
     pairs = [(diagnosis, trace)]
 
+    def _write(fh: IO[str]) -> None:
+        if fmt == "jsonl":
+            jsonl_mod.write(pairs, fh, include_content=not no_content)
+        elif fmt == "json":
+            json_mod.write(pairs, fh, include_content=not no_content)
+        else:
+            csv_mod.write(pairs, fh)
+
     if out is not None:
         with open(out, "w", encoding="utf-8") as fh:
-            if fmt == "jsonl":
-                jsonl_mod.write(pairs, fh, include_content=not no_content)
-            else:
-                csv_mod.write(pairs, fh)
-    elif fmt == "jsonl":
-        jsonl_mod.write(pairs, sys.stdout, include_content=not no_content)
+            _write(fh)
     else:
-        csv_mod.write(pairs, sys.stdout)
+        _write(sys.stdout)
 
 
 @cli.command()

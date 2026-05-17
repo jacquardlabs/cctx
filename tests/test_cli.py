@@ -389,3 +389,162 @@ def test_turn_out_of_range_shows_not_found(runner, session_jsonl):
     )
     assert result.exit_code == 0
     assert "not found" in result.output.lower() or "999" in result.output
+
+
+# ---------------------------------------------------------------------------
+# --until DATE tests (#77)
+# ---------------------------------------------------------------------------
+
+
+def test_until_requires_since(runner, session_jsonl):
+    """--until without --since → non-zero exit (UsageError)."""
+    from cctx.cli import cli
+
+    result = runner.invoke(cli, ["autopsy", str(session_jsonl), "--until", "2026-05-15"])
+    assert result.exit_code != 0
+    assert "since" in result.output.lower() or "Error" in result.output
+
+
+def test_until_with_since_accepted(runner, tmp_path):
+    """--until DATE + --since → exit 0."""
+    from cctx.cli import cli
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+    session_id = "until-test-sess"
+    line = {
+        "type": "user", "uuid": f"{session_id}-u1", "parentUuid": None,
+        "isSidechain": False, "timestamp": "2026-05-14T10:00:00.000Z",
+        "sessionId": session_id, "version": "2.1.138",
+        "cwd": "/Users/test/Projects/demo", "gitBranch": "main",
+        "userType": "external", "entrypoint": "cli",
+        "message": {"role": "user", "content": "hello"},
+    }
+    (project_dir / f"{session_id}.jsonl").write_text(json.dumps(line) + "\n")
+
+    result = runner.invoke(
+        cli,
+        ["autopsy", str(project_dir), "--since", "7", "--until", "2026-05-15"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+
+def test_until_invalid_date(runner, tmp_path):
+    """--until with a non-date string → non-zero exit."""
+    from cctx.cli import cli
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+
+    result = runner.invoke(
+        cli, ["autopsy", str(project_dir), "--since", "7", "--until", "not-a-date"],
+    )
+    assert result.exit_code != 0
+
+
+def test_until_label_includes_date(runner, tmp_path):
+    """--until DATE appears in the period label in aggregate output."""
+    from cctx.cli import cli
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+    session_id = "until-label-sess"
+    line = {
+        "type": "user", "uuid": f"{session_id}-u1", "parentUuid": None,
+        "isSidechain": False, "timestamp": "2026-05-10T10:00:00.000Z",
+        "sessionId": session_id, "version": "2.1.138",
+        "cwd": "/Users/test/Projects/demo", "gitBranch": "main",
+        "userType": "external", "entrypoint": "cli",
+        "message": {"role": "user", "content": "hello"},
+    }
+    (project_dir / f"{session_id}.jsonl").write_text(json.dumps(line) + "\n")
+
+    result = runner.invoke(
+        cli,
+        ["autopsy", str(project_dir), "--since", "30", "--until", "2026-05-15"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    assert "2026-05-15" in result.output
+
+
+# ---------------------------------------------------------------------------
+# autopsy --json tests (#78)
+# ---------------------------------------------------------------------------
+
+
+def test_autopsy_json_outputs_valid_json(runner, session_jsonl):
+    """--json flag produces valid JSON on stdout."""
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli, ["autopsy", str(session_jsonl), "--json"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert "session_id" in data
+    assert "findings" in data
+
+
+def test_autopsy_json_incompatible_with_since(runner, tmp_path):
+    """--json + --since → non-zero exit (UsageError)."""
+    from cctx.cli import cli
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+
+    result = runner.invoke(
+        cli, ["autopsy", str(project_dir), "--since", "7", "--json"],
+    )
+    assert result.exit_code != 0
+
+
+def test_autopsy_json_contains_cost(runner, session_jsonl):
+    """--json output includes cost fields."""
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli, ["autopsy", str(session_jsonl), "--json"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert "total_cost_usd" in data
+    assert "waste_cost_usd" in data
+
+
+# ---------------------------------------------------------------------------
+# export --format json tests (#79)
+# ---------------------------------------------------------------------------
+
+
+def test_export_json_produces_valid_json(runner, session_jsonl):
+    """export --format json produces a valid JSON array."""
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli, ["export", str(session_jsonl), "--format", "json"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert "session_id" in data[0]
+
+
+def test_export_json_to_file(runner, session_jsonl, tmp_path):
+    """export --format json --out FILE writes a valid JSON file."""
+    from cctx.cli import cli
+
+    out_path = tmp_path / "out.json"
+    result = runner.invoke(
+        cli, ["export", str(session_jsonl), "--format", "json", "--out", str(out_path)],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    data = json.loads(out_path.read_text())
+    assert isinstance(data, list)
+    assert data[0]["session_id"] == "test-sess-01"
