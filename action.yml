@@ -1,0 +1,39 @@
+name: 'cctx'
+description: 'Analyse Claude Code sessions for waste patterns, cost attribution, and CLAUDE.md recommendations'
+author: 'Jacquard Labs'
+
+branding:
+  icon: 'activity'
+  color: 'blue'
+
+inputs:
+  fail_on_findings:
+    description: 'Exit 1 if the session has waste findings'
+    required: false
+    default: 'false'
+  github_summary:
+    description: 'Write findings to the GitHub Actions job summary'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install cctx
+      shell: bash
+      run: pipx install cctx-cli
+
+    - name: Analyse session
+      shell: bash
+      env:
+        FAIL_ON_FINDINGS: ${{ inputs.fail_on_findings }}
+        GITHUB_SUMMARY: ${{ inputs.github_summary }}
+      run: |
+        ARGS="autopsy --latest ."
+        if [ "$GITHUB_SUMMARY" = "true" ]; then
+          ARGS="$ARGS --github-summary"
+        fi
+        if [ "$FAIL_ON_FINDINGS" = "true" ]; then
+          ARGS="$ARGS --fail-on-findings"
+        fi
+        cctx $ARGS

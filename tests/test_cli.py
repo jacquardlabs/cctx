@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -230,3 +231,71 @@ def test_render_aggregate_drilldown_output():
     output = buf.getvalue()
     assert "aabbccdd" in output
     assert "failed" in output.lower() or "Edit" in output
+
+
+# ---------------------------------------------------------------------------
+# --fail-on-findings tests
+# ---------------------------------------------------------------------------
+
+FIXTURE_PATH = (
+    Path(__file__).parent / "fixtures" / "claude_code" / "short-clean" / "short-clean.jsonl"
+)
+
+
+def test_fail_on_findings_clean_session_exits_0(runner):
+    """--fail-on-findings on a clean session exits 0."""
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli,
+        ["autopsy", str(FIXTURE_PATH), "--fail-on-findings"],
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+
+
+def test_fail_on_findings_with_findings_exits_1(runner, session_jsonl, monkeypatch):
+    """--fail-on-findings exits 1 when the diagnosis has findings."""
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
+    from cctx import diagnostician
+    from datetime import datetime, timezone
+
+    finding = Finding(
+        kind=FindingKind.RETRY_LOOP,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=1,
+        last_turn=2,
+        evidence={},
+        cost_usd=None,
+        summary="Edit(foo.py) failed 3× between turns 1–2",
+    )
+    diag_with_findings = Diagnosis(
+        session_id="test-sess-01",
+        findings=[finding],
+        inflection_turn=1,
+        patches=[],
+        total_cost_usd=0.0,
+        waste_cost_usd=0.0,
+        analysed_at=datetime(2026, 5, 16, 12, 0, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(diagnostician, "run", lambda trace: diag_with_findings)
+
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli,
+        ["autopsy", str(session_jsonl), "--fail-on-findings"],
+    )
+    assert result.exit_code == 1
+
+
+def test_fail_on_findings_incompatible_with_since(runner):
+    """--fail-on-findings + --since → non-zero exit (UsageError)."""
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli,
+        ["autopsy", str(FIXTURE_PATH.parent), "--since", "7", "--fail-on-findings"],
+    )
+    assert result.exit_code != 0

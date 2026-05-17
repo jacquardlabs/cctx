@@ -145,7 +145,24 @@ Claude Code writes logs to `~/.claude/projects/<encoded-path>/<session-id>.jsonl
 
 cctx is primarily a local forensic tool — it reads session logs from `~/.claude/projects/` on your machine. Those logs are personal conversation history and should not be committed to git or uploaded as build artifacts.
 
-**The one case where cctx belongs in CI:** when Claude Code itself runs inside a GitHub Actions job (agentic PR workflows, automated coding steps). In that case the JSONL logs are written on the runner during the job and cctx can analyse them as a post-step:
+**The one case where cctx belongs in CI:** when Claude Code itself runs inside a GitHub Actions job (agentic PR workflows, automated coding steps). In that case the JSONL logs are written on the runner during the job and cctx can analyse them as a post-step.
+
+### GitHub Action (recommended)
+
+```yaml
+- uses: anthropics/claude-code-action@v1
+  with:
+    # ... your agentic workflow config
+
+- uses: jacquardlabs/cctx@v0
+  with:
+    fail_on_findings: false   # set true to gate the job on waste findings
+    github_summary: true      # write findings to the job summary UI
+```
+
+The action auto-discovers the most recent Claude Code session written on the runner. It does not accept arbitrary file paths — that pattern would require committing session logs to the repo, which you should not do.
+
+### Manual step
 
 ```yaml
 - uses: anthropics/claude-code-action@v1
@@ -153,11 +170,10 @@ cctx is primarily a local forensic tool — it reads session logs from `~/.claud
     # ... your agentic workflow config
 
 - name: Analyse session
-  run: |
-    pipx run cctx-cli autopsy --latest . --github-summary
+  run: pipx run cctx-cli autopsy --latest . --github-summary
 ```
 
-`--github-summary` appends a markdown findings report to the GitHub Actions job summary UI. Omit it to just print to stdout.
+`--github-summary` appends a markdown findings report to the GitHub Actions job summary UI. Add `--fail-on-findings` to exit 1 when waste patterns are detected.
 
 Commands that make sense as CI steps:
 - `cctx autopsy` — diagnose the session that just ran

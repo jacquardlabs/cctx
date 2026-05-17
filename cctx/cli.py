@@ -227,12 +227,20 @@ def ls(project: Path | None) -> None:
     default=False,
     help="Append findings as markdown to $GITHUB_STEP_SUMMARY (single-session only).",
 )
+@click.option(
+    "--fail-on-findings",
+    "fail_on_findings",
+    is_flag=True,
+    default=False,
+    help="Exit 1 if any findings are detected (single-session only).",
+)
 def autopsy(
     target: Path | None,
     since: str | None,
     latest: bool,
     html_out: Path | None,
     github_summary: bool,
+    fail_on_findings: bool,
 ) -> None:
     """Diagnose a session or project directory.
 
@@ -246,6 +254,8 @@ def autopsy(
 
     if latest and since is not None:
         raise click.UsageError("--latest and --since are mutually exclusive.")
+    if fail_on_findings and since is not None:
+        raise click.UsageError("--fail-on-findings is not supported with --since.")
 
     if target is None:
         if not latest:
@@ -315,6 +325,8 @@ def autopsy(
             write_github_summary(diagnosis)
         if html_out is None and not github_summary:
             render_diagnosis(diagnosis, session_path=target)
+        if fail_on_findings and diagnosis.findings:
+            raise SystemExit(1)
 
 
 @cli.command()
