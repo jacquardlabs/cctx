@@ -45,65 +45,54 @@ Pattern classifiers are heuristics, not LLM calls. The same session file produce
 **6. Small surface, deep on each command.**
 Four commands. No command is shallow. Users should be able to learn the product in an afternoon and trust what it tells them.
 
-## Feature map (v0.1.0)
+## Feature map (v0.2.0)
 
 ### Shipped
 
-| Feature | Command | Status |
+| Feature | Command | Notes |
 |---|---|---|
-| Single-session diagnosis | `cctx autopsy <session>` | Shipped (M2) |
-| Cross-session pattern detection | `cctx autopsy <project> --since N` | Shipped (M2) |
-| HTML report | `cctx autopsy <session> --html FILE` | Shipped (M2/PR#59) |
-| Session trace TUI | `cctx trace <session>` | Shipped (M3) |
-| JSONL export | `cctx export <session> --format jsonl` | Shipped (M4) |
-| CSV export | `cctx export <session> --format csv` | Shipped (M4) |
-| Harvest (CLAUDE.md patcher) | `cctx harvest <session>` | Shipped (M5) |
-| Cross-session harvest | `cctx harvest <project> --since N` | Shipped (M5) |
+| Single-session diagnosis | `cctx autopsy <session>` | M2 |
+| Cross-session pattern detection | `cctx autopsy <project> --since N` | M2 |
+| `--since` string formats | `--since 7d`, `2w`, `2026-05-01`, date ranges | M6+ |
+| Interactive aggregate drill-down | select pattern → per-session detail | M6+ |
+| HTML report | `cctx autopsy <session> --html FILE` | M2 |
+| GitHub Actions job summary | `cctx autopsy --github-summary` | M6+ |
+| CI fail gate | `cctx autopsy --fail-on-findings` | M6+ |
+| GitHub Action (composite) | `jacquardlabs/cctx@v1` in workflow | M6+ |
+| Session trace TUI | `cctx trace <session>` | M3 |
+| JSONL export | `cctx export <session> --format jsonl` | M4 |
+| CSV export | `cctx export <session> --format csv` | M4 |
+| Harvest (CLAUDE.md patcher) | `cctx harvest <session>` | M5 |
+| Harvest v2 (multi-target) | patches to `.claude/rules/`, `.claude/skills/` | M6+ |
+| Harvest --check | `cctx harvest <dir> --check` — audit for dead refs | M6+ |
+| Cross-session harvest | `cctx harvest <project> --since N` | M5 |
+| Session discovery | `cctx ls` / `cctx autopsy --latest` | M6+ |
+| Live waste signals | `cctx watch <project>` | M6+ |
 
-### Pattern classifiers (v0.1.0)
+### Pattern classifiers (v0.2.0)
 
 | Pattern | Status |
 |---|---|
 | Retry loop | Shipped |
 | Scope creep | Shipped |
 | Stale context | Shipped |
-| Dead-end exploration | Not shipped in v0 |
-| Tool thrashing | Not shipped in v0 |
-
-### NOT in v0.1.0
-
-- `--format json` and `--format html` on `export` (html moved to `autopsy --html`; json not scheduled)
-- `--since` string formats (`7d`, `2w`, date ranges, `--until`, `--top N`) — accepts integer days only
-- Patch targets other than `CLAUDE.md` (rules, skills, ADR — v1+)
-- Interactive aggregate drill-down ("press N to inspect pattern") — read-only in v0
-- `cctx ls` / session discovery helper
-- Dead-end and tool-thrash classifiers
+| Dead-end exploration | Shipped (v0.2.0) |
+| Tool thrashing | Shipped (v0.2.0) |
 
 ## What we are NOT building
 
 - A SaaS or cloud product
 - An agent (cctx reads logs; it does not call the Anthropic API except optionally for token counting)
-- A real-time watcher (v2+ roadmap item)
-- Multi-provider support (v3+ roadmap item)
+- Multi-provider support (Claude Code only in v0/v1)
 - A fork-and-replay debugger
 - A general eval or testing framework
 
-## Known problems (as of 2026-05-15)
+## Known problems (as of 2026-05-16)
 
-**Release blockers for v0.1.0 (M6):**
+**Active gaps (non-blocking for v0.2.0 but worth tracking):**
 
-1. **No README.md.** `pyproject.toml` uses `cctx-project-brief.md` as the readme. The brief contains architecture diagrams and an internal "First session prompt" that should not be on PyPI. A user-facing README.md is required before publish.
+1. **`cctx watch` polling is simple.** Polls every 1s and re-runs classifiers on any file growth. Does not debounce or use `fsevents`/`inotify`. Fine for v0 but will chatter on active sessions.
 
-2. **`pyproject.toml` description is inaccurate.** Current: "Profile, debug, and optimize Claude Code and Agent SDK sessions." Accurate: "Diagnose Claude Code sessions — find what went wrong, what it cost, and what to add to CLAUDE.md."
+2. **`--format json` on `export` not shipped.** `--html` moved to `autopsy --html`; `json` format on the `export` subcommand is still deferred.
 
-3. **Version is `0.0.1`.** M6 requires bumping to `0.1.0`.
-
-4. **Brief example outputs show unshipped features.** The `cctx-project-brief.md` (which currently IS the readme) shows 5 pattern classifiers, 4 export formats, string `--since` arguments, a `Verdict` headline, and interactive aggregate output. None of these are accurate for the shipped CLI. Before PyPI publish, either ship them or update the brief.
-
-**Active gaps (non-blocking for v0.1.0 but worth tracking):**
-
-5. **Cost approximation honesty not surfaced in output.** The terminal renderer shows `$X.XX` total cost with no confidence annotation. The brief says "The system internals slice is honest; don't pretend to be exact" — this is a principle not yet expressed to users in output.
-
-6. **No session discovery helper.** Users must manually navigate URL-encoded project directories in `~/.claude/projects/` to find session files. First-run friction.
-
-7. **Aggregate output is read-only.** The brief's example shows an interactive aggregate view. Shipped aggregate is a static table. The interactive drill-down is a meaningful UX gap that the brief implicitly promises.
+3. **Cross-agent layer not started.** Emitting findings as `.cursorrules`, `AGENTS.md`, `.windsurfrules`, or GitHub Copilot instructions is a roadmap item with no milestone yet.

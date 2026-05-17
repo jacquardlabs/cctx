@@ -27,8 +27,8 @@ Parser           ← dependency-free; takes a path, returns SessionTrace
 Tokenizer        ← only place that imports anthropic; offline-mode safe for CI
   ↓
 Diagnostician    ← per-turn investigation: inflection detection + pattern
-                   classifiers (retry loop, scope creep, stale context).
-                   Produces a Diagnosis.
+                   classifiers (retry loop, scope creep, stale context,
+                   tool thrash, dead end). Produces a Diagnosis.
   ↓
 Recommender      ← turns Findings into Patches: copy-pasteable CLAUDE.md /
                    rule / skill diffs, evidence-backed when cross-session.
@@ -43,30 +43,34 @@ Exporters        ← jsonl, csv.
 
 ```
 cctx/
-├── cli.py              # click + rich-click; routes to autopsy / trace / export
+├── cli.py              # click + rich-click; routes all subcommands
 ├── parsers/
 │   └── claude_code.py  # SHIPPED. Parse ~/.claude JSONL logs.
-│                       # Spec: docs/superpowers/specs/2026-05-12-claude-code-parser-design.md
 ├── tokenizer.py        # SHIPPED. anthropic.count_tokens wrapper; CCTX_OFFLINE heuristic.
 ├── models.py           # SHIPPED. Turn, ToolUse, ToolResult, Usage, Attachment,
-│                       # RawToolResultFile, SessionTrace + group_into_exchanges().
-│                       # M2 extends with Finding, Patch, Diagnosis.
+│                       # RawToolResultFile, SessionTrace, Finding, Patch, Diagnosis,
+│                       # KIND_LABEL, AggregateReport.
 ├── diagnostician/
 │   ├── __init__.py     # public: run(trace) -> Diagnosis
 │   ├── inflection.py   # detect the turn where the session diverged
 │   ├── patterns/
 │   │   ├── retry_loop.py
 │   │   ├── scope_creep.py
-│   │   └── stale_context.py
+│   │   ├── stale_context.py
+│   │   ├── tool_thrash.py
+│   │   └── dead_end.py
 │   └── aggregate.py    # cross-session pattern aggregator (--since mode)
 ├── recommender/
 │   ├── claude_md.py    # Finding -> Patch (CLAUDE.md diff proposals)
 │   └── evidence.py     # session-count + dollar evidence accumulation
-├── harvest.py          # SHIPPED. apply_patch, preview_patches, apply_patches —
-│                       # append-only, idempotent CLAUDE.md patching with
-│                       # fingerprint-based deduplication.
+├── harvest.py          # SHIPPED. apply_patch, preview_patches, apply_patches, check_claude_md —
+│                       # append-only, idempotent patching with fingerprint-based deduplication.
+│                       # v2: patches route to any .md target (rules/, skills/).
+├── discovery.py        # SHIPPED. list_projects(), latest_session() — navigate ~/.claude/projects/
+├── watcher.py          # SHIPPED. cctx watch — poll active session, surface findings live.
 ├── renderers/
-│   ├── terminal.py     # rich rendering of a Diagnosis
+│   ├── terminal.py     # rich rendering of Diagnosis, AggregateReport, projects, sessions
+│   ├── github.py       # GitHub Actions job summary renderer (--github-summary)
 │   ├── report.py       # Jinja2 HTML report (cctx autopsy --html)
 │   └── trace_tui.py    # textual TUI with autopsy findings overlaid
 └── exporters/
@@ -102,16 +106,16 @@ These came out of the brief, the parser brainstorming session, and the autopsy p
 
 1. **M0 — Project setup.** SHIPPED. (#1)
 2. **M1 — Foundation.** SHIPPED — parser, tokenizer, models, fixtures, CI. (#2–#6, plus PR #38)
-3. **M2 — Autopsy v0.** SHIPPED — single-session diagnosis + cross-session pattern detection. The wedge product. (#9, #10, #40–#49)
+3. **M2 — Autopsy v0.** SHIPPED — single-session diagnosis + cross-session pattern detection. (#9, #10, #40–#49)
 4. **M3 — Trace TUI** with autopsy overlay. SHIPPED. (PR #57)
 5. **M4 — Export.** SHIPPED — jsonl + csv exporters (html moved to autopsy --html; json deferred). (PR #54)
-6. **M5 — Harvest v1.** SHIPPED — CLAUDE.md target only in v0; promote autopsy findings to durable CLAUDE.md diffs. (PR #56)
-7. **M6 — Release v0.1.0.** Release prep underway — README, PRODUCT.md, DESIGN.md, version bump, PyPI publish. (#31, #32)
+6. **M5 — Harvest v1.** SHIPPED — CLAUDE.md target only; promote autopsy findings to durable CLAUDE.md diffs. (PR #56)
+7. **M6 — Release v0.1.0.** SHIPPED — README, version bump, PyPI publish, GitHub Action (composite), session discovery (`cctx ls`). (#31, #32, #62, #73)
+8. **M7 — v0.2.0.** SHIPPED — `cctx watch` live mode, `--github-summary`, `--fail-on-findings`, harvest v2 multi-target, `harvest --check`, tool-thrash + dead-end classifiers, `--since` string formats, interactive aggregate drill-down.
 
 Future, not yet milestoned:
-- **Memory hygiene** (`cctx harvest --check`) — audit existing CLAUDE.md and memory files for staleness / contradictions / dead skills.
-- **Live mode** (`cctx watch`) — filesystem watcher on `~/.claude/projects` to surface waste signals during a session.
-- **Cross-agent layer** — emit the same captured knowledge as `.cursorrules`, `AGENTS.md`, `.windsurfrules`, GitHub Copilot instructions.
+- **Cross-agent layer** — emit findings as `.cursorrules`, `AGENTS.md`, `.windsurfrules`, GitHub Copilot instructions.
+- **`--format json` on `export`** — deferred; no milestone.
 
 ## Design docs
 
