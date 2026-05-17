@@ -579,7 +579,8 @@ def harvest(
         pairs = aggregate.run(project_dir, start, end)
         diagnoses = [d for d, _ in pairs]
         ev = evidence_mod.accumulate(diagnoses)
-        # project_specific.detect() intentionally omitted: pattern patches need human review (autopsy shows; harvest doesn't auto-apply).
+        # project_specific.detect() intentionally omitted: pattern patches need human review
+        # (autopsy shows them; harvest doesn't auto-apply).
         patches = claude_md.generate_from_evidence(ev)
     else:
         if target.is_dir():

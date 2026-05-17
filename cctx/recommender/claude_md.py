@@ -147,6 +147,8 @@ def generate_from_patterns(patterns: list[ProjectPattern]) -> list[Patch]:
             description=f"Project-specific: {p.failure_key} → {p.fix_key}",
             unified_diff=diff,
             finding_kind=FindingKind.PROJECT_PATTERN,
-            evidence_summary=f"Seen in {p.session_count} sessions, ~${p.total_waste_usd:.2f} wasted",
+            evidence_summary=(
+                f"Seen in {p.session_count} sessions, ~${p.total_waste_usd:.2f} wasted"
+            ),
         ))
     return patches

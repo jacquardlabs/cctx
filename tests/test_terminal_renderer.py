@@ -242,7 +242,9 @@ def _make_aggregate_report_with_pattern():
 
 def _render_aggregate_to_string(report):
     from io import StringIO
+
     from rich.console import Console
+
     from cctx.renderers.terminal import render_aggregate
     buf = StringIO()
     console = Console(file=buf, width=120, highlight=False, markup=False)

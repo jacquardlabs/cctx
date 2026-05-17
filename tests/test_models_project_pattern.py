@@ -32,6 +32,6 @@ def test_aggregate_report_project_patterns_defaults_to_empty():
 
 
 def test_finding_kind_project_pattern_value():
-    from cctx.models import FindingKind, KIND_LABEL
+    from cctx.models import KIND_LABEL, FindingKind
     assert FindingKind.PROJECT_PATTERN.value == "project_pattern"
     assert KIND_LABEL[FindingKind.PROJECT_PATTERN] == "PROJECT PATTERN"

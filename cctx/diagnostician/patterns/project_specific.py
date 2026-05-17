@@ -3,7 +3,8 @@
 detect(pairs) -> list[ProjectPattern]
 
 Finds (tool_name, failure_key, fix_key) triples that recur in 3+ sessions.
-Bash normalization uses first 3 tokens for cross-session fuzzy matching (intentionally looser than retry_loop). No LLM calls.
+Bash normalization uses first 3 tokens for cross-session fuzzy matching
+(intentionally looser than retry_loop). No LLM calls.
 """
 from __future__ import annotations
 

@@ -17,7 +17,10 @@ def _make_pattern(failure_key="pnpm install", fix_key="pnpm --filter app", sessi
 
 def test_generate_from_patterns_returns_one_patch_per_pattern():
     from cctx.recommender.claude_md import generate_from_patterns
-    patches = generate_from_patterns([_make_pattern(), _make_pattern("npm run build", "npm run build --workspace")])
+    patches = generate_from_patterns([
+        _make_pattern(),
+        _make_pattern("npm run build", "npm run build --workspace"),
+    ])
     assert len(patches) == 2
 
 

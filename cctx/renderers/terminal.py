@@ -24,7 +24,7 @@ from cctx.models import KIND_LABEL, FindingKind, Severity
 
 if TYPE_CHECKING:
     from cctx.discovery import ProjectInfo
-    from cctx.models import AggregateReport, Diagnosis, ProjectPattern, SessionTrace
+    from cctx.models import AggregateReport, Diagnosis, SessionTrace
 
 _SEVERITY_STYLE = {
     Severity.HIGH:   "bold red",

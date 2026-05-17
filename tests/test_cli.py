@@ -641,7 +641,7 @@ def _write_pnpm_session(project_dir: Path, session_id: str) -> None:
         },
     ]
     path = project_dir / f"{session_id}.jsonl"
-    path.write_text("\n".join(_json.dumps(l) for l in lines) + "\n")
+    path.write_text("\n".join(_json.dumps(ln) for ln in lines) + "\n")
 
 
 def test_autopsy_since_shows_project_patterns(runner, tmp_path):
