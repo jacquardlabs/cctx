@@ -43,20 +43,19 @@ def _is_error(result: ToolResult) -> bool:
 
 def _find_pairs(trace: SessionTrace) -> list[dict]:
     """Find failure/fix pairs within one session."""
-    result_map: dict[str, tuple[ToolResult, int]] = {}
+    result_map: dict[str, ToolResult] = {}
     for turn in trace.turns:
         for tr in turn.tool_results:
-            result_map[tr.tool_use_id] = (tr, turn.turn_number)
+            result_map[tr.tool_use_id] = tr
 
     records = []
     for turn in trace.turns:
         if turn.role != "assistant":
             continue
         for tu in turn.tool_uses:
-            pair = result_map.get(tu.tool_use_id)
-            if pair is None:
+            result = result_map.get(tu.tool_use_id)
+            if result is None:
                 continue
-            result, _ = pair
             key = _normalize_key(tu.tool_name, tu.tool_input)
             records.append({
                 "tool_name": tu.tool_name,
