@@ -2,6 +2,65 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-05-17)
+
+### Bug Fixes
+
+- Drop unused turn_number from result_map in _find_pairs
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- Restore WHY comment, fix_key != failure_key guard, tighten tuple annotation
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- Ruff lint failures (E501, F401, E741, I001) ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+### Documentation
+
+- M14 project-pattern-detection implementation plan
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- M14 project-specific pattern detection design spec
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- Note why harvest --since skips project_specific.detect()
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+### Features
+
+- Add ProjectPattern model, AggregateReport.project_patterns, FindingKind.PROJECT_PATTERN
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- Aggregate.run() returns (Diagnosis, SessionTrace) pairs
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- Generate_from_patterns() — CLAUDE.md patches from ProjectPatterns
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- M14 project-specific pattern detection ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- Project_specific.detect() — cross-session failure/fix pattern detector
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- Render_aggregate() shows project-specific patterns table
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+- Wire project_specific.detect() into autopsy and harvest --since paths
+  ([#86](https://github.com/jacquardlabs/cctx/pull/86),
+  [`cefc438`](https://github.com/jacquardlabs/cctx/commit/cefc438f9ff638ba2abf529663b5e24707f03bbb))
+
+
 ## v1.2.0 (2026-05-17)
 
 ### Features
