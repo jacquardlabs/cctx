@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-05-17)
+
+### Features
+
+- --until DATE, autopsy --json, export --format json (M12 #77 #78 #79)
+  ([#84](https://github.com/jacquardlabs/cctx/pull/84),
+  [`803b5f1`](https://github.com/jacquardlabs/cctx/commit/803b5f190404679ddef4cbbec7478d04c57b8413))
+
+
 ## v1.1.0 (2026-05-17)
 
 ### Chores
