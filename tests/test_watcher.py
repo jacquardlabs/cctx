@@ -6,10 +6,7 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from tests.conftest import make_user_line
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -30,8 +27,8 @@ def _minimal_line(session_id: str = "test-sess") -> dict:
 
 
 def test_finding_key_deduplication() -> None:
-    from cctx.watcher import _finding_key
     from cctx.models import Confidence, Finding, FindingKind, Severity
+    from cctx.watcher import _finding_key
 
     f = Finding(
         kind=FindingKind.RETRY_LOOP,
@@ -48,8 +45,8 @@ def test_finding_key_deduplication() -> None:
 
 
 def test_format_finding_output() -> None:
-    from cctx.watcher import _format_finding
     from cctx.models import Confidence, Finding, FindingKind, Severity
+    from cctx.watcher import _format_finding
 
     f = Finding(
         kind=FindingKind.RETRY_LOOP,
@@ -100,8 +97,8 @@ def test_parse_trace_sets_offline(tmp_path: Path, monkeypatch) -> None:
 
 def test_tail_exits_on_idle(tmp_path: Path, monkeypatch) -> None:
     """_tail returns after IDLE_TIMEOUT seconds of no file growth."""
-    from cctx.watcher import _tail
     import cctx.watcher as watcher_mod
+    from cctx.watcher import _tail
 
     session_path = tmp_path / "sess.jsonl"
     _write_session_line(session_path, _minimal_line())
@@ -116,11 +113,12 @@ def test_tail_exits_on_idle(tmp_path: Path, monkeypatch) -> None:
 
 def test_tail_reports_new_findings_once(tmp_path: Path, monkeypatch) -> None:
     """A finding that fires on every re-run is only printed once."""
-    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
-    from cctx.watcher import _tail
     from datetime import datetime, timezone
+
     import cctx.diagnostician as diag_mod
     import cctx.watcher as watcher_mod
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
+    from cctx.watcher import _tail
 
     session_path = tmp_path / "sess.jsonl"
     _write_session_line(session_path, _minimal_line())
@@ -170,6 +168,7 @@ def test_tail_reports_new_findings_once(tmp_path: Path, monkeypatch) -> None:
 
 def test_watch_help() -> None:
     from click.testing import CliRunner
+
     from cctx.cli import cli
 
     runner = CliRunner()
@@ -180,6 +179,7 @@ def test_watch_help() -> None:
 
 def test_watch_missing_project_dir(tmp_path: Path) -> None:
     from click.testing import CliRunner
+
     from cctx.cli import cli
 
     runner = CliRunner()

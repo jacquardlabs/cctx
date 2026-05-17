@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from io import StringIO
 
 
 def _make_finding(kind_str: str = "retry_loop", cost: float | None = None):
@@ -70,8 +69,8 @@ def test_findings_table_present():
 
 
 def test_finding_severity_emoji():
-    from cctx.renderers.github import render_github_summary
     from cctx.models import Confidence, Finding, FindingKind, Severity
+    from cctx.renderers.github import render_github_summary
 
     f = Finding(
         kind=FindingKind.TOOL_THRASH,
@@ -116,12 +115,11 @@ def test_patch_diff_shown():
 # ---------------------------------------------------------------------------
 
 def test_write_writes_to_step_summary(tmp_path):
-    from cctx.renderers.github import write_github_summary
 
     summary_file = tmp_path / "step_summary.md"
-    env = {**os.environ, "GITHUB_STEP_SUMMARY": str(summary_file)}
 
-    import subprocess, sys
+    import subprocess
+    import sys
     result = subprocess.run(
         [sys.executable, "-c",
          "import os; os.environ['GITHUB_STEP_SUMMARY'] = '" + str(summary_file) + "';"
@@ -156,6 +154,7 @@ def test_write_warns_when_env_not_set(capsys):
 
 def test_autopsy_github_summary_flag_exists():
     from click.testing import CliRunner
+
     from cctx.cli import cli
 
     runner = CliRunner()
@@ -165,9 +164,12 @@ def test_autopsy_github_summary_flag_exists():
 
 def test_autopsy_github_summary_since_incompatible(tmp_path):
     from click.testing import CliRunner
+
     from cctx.cli import cli
 
     runner = CliRunner()
     result = runner.invoke(cli, ["autopsy", str(tmp_path), "--since", "7d", "--github-summary"])
     assert result.exit_code != 0
-    assert "not supported" in result.output.lower() or "mutually exclusive" in result.output.lower() or "not supported" in (result.exception or "")
+    out = result.output.lower()
+    err = str(result.exception or "")
+    assert "not supported" in out or "mutually exclusive" in out or "not supported" in err

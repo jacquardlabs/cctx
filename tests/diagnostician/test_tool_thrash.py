@@ -90,7 +90,7 @@ def test_clean_trace_no_tools():
 
 
 def test_window_constraint_outside_window():
-    from cctx.diagnostician.patterns.tool_thrash import classify, WINDOW
+    from cctx.diagnostician.patterns.tool_thrash import WINDOW, classify
 
     # Calls spread more than WINDOW turns apart — no thrash burst
     turns = [make_user_turn(1)]

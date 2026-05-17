@@ -17,6 +17,23 @@ from pathlib import Path
 
 import rich_click as click
 
+from cctx import diagnostician
+from cctx.diagnostician import aggregate
+from cctx.discovery import complete_project as _complete_project
+from cctx.models import KIND_LABEL, AggregateReport
+from cctx.parsers.claude_code import parse_session
+from cctx.recommender import claude_md
+from cctx.recommender import evidence as evidence_mod
+from cctx.renderers.terminal import (
+    render_aggregate,
+    render_aggregate_drilldown,
+    render_diagnosis,
+    render_harvest_results,
+    render_projects,
+    render_sessions,
+)
+from cctx.tokenizer import tokenize_session
+
 UTC = timezone.utc
 
 
@@ -37,13 +54,17 @@ def parse_since(value: str) -> tuple[datetime, datetime, str]:
     if ".." in stripped:
         parts = stripped.split("..", 1)
         if len(parts) != 2:
-            raise click.UsageError(f"Invalid --since range '{value}'. Expected YYYY-MM-DD..YYYY-MM-DD")
+            raise click.UsageError(
+                f"Invalid --since range '{value}'. Expected YYYY-MM-DD..YYYY-MM-DD"
+            )
         try:
             start = datetime.fromisoformat(parts[0].strip()).replace(tzinfo=UTC)
             end = datetime.fromisoformat(parts[1].strip()).replace(tzinfo=UTC)
             end = end.replace(hour=23, minute=59, second=59)
         except ValueError:
-            raise click.UsageError(f"Invalid date in --since '{value}'. Expected YYYY-MM-DD..YYYY-MM-DD")
+            raise click.UsageError(
+                f"Invalid date in --since '{value}'. Expected YYYY-MM-DD..YYYY-MM-DD"
+            ) from None
         return start, end, f"{parts[0].strip()}..{parts[1].strip()}"
 
     # Absolute date: "YYYY-MM-DD"
@@ -51,7 +72,9 @@ def parse_since(value: str) -> tuple[datetime, datetime, str]:
         try:
             start = datetime.fromisoformat(stripped).replace(tzinfo=UTC)
         except ValueError:
-            raise click.UsageError(f"Invalid date '{value}'. Expected YYYY-MM-DD")
+            raise click.UsageError(
+                f"Invalid date '{value}'. Expected YYYY-MM-DD"
+            ) from None
         return start, now, f"since {stripped}"
 
     # Relative: "7", "7d", "2w"
@@ -60,14 +83,18 @@ def parse_since(value: str) -> tuple[datetime, datetime, str]:
         try:
             weeks = int(stripped_lower[:-1])
         except ValueError:
-            raise click.UsageError(f"Invalid --since value '{value}'. Expected integer weeks, e.g. 2w")
+            raise click.UsageError(
+                f"Invalid --since value '{value}'. Expected integer weeks, e.g. 2w"
+            ) from None
         delta = timedelta(weeks=weeks)
         label = f"last {weeks * 7} days"
     elif stripped_lower.endswith("d"):
         try:
             days = int(stripped_lower[:-1])
         except ValueError:
-            raise click.UsageError(f"Invalid --since value '{value}'. Expected integer days, e.g. 7d")
+            raise click.UsageError(
+                f"Invalid --since value '{value}'. Expected integer days, e.g. 7d"
+            ) from None
         delta = timedelta(days=days)
         label = f"last {days} days"
     else:
@@ -78,28 +105,11 @@ def parse_since(value: str) -> tuple[datetime, datetime, str]:
                 f"Invalid --since value '{value}'. "
                 "Use an integer (7), a shorthand (7d, 2w), or a date (2026-05-01) "
                 "or range (2026-05-01..2026-05-15)."
-            )
+            ) from None
         delta = timedelta(days=days)
         label = f"last {days} days"
 
     return now - delta, now, label
-
-from cctx import diagnostician
-from cctx.diagnostician import aggregate
-from cctx.discovery import complete_project as _complete_project
-from cctx.models import AggregateReport, KIND_LABEL
-from cctx.parsers.claude_code import parse_session
-from cctx.recommender import claude_md
-from cctx.recommender import evidence as evidence_mod
-from cctx.renderers.terminal import (
-    render_aggregate,
-    render_aggregate_drilldown,
-    render_diagnosis,
-    render_harvest_results,
-    render_projects,
-    render_sessions,
-)
-from cctx.tokenizer import tokenize_session
 
 click.rich_click.USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True

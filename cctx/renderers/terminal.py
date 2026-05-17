@@ -58,7 +58,9 @@ def render_diagnosis(
         )
         cost_line += f" | Attributed waste: ~${diagnosis.waste_cost_usd:.2f} ({pct:.0f}%)"
     con.print(cost_line)
-    con.print(Text("~85–95% of actual billing; system framing not observable in JSONL", style="dim"))
+    con.print(Text(
+        "~85–95% of actual billing; system framing not observable in JSONL", style="dim"
+    ))
 
     if not diagnosis.findings:
         con.print("\nNo findings — session looks clean.")
@@ -140,7 +142,6 @@ def render_aggregate_drilldown(
     console: Console | None = None,
 ) -> None:
     """Print per-session findings for a specific FindingKind."""
-    from cctx.models import Diagnosis  # local import — avoids circular at module level
 
     con = console or _default_console()
     label = _KIND_LABEL.get(kind, kind.value)

@@ -129,8 +129,9 @@ def test_parse_since_weeks_suffix():
 
 
 def test_parse_since_absolute_date():
-    from cctx.cli import parse_since
     from datetime import timezone
+
+    from cctx.cli import parse_since
     start, end, label = parse_since("2026-05-01")
     assert start.year == 2026 and start.month == 5 and start.day == 1
     assert start.tzinfo == timezone.utc
@@ -138,8 +139,8 @@ def test_parse_since_absolute_date():
 
 
 def test_parse_since_date_range():
+
     from cctx.cli import parse_since
-    from datetime import timezone
     start, end, label = parse_since("2026-05-01..2026-05-15")
     assert start.year == 2026 and start.month == 5 and start.day == 1
     assert end.year == 2026 and end.month == 5 and end.day == 15
@@ -147,8 +148,9 @@ def test_parse_since_date_range():
 
 
 def test_parse_since_invalid():
-    import pytest
     import click
+    import pytest
+
     from cctx.cli import parse_since
     with pytest.raises(click.UsageError):
         parse_since("not-a-date")
@@ -161,6 +163,7 @@ def test_parse_since_invalid():
 def test_aggregate_drilldown_non_interactive(tmp_path, monkeypatch):
     """In non-TTY mode (piped), _aggregate_drilldown exits without prompting."""
     import sys
+
     from cctx.cli import _aggregate_drilldown
     from cctx.models import AggregateReport, FindingKind, KindEvidence
 
@@ -198,11 +201,17 @@ def test_aggregate_drilldown_no_kinds_skips():
 
 def test_render_aggregate_drilldown_output():
     """render_aggregate_drilldown shows per-session findings for the selected kind."""
-    from io import StringIO
     from datetime import datetime, timezone
+    from io import StringIO
+
     from rich.console import Console
+
     from cctx.models import (
-        Confidence, Diagnosis, Finding, FindingKind, Severity,
+        Confidence,
+        Diagnosis,
+        Finding,
+        FindingKind,
+        Severity,
     )
     from cctx.renderers.terminal import render_aggregate_drilldown
 
@@ -256,9 +265,10 @@ def test_fail_on_findings_clean_session_exits_0(runner):
 
 def test_fail_on_findings_with_findings_exits_1(runner, session_jsonl, monkeypatch):
     """--fail-on-findings exits 1 when the diagnosis has findings."""
-    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
-    from cctx import diagnostician
     from datetime import datetime, timezone
+
+    from cctx import diagnostician
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
 
     finding = Finding(
         kind=FindingKind.RETRY_LOOP,

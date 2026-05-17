@@ -1,9 +1,6 @@
 """Tests for cctx/harvest.py check_claude_md() and --check CLI flag."""
 from __future__ import annotations
 
-from pathlib import Path
-
-
 # ---------------------------------------------------------------------------
 # check_claude_md unit tests
 # ---------------------------------------------------------------------------
@@ -105,29 +102,36 @@ def test_multiple_issues(tmp_path):
 
 def test_check_flag_clean_exits_zero(tmp_path):
     from click.testing import CliRunner
+
     from cctx.cli import cli
 
     (tmp_path / "CLAUDE.md").write_text("## Guide\n\nStop retrying after 2 failures.\n")
     runner = CliRunner()
     # harvest --check doesn't need a TARGET session file; we pass a dummy existing path
-    result = runner.invoke(cli, ["harvest", str(tmp_path), "--check", "--target-dir", str(tmp_path)])
+    result = runner.invoke(
+        cli, ["harvest", str(tmp_path), "--check", "--target-dir", str(tmp_path)]
+    )
     assert result.exit_code == 0
 
 
 def test_check_flag_findings_exits_one(tmp_path):
     from click.testing import CliRunner
+
     from cctx.cli import cli
 
     (tmp_path / "CLAUDE.md").write_text(
         "## Dead ref\n\nSee `missing/module.py`.\n"
     )
     runner = CliRunner()
-    result = runner.invoke(cli, ["harvest", str(tmp_path), "--check", "--target-dir", str(tmp_path)])
+    result = runner.invoke(
+        cli, ["harvest", str(tmp_path), "--check", "--target-dir", str(tmp_path)]
+    )
     assert result.exit_code == 1
 
 
 def test_check_flag_in_help():
     from click.testing import CliRunner
+
     from cctx.cli import cli
 
     runner = CliRunner()

@@ -14,7 +14,13 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from cctx.diagnostician import inflection
-from cctx.diagnostician.patterns import dead_end, retry_loop, scope_creep, stale_context, tool_thrash
+from cctx.diagnostician.patterns import (
+    dead_end,
+    retry_loop,
+    scope_creep,
+    stale_context,
+    tool_thrash,
+)
 from cctx.models import Diagnosis, Finding, FindingKind
 from cctx.pricing import price_per_tok as _price_per_tok
 
