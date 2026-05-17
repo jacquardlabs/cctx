@@ -3,7 +3,7 @@
 detect(pairs) -> list[ProjectPattern]
 
 Finds (tool_name, failure_key, fix_key) triples that recur in 3+ sessions.
-Normalization matches retry_loop._similarity_key. No LLM calls.
+Bash normalization uses first 3 tokens for cross-session fuzzy matching (intentionally looser than retry_loop). No LLM calls.
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def _is_error(result: ToolResult) -> bool:
 
 def _find_pairs(trace: SessionTrace) -> list[dict]:
     """Find failure/fix pairs within one session."""
-    result_map: dict[str, tuple] = {}
+    result_map: dict[str, tuple[ToolResult, int]] = {}
     for turn in trace.turns:
         for tr in turn.tool_results:
             result_map[tr.tool_use_id] = (tr, turn.turn_number)
@@ -92,6 +92,7 @@ def _find_pairs(trace: SessionTrace) -> list[dict]:
                 r for r in records
                 if r["tool_name"] == tool_name
                 and not r["is_error"]
+                and r["key"] != failure_key
                 and last_err_turn < r["turn"] <= last_err_turn + FIX_WINDOW
             ),
             None,

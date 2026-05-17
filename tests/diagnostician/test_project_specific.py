@@ -186,3 +186,33 @@ def test_bash_normalization_first_three_tokens():
 def test_edit_normalization_uses_file_path():
     from cctx.diagnostician.patterns.project_specific import _normalize_key
     assert _normalize_key("Edit", {"file_path": "src/foo.py"}) == "src/foo.py"
+
+
+def test_eventual_success_without_different_fix_not_a_pattern():
+    """A command that eventually succeeds (same key) is not a pattern — no actionable fix."""
+    from cctx.diagnostician.patterns.project_specific import detect
+
+    def _retry_success_trace(session_id: str):
+        turns = [make_user_turn(1)]
+        for i in range(2):
+            uid = f"tu-f{i}"
+            turns.append(make_assistant_turn(
+                2 + i * 2,
+                tool_uses=[make_tool_use(uid, "Bash", {"command": "pnpm install"})],
+            ))
+            turns.append(make_tool_result_turn(
+                3 + i * 2,
+                tool_results=[make_tool_result(uid, "Bash", "Error: network timeout", is_error=True)],
+            ))
+        uid_fix = "tu-ok"
+        turns.append(make_assistant_turn(
+            6, tool_uses=[make_tool_use(uid_fix, "Bash", {"command": "pnpm install"})],
+        ))
+        turns.append(make_tool_result_turn(
+            7, tool_results=[make_tool_result(uid_fix, "Bash", "Done")],
+        ))
+        trace = make_trace(turns)
+        return dataclasses.replace(trace, session_id=session_id)
+
+    pairs = [(_make_diagnosis(f"s{i}"), _retry_success_trace(f"s{i}")) for i in range(3)]
+    assert detect(pairs) == []

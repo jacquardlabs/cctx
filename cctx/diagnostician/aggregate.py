@@ -38,5 +38,5 @@ def run(
             diagnosis = diagnostician.run(trace)
             result.append((diagnosis, trace))
         except Exception:
-            continue
+            continue  # skip corrupt sessions; don't fail the whole run
     return result
