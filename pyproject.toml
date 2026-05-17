@@ -42,6 +42,17 @@ python_functions = ["test_*"]
 addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
 
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["cctx/__init__.py:__version__"]
+tag_format = "v{version}"
+commit_message = "chore(release): v{version} [skip ci]"
+build_command = "pip install build && python -m build"
+upload_to_vcs_release = true
+
+[tool.semantic_release.branches.main]
+match = "main"
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
