@@ -215,3 +215,48 @@ def test_contradiction_severity_is_high():
     ]
     findings = check_contradictions(sections)
     assert findings[0].severity is CheckSeverity.HIGH
+
+
+# ---------------------------------------------------------------------------
+# check_redundancy unit tests
+# ---------------------------------------------------------------------------
+
+def test_redundancy_detected_similar_sections():
+    from cctx.harvest import CheckIssue, check_redundancy
+    body = "stop retrying after two failures diagnose before retrying"
+    sections = [
+        ("## Retry discipline", body),
+        ("## Failure handling", body),
+    ]
+    findings = check_redundancy(sections)
+    assert len(findings) == 1
+    assert findings[0].issue is CheckIssue.REDUNDANCY
+
+
+def test_no_redundancy_different_sections():
+    from cctx.harvest import check_redundancy
+    sections = [
+        ("## Retry discipline", "stop retrying after two failures diagnose before"),
+        ("## Scope creep", "finish stated task before picking up anything else"),
+    ]
+    assert check_redundancy(sections) == []
+
+
+def test_short_section_not_eligible():
+    from cctx.harvest import check_redundancy
+    sections = [
+        ("## A", "stop retry"),           # 2 words after stopword removal — not eligible
+        ("## B", "stop retry"),
+    ]
+    assert check_redundancy(sections) == []
+
+
+def test_redundancy_severity_is_medium():
+    from cctx.harvest import CheckSeverity, check_redundancy
+    body = "stop retrying after two failures diagnose before retrying"
+    sections = [
+        ("## A", body),
+        ("## B", body),
+    ]
+    findings = check_redundancy(sections)
+    assert findings[0].severity is CheckSeverity.MEDIUM

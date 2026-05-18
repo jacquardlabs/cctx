@@ -300,6 +300,42 @@ def check_contradictions(
     return findings
 
 
+def check_redundancy(
+    sections: list[tuple[str, str]],
+) -> list[CheckFinding]:
+    """Detect redundancy across sections using Jaccard similarity.
+
+    Builds a word set (stopwords removed) for each section. Sections with
+    fewer than 5 words are ineligible. For all pairs of eligible sections,
+    computes Jaccard similarity of their word sets. Flags pairs with
+    similarity >= 0.8.
+
+    Returns findings for each redundancy found (severity: MEDIUM).
+    """
+    eligible = [
+        (heading, body, _words(body))
+        for heading, body in sections
+        if len(_words(body)) >= 5
+    ]
+    findings: list[CheckFinding] = []
+    for i in range(len(eligible)):
+        for j in range(i + 1, len(eligible)):
+            h1, _, w1 = eligible[i]
+            h2, _, w2 = eligible[j]
+            union = w1 | w2
+            if not union:
+                continue
+            jaccard = len(w1 & w2) / len(union)
+            if jaccard >= 0.8:
+                findings.append(CheckFinding(
+                    heading=h1,
+                    issue=CheckIssue.REDUNDANCY,
+                    severity=CheckSeverity.MEDIUM,
+                    detail=f"{h1!r} and {h2!r} are {jaccard:.0%} similar",
+                ))
+    return findings
+
+
 def check_claude_md(target_dir: Path) -> list[CheckFinding]:
     """Audit CLAUDE.md in target_dir for deterministically detectable issues.
 
