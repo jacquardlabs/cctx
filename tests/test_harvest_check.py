@@ -172,3 +172,46 @@ def test_existing_checks_have_medium_severity(tmp_path):
     findings = check_claude_md(tmp_path)
     assert findings
     assert all(f.severity is CheckSeverity.MEDIUM for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# check_contradictions unit tests
+# ---------------------------------------------------------------------------
+
+def test_contradiction_detected_across_sections():
+    from cctx.harvest import CheckIssue, check_contradictions
+    sections = [
+        ("## Formatting", "Always use tabs for indentation."),
+        ("## Style", "Never use tabs, use spaces instead."),
+    ]
+    findings = check_contradictions(sections)
+    assert len(findings) == 1
+    assert findings[0].issue is CheckIssue.CONTRADICTION
+
+
+def test_no_contradiction_same_polarity():
+    from cctx.harvest import check_contradictions
+    sections = [
+        ("## A", "Always use tabs."),
+        ("## B", "Always use spaces."),
+    ]
+    assert check_contradictions(sections) == []
+
+
+def test_no_contradiction_different_subjects():
+    from cctx.harvest import check_contradictions
+    sections = [
+        ("## A", "Always use tabs."),
+        ("## B", "Never import numpy."),
+    ]
+    assert check_contradictions(sections) == []
+
+
+def test_contradiction_severity_is_high():
+    from cctx.harvest import CheckSeverity, check_contradictions
+    sections = [
+        ("## A", "Always use tabs."),
+        ("## B", "Never use tabs."),
+    ]
+    findings = check_contradictions(sections)
+    assert findings[0].severity is CheckSeverity.HIGH

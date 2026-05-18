@@ -222,6 +222,23 @@ _KNOWN_EXTENSIONS = {
     ".json", ".md", ".sh", ".bash", ".fish", ".zsh",
 }
 
+_STOPWORDS = {
+    "a", "an", "the", "to", "be", "is", "are", "was", "were",
+    "in", "on", "at", "of", "for", "with", "and", "or", "not",
+    "it", "this", "that", "you", "your", "use", "do",
+}
+
+_ALWAYS_NEVER_RE = re.compile(
+    r"\b(always|never)\b(.+?)(?:[.!?\n]|$)", re.IGNORECASE
+)
+
+_FUNC_REF_RE = re.compile(r"`([^`/.\s]+)\(\)`")
+
+
+def _words(text: str) -> set[str]:
+    tokens = re.findall(r"\b[a-zA-Z_]\w*\b", text.lower())
+    return {t for t in tokens if t not in _STOPWORDS}
+
 
 def _parse_sections(content: str) -> list[tuple[str, str]]:
     """Split markdown into (heading, body) pairs.
@@ -241,6 +258,46 @@ def _parse_sections(content: str) -> list[tuple[str, str]]:
             current_lines.append(line)
     sections.append((current_heading, "\n".join(current_lines)))
     return sections
+
+
+def check_contradictions(
+    sections: list[tuple[str, str]],
+) -> list[CheckFinding]:
+    """Detect contradictions across sections using always/never polarity heuristic.
+
+    Looks for "always" and "never" clauses in section bodies, extracts the
+    subject words, and flags cases where the same word has conflicting polarities.
+
+    Returns findings for each contradiction found (severity: HIGH).
+    """
+    from collections import defaultdict
+    subject_map: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for heading, body in sections:
+        for match in _ALWAYS_NEVER_RE.finditer(body):
+            polarity = match.group(1).lower()
+            clause = match.group(2)
+            for word in _words(clause):
+                subject_map[word].append((polarity, heading))
+
+    findings: list[CheckFinding] = []
+    seen: set[tuple[str, str]] = set()
+    for word, occurrences in subject_map.items():
+        always_headings = [h for p, h in occurrences if p == "always"]
+        never_headings = [h for p, h in occurrences if p == "never"]
+        if always_headings and never_headings:
+            key = (always_headings[0], never_headings[0])
+            if key not in seen:
+                seen.add(key)
+                findings.append(CheckFinding(
+                    heading=always_headings[0],
+                    issue=CheckIssue.CONTRADICTION,
+                    severity=CheckSeverity.HIGH,
+                    detail=(
+                        f"'{word}' is 'always' in {always_headings[0]!r}"
+                        f" but 'never' in {never_headings[0]!r}"
+                    ),
+                ))
+    return findings
 
 
 def check_claude_md(target_dir: Path) -> list[CheckFinding]:
