@@ -233,7 +233,9 @@ _ALWAYS_NEVER_RE = re.compile(
     r"\b(always|never)\b(.+?)(?:[.!?\n]|$)", re.IGNORECASE
 )
 
-_FUNC_REF_RE = re.compile(r"`([^`/.\s]+)\(\)`")
+_STALENESS_EXCLUDED = {".git", ".venv", "node_modules", "__pycache__"}
+
+_FUNC_REF_RE = re.compile(r"`([^`/.\s]{8,})\(\)`")
 
 
 def _words(text: str) -> set[str]:
@@ -341,14 +343,12 @@ def check_staleness(
 ) -> list[CheckFinding]:
     """Detect stale function references in CLAUDE.md.
 
-    Scans all .py, .ts, and .js source files in the project directory,
-    builds a combined source text, and searches for backtick-quoted function
-    references (e.g., `my_function()`) that are 8+ characters long. Flags
-    references not found in the source.
+    Scans all .py, .ts, and .js source files in the project directory and
+    searches for backtick-quoted function references (e.g., `my_function()`)
+    that are 8+ characters long. Flags references not found in the source.
 
     Returns findings for each stale identifier found (severity: LOW).
     """
-    _EXCLUDED = {".git", ".venv", "node_modules", "__pycache__"}
     source_files = [
         f
         for f in (
@@ -356,22 +356,20 @@ def check_staleness(
             + list(project_dir.rglob("*.ts"))
             + list(project_dir.rglob("*.js"))
         )
-        if not any(part in _EXCLUDED for part in f.parts)
+        if not any(part in _STALENESS_EXCLUDED for part in f.parts)
     ]
     if not source_files:
         return []
-
-    source_text = "\n".join(
-        f.read_text(encoding="utf-8", errors="ignore") for f in source_files
-    )
 
     findings: list[CheckFinding] = []
     for heading, body in sections:
         for match in _FUNC_REF_RE.finditer(body):
             name = match.group(1)
-            if len(name) < 8:
-                continue
-            if name not in source_text:
+            found = any(
+                name in f.read_text(encoding="utf-8", errors="ignore")
+                for f in source_files
+            )
+            if not found:
                 findings.append(CheckFinding(
                     heading=heading,
                     issue=CheckIssue.STALE_IDENTIFIER,
