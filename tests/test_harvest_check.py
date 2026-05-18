@@ -303,3 +303,36 @@ def test_staleness_severity_is_low(tmp_path):
     sections = [("## Guide", "Use `deleted_helper()` to process.")]
     findings = check_staleness(sections, tmp_path)
     assert findings[0].severity is CheckSeverity.LOW
+
+
+# ---------------------------------------------------------------------------
+# Integration: check_claude_md wires all detectors
+# ---------------------------------------------------------------------------
+
+def test_check_claude_md_runs_all_detectors(tmp_path):
+    """check_claude_md returns findings from all four check types."""
+    from cctx.harvest import CheckIssue, check_claude_md
+
+    # Create a source file so staleness check runs
+    (tmp_path / "app.py").write_text("def other_function(): pass\n")
+
+    content = "\n".join([
+        "## Formatting",
+        "Always use tabs for indentation.",
+        "",
+        "## Style",
+        "Never use tabs, use spaces.",
+        "",
+        "## Dead ref",
+        "See `missing/module.py`.",
+        "",
+        "## Stale",
+        "Call `deleted_helper()` to process.",
+    ])
+    (tmp_path / "CLAUDE.md").write_text(content)
+
+    findings = check_claude_md(tmp_path)
+    issues = {f.issue for f in findings}
+    assert CheckIssue.CONTRADICTION in issues
+    assert CheckIssue.DEAD_FILE_REF in issues
+    assert CheckIssue.STALE_IDENTIFIER in issues

@@ -379,22 +379,17 @@ def check_staleness(
     return findings
 
 
-def check_claude_md(target_dir: Path) -> list[CheckFinding]:
-    """Audit CLAUDE.md in target_dir for deterministically detectable issues.
+def _check_structure(
+    sections: list[tuple[str, str]],
+    target_dir: Path,
+) -> list[CheckFinding]:
+    """Check structure issues: empty sections, dead file/skill references.
 
-    Checks:
-      - Dead file references: backtick-quoted paths that don't exist on disk
-      - Dead skill references: .claude/skills/ paths that don't exist
-      - Empty sections: ## headings with no content
-
-    Returns an empty list if CLAUDE.md doesn't exist (not an error).
+    Returns findings for:
+      - Empty sections: ## headings with no content (MEDIUM)
+      - Dead file references: backtick-quoted paths that don't exist (MEDIUM)
+      - Dead skill references: .claude/skills/ paths that don't exist (MEDIUM)
     """
-    claude_md = target_dir / "CLAUDE.md"
-    if not claude_md.exists():
-        return []
-
-    content = claude_md.read_text(encoding="utf-8")
-    sections = _parse_sections(content)
     findings: list[CheckFinding] = []
 
     for heading, body in sections:
@@ -445,3 +440,28 @@ def check_claude_md(target_dir: Path) -> list[CheckFinding]:
                 ))
 
     return findings
+
+
+def check_claude_md(target_dir: Path) -> list[CheckFinding]:
+    """Audit CLAUDE.md in target_dir for deterministically detectable issues.
+
+    Checks:
+      - Dead file/skill references and empty sections (MEDIUM)
+      - Contradictory always/never rules (HIGH)
+      - Redundant sections with Jaccard >= 0.8 (MEDIUM)
+      - Stale backtick-quoted function identifiers >= 8 chars (LOW)
+
+    Returns an empty list if CLAUDE.md doesn't exist (not an error).
+    """
+    claude_md = target_dir / "CLAUDE.md"
+    if not claude_md.exists():
+        return []
+
+    content = claude_md.read_text(encoding="utf-8")
+    sections = _parse_sections(content)
+    return (
+        _check_structure(sections, target_dir)
+        + check_contradictions(sections)
+        + check_redundancy(sections)
+        + check_staleness(sections, target_dir)
+    )
