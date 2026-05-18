@@ -14,6 +14,7 @@ Layering rules (MUST respect):
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -270,7 +271,6 @@ def check_contradictions(
 
     Returns findings for each contradiction found (severity: HIGH).
     """
-    from collections import defaultdict
     subject_map: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for heading, body in sections:
         for match in _ALWAYS_NEVER_RE.finditer(body):
