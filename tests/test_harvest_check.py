@@ -336,3 +336,70 @@ def test_check_claude_md_runs_all_detectors(tmp_path):
     assert CheckIssue.CONTRADICTION in issues
     assert CheckIssue.DEAD_FILE_REF in issues
     assert CheckIssue.STALE_IDENTIFIER in issues
+
+
+# ---------------------------------------------------------------------------
+# CLI --check-severity flag tests
+# ---------------------------------------------------------------------------
+
+def test_check_severity_high_exits_zero_on_medium_findings(tmp_path):
+    """--check-severity HIGH: MEDIUM findings don't trigger exit 1."""
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Dead ref\n\nSee `missing/module.py`.\n"
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["harvest", str(tmp_path), "--check", "--check-severity", "HIGH",
+         "--target-dir", str(tmp_path)],
+    )
+    assert result.exit_code == 0
+
+
+def test_check_severity_low_exits_one_on_any_finding(tmp_path):
+    """--check-severity LOW: any finding triggers exit 1."""
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+
+    (tmp_path / "app.py").write_text("def other_fn(): pass\n")
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Guide\n\nUse `deleted_helper()` to process.\n"
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["harvest", str(tmp_path), "--check", "--check-severity", "LOW",
+         "--target-dir", str(tmp_path)],
+    )
+    assert result.exit_code == 1
+
+
+def test_check_severity_in_help():
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+    runner = CliRunner()
+    result = runner.invoke(cli, ["harvest", "--help"])
+    assert "--check-severity" in result.output
+
+
+def test_check_output_shows_severity_badge(tmp_path):
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Dead ref\n\nSee `missing/module.py`.\n"
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["harvest", str(tmp_path), "--check", "--target-dir", str(tmp_path)],
+    )
+    # MED badge should appear for DEAD_FILE_REF (MEDIUM severity)
+    assert "[MED]" in result.output or "MED" in result.output

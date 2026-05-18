@@ -147,22 +147,32 @@ def _render_check_findings(findings: list, target_dir: Path) -> None:
     from rich.console import Console
     from rich.rule import Rule
 
+    from cctx.harvest import CheckIssue, CheckSeverity
+
     con = Console()
     claude_md_path = target_dir / "CLAUDE.md"
     con.print(Rule(f"cctx harvest --check — {claude_md_path}"))
     if not findings:
-        con.print("✓ CLAUDE.md looks clean — no dead references or empty sections.")
+        con.print("✓ CLAUDE.md looks clean — no issues found.")
         return
     con.print(f"{len(findings)} issue(s) found:\n")
-    from cctx.harvest import CheckIssue
     _ISSUE_LABEL = {
-        CheckIssue.DEAD_FILE_REF:  "dead file reference",
-        CheckIssue.DEAD_SKILL_REF: "dead skill reference",
-        CheckIssue.EMPTY_SECTION:  "empty section",
+        CheckIssue.DEAD_FILE_REF:    "dead file reference",
+        CheckIssue.DEAD_SKILL_REF:   "dead skill reference",
+        CheckIssue.EMPTY_SECTION:    "empty section",
+        CheckIssue.CONTRADICTION:    "contradiction",
+        CheckIssue.REDUNDANCY:       "redundancy",
+        CheckIssue.STALE_IDENTIFIER: "stale identifier",
+    }
+    _SEV_BADGE = {
+        CheckSeverity.HIGH:   "[HIGH]",
+        CheckSeverity.MEDIUM: "[MED] ",
+        CheckSeverity.LOW:    "[LOW] ",
     }
     for f in findings:
+        badge = _SEV_BADGE.get(f.severity, "      ")
         label = _ISSUE_LABEL.get(f.issue, f.issue.value)
-        con.print(f"  [{f.heading}]  {label}: {f.detail}")
+        con.print(f"  {badge}  {f.heading}  {label}: {f.detail}")
 
 
 @click.group()
@@ -549,6 +559,14 @@ def trace(target: Path | None, latest: bool) -> None:
     default=False,
     help="Audit existing CLAUDE.md for dead references and empty sections. Exit 1 if findings.",
 )
+@click.option(
+    "--check-severity",
+    "check_severity",
+    default="MEDIUM",
+    type=click.Choice(["LOW", "MEDIUM", "HIGH"], case_sensitive=False),
+    show_default=True,
+    help="Minimum severity that causes --check to exit 1.",
+)
 def harvest(
     target: Path,
     since: str | None,
@@ -556,15 +574,27 @@ def harvest(
     dry_run: bool,
     target_dir: Path | None,
     check_mode: bool,
+    check_severity: str,
 ) -> None:
     """Apply autopsy patches to CLAUDE.md."""
     from cctx.harvest import apply_patches, check_claude_md, preview_patches
 
     if check_mode:
+        from cctx.harvest import CheckSeverity, check_claude_md
         resolved_dir = target_dir or Path.cwd()
         findings = check_claude_md(resolved_dir)
         _render_check_findings(findings, resolved_dir)
-        raise SystemExit(1 if findings else 0)
+        _SEVERITY_ORDER = {
+            CheckSeverity.LOW: 0,
+            CheckSeverity.MEDIUM: 1,
+            CheckSeverity.HIGH: 2,
+        }
+        threshold = CheckSeverity(check_severity.lower())
+        triggering = [
+            f for f in findings
+            if _SEVERITY_ORDER[f.severity] >= _SEVERITY_ORDER[threshold]
+        ]
+        raise SystemExit(1 if triggering else 0)
 
     if apply_mode and dry_run:
         raise click.UsageError("--apply and --dry-run are mutually exclusive.")
