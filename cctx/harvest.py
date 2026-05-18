@@ -28,17 +28,27 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
+class CheckSeverity(str, Enum):
+    LOW    = "low"
+    MEDIUM = "medium"
+    HIGH   = "high"
+
+
 class CheckIssue(str, Enum):
-    DEAD_FILE_REF = "dead_file_ref"   # backtick-quoted path that doesn't exist on disk
-    DEAD_SKILL_REF = "dead_skill_ref" # .claude/skills/ reference that doesn't exist
-    EMPTY_SECTION = "empty_section"   # ## heading with no content
+    DEAD_FILE_REF    = "dead_file_ref"
+    DEAD_SKILL_REF   = "dead_skill_ref"
+    EMPTY_SECTION    = "empty_section"
+    CONTRADICTION    = "contradiction"
+    REDUNDANCY       = "redundancy"
+    STALE_IDENTIFIER = "stale_identifier"
 
 
 @dataclass
 class CheckFinding:
-    heading: str          # ## section where this was found ("(preamble)" if before first heading)
-    issue: CheckIssue
-    detail: str           # human-readable description
+    heading:  str
+    issue:    CheckIssue
+    severity: CheckSeverity
+    detail:   str
 
 
 class ApplyStatus(str, Enum):
@@ -259,6 +269,7 @@ def check_claude_md(target_dir: Path) -> list[CheckFinding]:
             findings.append(CheckFinding(
                 heading=heading,
                 issue=CheckIssue.EMPTY_SECTION,
+                severity=CheckSeverity.MEDIUM,
                 detail=f"{heading!r} has no content",
             ))
             continue
@@ -275,6 +286,7 @@ def check_claude_md(target_dir: Path) -> list[CheckFinding]:
                 findings.append(CheckFinding(
                     heading=heading,
                     issue=CheckIssue.DEAD_SKILL_REF,
+                    severity=CheckSeverity.MEDIUM,
                     detail=f"skill not found: {match.group(1)!r}",
                 ))
 
@@ -292,6 +304,7 @@ def check_claude_md(target_dir: Path) -> list[CheckFinding]:
                 findings.append(CheckFinding(
                     heading=heading,
                     issue=CheckIssue.DEAD_FILE_REF,
+                    severity=CheckSeverity.MEDIUM,
                     detail=f"file not found: {token!r}",
                 ))
 

@@ -137,3 +137,38 @@ def test_check_flag_in_help():
     runner = CliRunner()
     result = runner.invoke(cli, ["harvest", "--help"])
     assert "--check" in result.output
+
+
+def test_check_severity_enum_exists():
+    from cctx.harvest import CheckSeverity
+    assert CheckSeverity.LOW.value == "low"
+    assert CheckSeverity.MEDIUM.value == "medium"
+    assert CheckSeverity.HIGH.value == "high"
+
+
+def test_check_issue_has_new_values():
+    from cctx.harvest import CheckIssue
+    assert CheckIssue.CONTRADICTION.value == "contradiction"
+    assert CheckIssue.REDUNDANCY.value == "redundancy"
+    assert CheckIssue.STALE_IDENTIFIER.value == "stale_identifier"
+
+
+def test_check_finding_has_severity():
+    from cctx.harvest import CheckFinding, CheckIssue, CheckSeverity
+    f = CheckFinding(
+        heading="## Test",
+        issue=CheckIssue.EMPTY_SECTION,
+        severity=CheckSeverity.MEDIUM,
+        detail="no content",
+    )
+    assert f.severity is CheckSeverity.MEDIUM
+
+
+def test_existing_checks_have_medium_severity(tmp_path):
+    from cctx.harvest import CheckSeverity, check_claude_md
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Dead ref\n\nSee `missing/module.py`.\n"
+    )
+    findings = check_claude_md(tmp_path)
+    assert findings
+    assert all(f.severity is CheckSeverity.MEDIUM for f in findings)
