@@ -312,19 +312,18 @@ def check_redundancy(
 
     Returns findings for each redundancy found (severity: MEDIUM).
     """
-    eligible = [
-        (heading, body, _words(body))
-        for heading, body in sections
-        if len(_words(body)) >= 5
-    ]
+    eligible = []
+    for heading, body in sections:
+        ws = _words(body)
+        if len(ws) >= 5:
+            eligible.append((heading, body, ws))
+
     findings: list[CheckFinding] = []
     for i in range(len(eligible)):
         for j in range(i + 1, len(eligible)):
             h1, _, w1 = eligible[i]
             h2, _, w2 = eligible[j]
             union = w1 | w2
-            if not union:
-                continue
             jaccard = len(w1 & w2) / len(union)
             if jaccard >= 0.8:
                 findings.append(CheckFinding(
