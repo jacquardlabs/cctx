@@ -166,13 +166,13 @@ def _render_check_findings(findings: list, target_dir: Path) -> None:
     }
     _SEV_BADGE = {
         CheckSeverity.HIGH:   "[HIGH]",
-        CheckSeverity.MEDIUM: "[MED] ",
-        CheckSeverity.LOW:    "[LOW] ",
+        CheckSeverity.MEDIUM: "[MED]",
+        CheckSeverity.LOW:    "[LOW]",
     }
     for f in findings:
         badge = _SEV_BADGE.get(f.severity, "      ")
         label = _ISSUE_LABEL.get(f.issue, f.issue.value)
-        con.print(f"  {badge}  {f.heading}  {label}: {f.detail}")
+        con.print(f"  {badge:<6}  {f.heading}  {label}: {f.detail}")
 
 
 @click.group()
@@ -580,7 +580,7 @@ def harvest(
     from cctx.harvest import apply_patches, check_claude_md, preview_patches
 
     if check_mode:
-        from cctx.harvest import CheckSeverity, check_claude_md
+        from cctx.harvest import CheckSeverity
         resolved_dir = target_dir or Path.cwd()
         findings = check_claude_md(resolved_dir)
         _render_check_findings(findings, resolved_dir)
