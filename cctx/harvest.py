@@ -335,6 +335,52 @@ def check_redundancy(
     return findings
 
 
+def check_staleness(
+    sections: list[tuple[str, str]],
+    project_dir: Path,
+) -> list[CheckFinding]:
+    """Detect stale function references in CLAUDE.md.
+
+    Scans all .py, .ts, and .js source files in the project directory,
+    builds a combined source text, and searches for backtick-quoted function
+    references (e.g., `my_function()`) that are 8+ characters long. Flags
+    references not found in the source.
+
+    Returns findings for each stale identifier found (severity: LOW).
+    """
+    _EXCLUDED = {".git", ".venv", "node_modules", "__pycache__"}
+    source_files = [
+        f
+        for f in (
+            list(project_dir.rglob("*.py"))
+            + list(project_dir.rglob("*.ts"))
+            + list(project_dir.rglob("*.js"))
+        )
+        if not any(part in _EXCLUDED for part in f.parts)
+    ]
+    if not source_files:
+        return []
+
+    source_text = "\n".join(
+        f.read_text(encoding="utf-8", errors="ignore") for f in source_files
+    )
+
+    findings: list[CheckFinding] = []
+    for heading, body in sections:
+        for match in _FUNC_REF_RE.finditer(body):
+            name = match.group(1)
+            if len(name) < 8:
+                continue
+            if name not in source_text:
+                findings.append(CheckFinding(
+                    heading=heading,
+                    issue=CheckIssue.STALE_IDENTIFIER,
+                    severity=CheckSeverity.LOW,
+                    detail=f"'{name}()' not found in project source files",
+                ))
+    return findings
+
+
 def check_claude_md(target_dir: Path) -> list[CheckFinding]:
     """Audit CLAUDE.md in target_dir for deterministically detectable issues.
 

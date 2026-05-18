@@ -260,3 +260,46 @@ def test_redundancy_severity_is_medium():
     ]
     findings = check_redundancy(sections)
     assert findings[0].severity is CheckSeverity.MEDIUM
+
+
+# ---------------------------------------------------------------------------
+# check_staleness unit tests
+# ---------------------------------------------------------------------------
+
+def test_stale_identifier_flagged(tmp_path):
+    from cctx.harvest import CheckIssue, check_staleness
+    (tmp_path / "app.py").write_text("def some_other_fn(): pass\n")
+    sections = [("## Guide", "Call `deleted_helper()` before running.")]
+    findings = check_staleness(sections, tmp_path)
+    assert any(f.issue is CheckIssue.STALE_IDENTIFIER for f in findings)
+    assert any("deleted_helper" in f.detail for f in findings)
+
+
+def test_existing_identifier_not_flagged(tmp_path):
+    from cctx.harvest import check_staleness
+    (tmp_path / "app.py").write_text("def tokenize_session(): pass\n")
+    sections = [("## Guide", "Use `tokenize_session()` to count tokens.")]
+    assert check_staleness(sections, tmp_path) == []
+
+
+def test_short_identifier_not_eligible(tmp_path):
+    from cctx.harvest import check_staleness
+    (tmp_path / "app.py").write_text("def other(): pass\n")
+    # "run" is 3 chars — below 8-char minimum
+    sections = [("## Guide", "Call `run()` to start.")]
+    assert check_staleness(sections, tmp_path) == []
+
+
+def test_no_source_files_skips_staleness(tmp_path):
+    from cctx.harvest import check_staleness
+    # No .py/.ts/.js files in tmp_path
+    sections = [("## Guide", "Call `deleted_helper()` before running.")]
+    assert check_staleness(sections, tmp_path) == []
+
+
+def test_staleness_severity_is_low(tmp_path):
+    from cctx.harvest import CheckSeverity, check_staleness
+    (tmp_path / "app.py").write_text("def other_fn(): pass\n")
+    sections = [("## Guide", "Use `deleted_helper()` to process.")]
+    findings = check_staleness(sections, tmp_path)
+    assert findings[0].severity is CheckSeverity.LOW
