@@ -3,8 +3,8 @@
 render_diagnosis(diagnosis, console=None) -> None
 render_aggregate(report, console=None) -> None
 render_harvest_results(results, dry_run=False, console=None) -> None
-render_projects(projects, console=None) -> None
-render_sessions(project, console=None) -> None
+render_projects(projects, live_statuses=None, console=None) -> None
+render_sessions(project, live_statuses=None, console=None) -> None
 
 Uses rich for formatting. Accepts an optional Console for testing.
 """
@@ -301,6 +301,11 @@ def render_projects(
     console: Console | None = None,
 ) -> None:
     con = console or _default_console()
+
+    if not projects:
+        con.print("No projects found in ~/.claude/projects/.")
+        return
+
     _live = live_statuses or {}
     live_project_ids: set[str] = {
         proj.project_dir.name
@@ -308,10 +313,6 @@ def render_projects(
         for s in proj.sessions
         if s.session_id in _live
     }
-
-    if not projects:
-        con.print("No projects found in ~/.claude/projects/.")
-        return
 
     con.print(Rule("cctx — projects"))
     table = Table(show_header=True, box=None, pad_edge=False, show_edge=False)

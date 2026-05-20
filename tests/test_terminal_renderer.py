@@ -290,16 +290,13 @@ def test_render_aggregate_patterns_visible_even_when_by_kind_empty():
 # ---------------------------------------------------------------------------
 
 
-def test_render_sessions_shows_live_badge():
+def test_render_sessions_shows_live_badge(tmp_path):
     """A session whose ID is in live_statuses gets a ● badge in the output."""
-    from pathlib import Path
-
     from rich.console import Console
 
     from cctx.discovery import ProjectInfo, SessionMeta
     from cctx.renderers.terminal import render_sessions
 
-    tmp_path = Path("/tmp/test_live_badges")
     session = SessionMeta(
         path=tmp_path / "abc12345.jsonl",
         session_id="abc12345-0000-0000-0000-000000000000",
@@ -326,16 +323,13 @@ def test_render_sessions_shows_live_badge():
     assert "busy" in output
 
 
-def test_render_sessions_no_badge_when_not_live():
+def test_render_sessions_no_badge_when_not_live(tmp_path):
     """Sessions not in live_statuses get no badge — output matches prior behavior."""
-    from pathlib import Path
-
     from rich.console import Console
 
     from cctx.discovery import ProjectInfo, SessionMeta
     from cctx.renderers.terminal import render_sessions
 
-    tmp_path = Path("/tmp/test_live_badges")
     session = SessionMeta(
         path=tmp_path / "abc12345.jsonl",
         session_id="abc12345-0000-0000-0000-000000000000",
@@ -357,16 +351,41 @@ def test_render_sessions_no_badge_when_not_live():
     assert "●" not in output
 
 
-def test_render_projects_shows_live_badge():
-    """A project with a live session shows a ● badge in the project listing."""
-    from pathlib import Path
+def test_render_sessions_no_badge_when_live_statuses_is_none(tmp_path):
+    """live_statuses=None (the default) produces no badge — same as empty dict."""
+    from rich.console import Console
 
+    from cctx.discovery import ProjectInfo, SessionMeta
+    from cctx.renderers.terminal import render_sessions
+
+    session = SessionMeta(
+        path=tmp_path / "abc12345.jsonl",
+        session_id="abc12345-0000-0000-0000-000000000000",
+        start_time=datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc),
+        cwd="/some/path",
+        git_branch="main",
+    )
+    project = ProjectInfo(
+        project_dir=tmp_path,
+        display_name="~/some/path",
+        sessions=[session],
+    )
+
+    buf = StringIO()
+    con = Console(file=buf, highlight=False, markup=False)
+    render_sessions(project, console=con)  # no live_statuses — uses default None
+    output = buf.getvalue()
+
+    assert "●" not in output
+
+
+def test_render_projects_shows_live_badge(tmp_path):
+    """A project with a live session shows a ● badge in the project listing."""
     from rich.console import Console
 
     from cctx.discovery import ProjectInfo, SessionMeta
     from cctx.renderers.terminal import render_projects
 
-    tmp_path = Path("/tmp/test_live_badges")
     session = SessionMeta(
         path=tmp_path / "abc12345.jsonl",
         session_id="abc12345-0000-0000-0000-000000000000",
@@ -390,3 +409,31 @@ def test_render_projects_shows_live_badge():
     output = buf.getvalue()
 
     assert "●" in output
+
+
+def test_render_projects_no_badge_when_not_live(tmp_path):
+    """Projects with no live sessions show no badge."""
+    from rich.console import Console
+
+    from cctx.discovery import ProjectInfo, SessionMeta
+    from cctx.renderers.terminal import render_projects
+
+    session = SessionMeta(
+        path=tmp_path / "abc12345.jsonl",
+        session_id="abc12345-0000-0000-0000-000000000000",
+        start_time=datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc),
+        cwd="/some/path",
+        git_branch="main",
+    )
+    project = ProjectInfo(
+        project_dir=tmp_path,
+        display_name="~/some/path",
+        sessions=[session],
+    )
+
+    buf = StringIO()
+    con = Console(file=buf, highlight=False, markup=False)
+    render_projects([project], live_statuses={}, console=con)
+    output = buf.getvalue()
+
+    assert "●" not in output
