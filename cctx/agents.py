@@ -43,6 +43,9 @@ def live_sessions() -> list[LiveSession]:
     except json.JSONDecodeError:
         return []
 
+    if not isinstance(data, list):
+        return []
+
     sessions: list[LiveSession] = []
     for item in data:
         try:
