@@ -2,6 +2,42 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-05-20)
+
+### Bug Fixes
+
+- Agents.py — guard against non-list JSON, tighten patch targets
+  ([`c41c42c`](https://github.com/jacquardlabs/cctx/commit/c41c42cb366904fc332638b8f97ee042f17b45c2))
+
+- Renderer — guard order, tmp_path fixtures, missing no-badge tests
+  ([`8f26afd`](https://github.com/jacquardlabs/cctx/commit/8f26afdf27c63641942b434e47a2fb7b24d38068))
+
+- Watcher — hermetic tests, reuse _encode_path, rename clarity
+  ([`a7b52de`](https://github.com/jacquardlabs/cctx/commit/a7b52def47b13447d956476a0ec6782fe2d0247b))
+
+### Documentation
+
+- Implementation plan for claude agents live integration
+  ([`2136adf`](https://github.com/jacquardlabs/cctx/commit/2136adf0697a695d27f438f0368e7bd5ba406e89))
+
+- Spec for claude agents --json live session integration
+  ([`0df2381`](https://github.com/jacquardlabs/cctx/commit/0df23813a90c66e57d0d39c6b959859b89a5c057))
+
+### Features
+
+- Add agents.py — live_sessions() via claude agents --json
+  ([`83b704f`](https://github.com/jacquardlabs/cctx/commit/83b704ffbe4303dbd316257a01eb0b59307c0e06))
+
+- Cctx ls — pass live_statuses to renderer for live session badges
+  ([`65445d7`](https://github.com/jacquardlabs/cctx/commit/65445d75a213bf26401fe044a2409d2ce0efbcb1))
+
+- Render_sessions/render_projects — live status badges via live_statuses param
+  ([`3d77687`](https://github.com/jacquardlabs/cctx/commit/3d776879c9ce03a622361c2b804e5986d40f37a1))
+
+- Watcher — live session detection + early idle exit via claude agents --json
+  ([`a11481c`](https://github.com/jacquardlabs/cctx/commit/a11481c2126fead87e1f92bfecc7bf5ac3f39d1a))
+
+
 ## v1.4.0 (2026-05-20)
 
 ### Bug Fixes
