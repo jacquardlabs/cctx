@@ -52,6 +52,19 @@ def test_dead_skill_reference(tmp_path):
     assert any(f.issue is CheckIssue.DEAD_SKILL_REF for f in findings)
 
 
+def test_existing_skill_reference_no_finding(tmp_path):
+    from cctx.harvest import check_claude_md
+
+    skill_dir = tmp_path / ".claude" / "skills"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "my-skill.md").write_text("# skill")
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Skills\n\nUse `.claude/skills/my-skill.md`.\n"
+    )
+    findings = check_claude_md(tmp_path)
+    assert not any("my-skill.md" in f.detail for f in findings)
+
+
 def test_empty_section_detected(tmp_path):
     from cctx.harvest import CheckIssue, check_claude_md
 
@@ -137,3 +150,269 @@ def test_check_flag_in_help():
     runner = CliRunner()
     result = runner.invoke(cli, ["harvest", "--help"])
     assert "--check" in result.output
+
+
+def test_check_severity_enum_exists():
+    from cctx.harvest import CheckSeverity
+    assert CheckSeverity.LOW.value == "low"
+    assert CheckSeverity.MEDIUM.value == "medium"
+    assert CheckSeverity.HIGH.value == "high"
+
+
+def test_check_issue_has_new_values():
+    from cctx.harvest import CheckIssue
+    assert CheckIssue.CONTRADICTION.value == "contradiction"
+    assert CheckIssue.REDUNDANCY.value == "redundancy"
+    assert CheckIssue.STALE_IDENTIFIER.value == "stale_identifier"
+
+
+def test_check_finding_has_severity():
+    from cctx.harvest import CheckFinding, CheckIssue, CheckSeverity
+    f = CheckFinding(
+        heading="## Test",
+        issue=CheckIssue.EMPTY_SECTION,
+        severity=CheckSeverity.MEDIUM,
+        detail="no content",
+    )
+    assert f.severity is CheckSeverity.MEDIUM
+
+
+def test_existing_checks_have_medium_severity(tmp_path):
+    from cctx.harvest import CheckSeverity, check_claude_md
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Dead ref\n\nSee `missing/module.py`.\n"
+    )
+    findings = check_claude_md(tmp_path)
+    assert findings
+    assert all(f.severity is CheckSeverity.MEDIUM for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# check_contradictions unit tests
+# ---------------------------------------------------------------------------
+
+def test_contradiction_detected_across_sections():
+    from cctx.harvest import CheckIssue, check_contradictions
+    sections = [
+        ("## Formatting", "Always use tabs for indentation."),
+        ("## Style", "Never use tabs, use spaces instead."),
+    ]
+    findings = check_contradictions(sections)
+    assert len(findings) == 1
+    assert findings[0].issue is CheckIssue.CONTRADICTION
+
+
+def test_no_contradiction_same_polarity():
+    from cctx.harvest import check_contradictions
+    sections = [
+        ("## A", "Always use tabs."),
+        ("## B", "Always use spaces."),
+    ]
+    assert check_contradictions(sections) == []
+
+
+def test_no_contradiction_different_subjects():
+    from cctx.harvest import check_contradictions
+    sections = [
+        ("## A", "Always use tabs."),
+        ("## B", "Never import numpy."),
+    ]
+    assert check_contradictions(sections) == []
+
+
+def test_contradiction_severity_is_high():
+    from cctx.harvest import CheckSeverity, check_contradictions
+    sections = [
+        ("## A", "Always use tabs."),
+        ("## B", "Never use tabs."),
+    ]
+    findings = check_contradictions(sections)
+    assert findings[0].severity is CheckSeverity.HIGH
+
+
+# ---------------------------------------------------------------------------
+# check_redundancy unit tests
+# ---------------------------------------------------------------------------
+
+def test_redundancy_detected_similar_sections():
+    from cctx.harvest import CheckIssue, check_redundancy
+    body = "stop retrying after two failures diagnose before retrying"
+    sections = [
+        ("## Retry discipline", body),
+        ("## Failure handling", body),
+    ]
+    findings = check_redundancy(sections)
+    assert len(findings) == 1
+    assert findings[0].issue is CheckIssue.REDUNDANCY
+
+
+def test_no_redundancy_different_sections():
+    from cctx.harvest import check_redundancy
+    sections = [
+        ("## Retry discipline", "stop retrying after two failures diagnose before"),
+        ("## Scope creep", "finish stated task before picking up anything else"),
+    ]
+    assert check_redundancy(sections) == []
+
+
+def test_short_section_not_eligible():
+    from cctx.harvest import check_redundancy
+    sections = [
+        ("## A", "stop retry"),           # 2 words after stopword removal — not eligible
+        ("## B", "stop retry"),
+    ]
+    assert check_redundancy(sections) == []
+
+
+def test_redundancy_severity_is_medium():
+    from cctx.harvest import CheckSeverity, check_redundancy
+    body = "stop retrying after two failures diagnose before retrying"
+    sections = [
+        ("## A", body),
+        ("## B", body),
+    ]
+    findings = check_redundancy(sections)
+    assert findings[0].severity is CheckSeverity.MEDIUM
+
+
+# ---------------------------------------------------------------------------
+# check_staleness unit tests
+# ---------------------------------------------------------------------------
+
+def test_stale_identifier_flagged(tmp_path):
+    from cctx.harvest import CheckIssue, check_staleness
+    (tmp_path / "app.py").write_text("def some_other_fn(): pass\n")
+    sections = [("## Guide", "Call `deleted_helper()` before running.")]
+    findings = check_staleness(sections, tmp_path)
+    assert any(f.issue is CheckIssue.STALE_IDENTIFIER for f in findings)
+    assert any("deleted_helper" in f.detail for f in findings)
+
+
+def test_existing_identifier_not_flagged(tmp_path):
+    from cctx.harvest import check_staleness
+    (tmp_path / "app.py").write_text("def tokenize_session(): pass\n")
+    sections = [("## Guide", "Use `tokenize_session()` to count tokens.")]
+    assert check_staleness(sections, tmp_path) == []
+
+
+def test_short_identifier_not_eligible(tmp_path):
+    from cctx.harvest import check_staleness
+    (tmp_path / "app.py").write_text("def other(): pass\n")
+    # "run" is 3 chars — below 8-char minimum
+    sections = [("## Guide", "Call `run()` to start.")]
+    assert check_staleness(sections, tmp_path) == []
+
+
+def test_no_source_files_skips_staleness(tmp_path):
+    from cctx.harvest import check_staleness
+    # No .py/.ts/.js files in tmp_path
+    sections = [("## Guide", "Call `deleted_helper()` before running.")]
+    assert check_staleness(sections, tmp_path) == []
+
+
+def test_staleness_severity_is_low(tmp_path):
+    from cctx.harvest import CheckSeverity, check_staleness
+    (tmp_path / "app.py").write_text("def other_fn(): pass\n")
+    sections = [("## Guide", "Use `deleted_helper()` to process.")]
+    findings = check_staleness(sections, tmp_path)
+    assert findings[0].severity is CheckSeverity.LOW
+
+
+# ---------------------------------------------------------------------------
+# Integration: check_claude_md wires all detectors
+# ---------------------------------------------------------------------------
+
+def test_check_claude_md_runs_all_detectors(tmp_path):
+    """check_claude_md returns findings from all four check types."""
+    from cctx.harvest import CheckIssue, check_claude_md
+
+    # Create a source file so staleness check runs
+    (tmp_path / "app.py").write_text("def other_function(): pass\n")
+
+    content = "\n".join([
+        "## Formatting",
+        "Always use tabs for indentation.",
+        "",
+        "## Style",
+        "Never use tabs, use spaces.",
+        "",
+        "## Dead ref",
+        "See `missing/module.py`.",
+        "",
+        "## Stale",
+        "Call `deleted_helper()` to process.",
+    ])
+    (tmp_path / "CLAUDE.md").write_text(content)
+
+    findings = check_claude_md(tmp_path)
+    issues = {f.issue for f in findings}
+    assert CheckIssue.CONTRADICTION in issues
+    assert CheckIssue.DEAD_FILE_REF in issues
+    assert CheckIssue.STALE_IDENTIFIER in issues
+
+
+# ---------------------------------------------------------------------------
+# CLI --check-severity flag tests
+# ---------------------------------------------------------------------------
+
+def test_check_severity_high_exits_zero_on_medium_findings(tmp_path):
+    """--check-severity HIGH: MEDIUM findings don't trigger exit 1."""
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Dead ref\n\nSee `missing/module.py`.\n"
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["harvest", str(tmp_path), "--check", "--check-severity", "HIGH",
+         "--target-dir", str(tmp_path)],
+    )
+    assert result.exit_code == 0
+
+
+def test_check_severity_low_exits_one_on_any_finding(tmp_path):
+    """--check-severity LOW: any finding triggers exit 1."""
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+
+    (tmp_path / "app.py").write_text("def other_fn(): pass\n")
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Guide\n\nUse `deleted_helper()` to process.\n"
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["harvest", str(tmp_path), "--check", "--check-severity", "LOW",
+         "--target-dir", str(tmp_path)],
+    )
+    assert result.exit_code == 1
+
+
+def test_check_severity_in_help():
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+    runner = CliRunner()
+    result = runner.invoke(cli, ["harvest", "--help"])
+    assert "--check-severity" in result.output
+
+
+def test_check_output_shows_severity_badge(tmp_path):
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Dead ref\n\nSee `missing/module.py`.\n"
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["harvest", str(tmp_path), "--check", "--target-dir", str(tmp_path)],
+    )
+    # MED badge should appear for DEAD_FILE_REF (MEDIUM severity)
+    assert "[MED]" in result.output or "MED" in result.output

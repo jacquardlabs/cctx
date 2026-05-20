@@ -14,6 +14,7 @@ Layering rules (MUST respect):
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -28,17 +29,27 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
+class CheckSeverity(str, Enum):
+    LOW    = "low"
+    MEDIUM = "medium"
+    HIGH   = "high"
+
+
 class CheckIssue(str, Enum):
-    DEAD_FILE_REF = "dead_file_ref"   # backtick-quoted path that doesn't exist on disk
-    DEAD_SKILL_REF = "dead_skill_ref" # .claude/skills/ reference that doesn't exist
-    EMPTY_SECTION = "empty_section"   # ## heading with no content
+    DEAD_FILE_REF    = "dead_file_ref"
+    DEAD_SKILL_REF   = "dead_skill_ref"
+    EMPTY_SECTION    = "empty_section"
+    CONTRADICTION    = "contradiction"
+    REDUNDANCY       = "redundancy"
+    STALE_IDENTIFIER = "stale_identifier"
 
 
 @dataclass
 class CheckFinding:
-    heading: str          # ## section where this was found ("(preamble)" if before first heading)
-    issue: CheckIssue
-    detail: str           # human-readable description
+    heading:  str
+    issue:    CheckIssue
+    severity: CheckSeverity
+    detail:   str
 
 
 class ApplyStatus(str, Enum):
@@ -212,6 +223,25 @@ _KNOWN_EXTENSIONS = {
     ".json", ".md", ".sh", ".bash", ".fish", ".zsh",
 }
 
+_STOPWORDS = {
+    "a", "an", "the", "to", "be", "is", "are", "was", "were",
+    "in", "on", "at", "of", "for", "with", "and", "or", "not",
+    "it", "this", "that", "you", "your", "use", "do",
+}
+
+_ALWAYS_NEVER_RE = re.compile(
+    r"\b(always|never)\b(.+?)(?:[.!?\n]|$)", re.IGNORECASE
+)
+
+_STALENESS_EXCLUDED = {".git", ".venv", "node_modules", "__pycache__"}
+
+_FUNC_REF_RE = re.compile(r"`([^`/.\s]{8,})\(\)`")
+
+
+def _words(text: str) -> set[str]:
+    tokens = re.findall(r"\b[a-zA-Z_]\w*\b", text.lower())
+    return {t for t in tokens if t not in _STOPWORDS}
+
 
 def _parse_sections(content: str) -> list[tuple[str, str]]:
     """Split markdown into (heading, body) pairs.
@@ -233,22 +263,133 @@ def _parse_sections(content: str) -> list[tuple[str, str]]:
     return sections
 
 
-def check_claude_md(target_dir: Path) -> list[CheckFinding]:
-    """Audit CLAUDE.md in target_dir for deterministically detectable issues.
+def check_contradictions(
+    sections: list[tuple[str, str]],
+) -> list[CheckFinding]:
+    """Detect contradictions across sections using always/never polarity heuristic.
 
-    Checks:
-      - Dead file references: backtick-quoted paths that don't exist on disk
-      - Dead skill references: .claude/skills/ paths that don't exist
-      - Empty sections: ## headings with no content
+    Looks for "always" and "never" clauses in section bodies, extracts the
+    subject words, and flags cases where the same word has conflicting polarities.
 
-    Returns an empty list if CLAUDE.md doesn't exist (not an error).
+    Returns findings for each contradiction found (severity: HIGH).
     """
-    claude_md = target_dir / "CLAUDE.md"
-    if not claude_md.exists():
+    subject_map: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for heading, body in sections:
+        for match in _ALWAYS_NEVER_RE.finditer(body):
+            polarity = match.group(1).lower()
+            clause = match.group(2)
+            for word in _words(clause):
+                subject_map[word].append((polarity, heading))
+
+    findings: list[CheckFinding] = []
+    seen: set[tuple[str, str]] = set()
+    for word, occurrences in subject_map.items():
+        always_headings = [h for p, h in occurrences if p == "always"]
+        never_headings = [h for p, h in occurrences if p == "never"]
+        if always_headings and never_headings:
+            key = (always_headings[0], never_headings[0])
+            if key not in seen:
+                seen.add(key)
+                findings.append(CheckFinding(
+                    heading=always_headings[0],
+                    issue=CheckIssue.CONTRADICTION,
+                    severity=CheckSeverity.HIGH,
+                    detail=(
+                        f"'{word}' is 'always' in {always_headings[0]!r}"
+                        f" but 'never' in {never_headings[0]!r}"
+                    ),
+                ))
+    return findings
+
+
+def check_redundancy(
+    sections: list[tuple[str, str]],
+) -> list[CheckFinding]:
+    """Detect redundancy across sections using Jaccard similarity.
+
+    Builds a word set (stopwords removed) for each section. Sections with
+    fewer than 5 words are ineligible. For all pairs of eligible sections,
+    computes Jaccard similarity of their word sets. Flags pairs with
+    similarity >= 0.8.
+
+    Returns findings for each redundancy found (severity: MEDIUM).
+    """
+    eligible = []
+    for heading, body in sections:
+        ws = _words(body)
+        if len(ws) >= 5:
+            eligible.append((heading, body, ws))
+
+    findings: list[CheckFinding] = []
+    for i in range(len(eligible)):
+        for j in range(i + 1, len(eligible)):
+            h1, _, w1 = eligible[i]
+            h2, _, w2 = eligible[j]
+            union = w1 | w2
+            jaccard = len(w1 & w2) / len(union)
+            if jaccard >= 0.8:
+                findings.append(CheckFinding(
+                    heading=h1,
+                    issue=CheckIssue.REDUNDANCY,
+                    severity=CheckSeverity.MEDIUM,
+                    detail=f"{h1!r} and {h2!r} are {jaccard:.0%} similar",
+                ))
+    return findings
+
+
+def check_staleness(
+    sections: list[tuple[str, str]],
+    project_dir: Path,
+) -> list[CheckFinding]:
+    """Detect stale function references in CLAUDE.md.
+
+    Scans all .py, .ts, and .js source files in the project directory and
+    searches for backtick-quoted function references (e.g., `my_function()`)
+    that are 8+ characters long. Flags references not found in the source.
+
+    Returns findings for each stale identifier found (severity: LOW).
+    """
+    source_files = [
+        f
+        for f in (
+            list(project_dir.rglob("*.py"))
+            + list(project_dir.rglob("*.ts"))
+            + list(project_dir.rglob("*.js"))
+        )
+        if not any(part in _STALENESS_EXCLUDED for part in f.parts)
+    ]
+    if not source_files:
         return []
 
-    content = claude_md.read_text(encoding="utf-8")
-    sections = _parse_sections(content)
+    findings: list[CheckFinding] = []
+    for heading, body in sections:
+        for match in _FUNC_REF_RE.finditer(body):
+            name = match.group(1)
+            found = any(
+                name in f.read_text(encoding="utf-8", errors="ignore")
+                for f in source_files
+            )
+            if not found:
+                findings.append(CheckFinding(
+                    heading=heading,
+                    issue=CheckIssue.STALE_IDENTIFIER,
+                    severity=CheckSeverity.LOW,
+                    detail=f"'{name}()' not found in project source files",
+                ))
+    return findings
+
+
+def _check_structure(
+    sections: list[tuple[str, str]],
+    target_dir: Path,
+) -> list[CheckFinding]:
+    """Check structure issues: empty sections, dead file/skill references.
+
+    Returns findings for:
+      - Empty sections: ## headings with no content (MEDIUM)
+      - Dead file references: backtick-quoted paths that don't exist (MEDIUM)
+      - Dead skill references: .claude/skills/ paths that don't exist (MEDIUM)
+    """
     findings: list[CheckFinding] = []
 
     for heading, body in sections:
@@ -259,13 +400,14 @@ def check_claude_md(target_dir: Path) -> list[CheckFinding]:
             findings.append(CheckFinding(
                 heading=heading,
                 issue=CheckIssue.EMPTY_SECTION,
+                severity=CheckSeverity.MEDIUM,
                 detail=f"{heading!r} has no content",
             ))
             continue
 
         # Dead skill references
         for match in _SKILL_REF_RE.finditer(body):
-            skill_path_str = match.group(1).lstrip("./")
+            skill_path_str = match.group(1).removeprefix("./")
             # Try resolving from target_dir and from home
             candidates = [
                 target_dir / skill_path_str,
@@ -275,6 +417,7 @@ def check_claude_md(target_dir: Path) -> list[CheckFinding]:
                 findings.append(CheckFinding(
                     heading=heading,
                     issue=CheckIssue.DEAD_SKILL_REF,
+                    severity=CheckSeverity.MEDIUM,
                     detail=f"skill not found: {match.group(1)!r}",
                 ))
 
@@ -292,7 +435,33 @@ def check_claude_md(target_dir: Path) -> list[CheckFinding]:
                 findings.append(CheckFinding(
                     heading=heading,
                     issue=CheckIssue.DEAD_FILE_REF,
+                    severity=CheckSeverity.MEDIUM,
                     detail=f"file not found: {token!r}",
                 ))
 
     return findings
+
+
+def check_claude_md(target_dir: Path) -> list[CheckFinding]:
+    """Audit CLAUDE.md in target_dir for deterministically detectable issues.
+
+    Checks:
+      - Dead file/skill references and empty sections (MEDIUM)
+      - Contradictory always/never rules (HIGH)
+      - Redundant sections with Jaccard >= 0.8 (MEDIUM)
+      - Stale backtick-quoted function identifiers >= 8 chars (LOW)
+
+    Returns an empty list if CLAUDE.md doesn't exist (not an error).
+    """
+    claude_md = target_dir / "CLAUDE.md"
+    if not claude_md.exists():
+        return []
+
+    content = claude_md.read_text(encoding="utf-8")
+    sections = _parse_sections(content)
+    return (
+        _check_structure(sections, target_dir)
+        + check_contradictions(sections)
+        + check_redundancy(sections)
+        + check_staleness(sections, target_dir)
+    )
