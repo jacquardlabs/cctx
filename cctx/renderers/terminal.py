@@ -294,8 +294,20 @@ def render_harvest_results(
         con.print(f"Applied {applied_count} patch(es).")
 
 
-def render_projects(projects: list[ProjectInfo], *, console: Console | None = None) -> None:
+def render_projects(
+    projects: list[ProjectInfo],
+    *,
+    live_statuses: dict[str, str] | None = None,
+    console: Console | None = None,
+) -> None:
     con = console or _default_console()
+    _live = live_statuses or {}
+    live_project_ids: set[str] = {
+        proj.project_dir.name
+        for proj in projects
+        for s in proj.sessions
+        if s.session_id in _live
+    }
 
     if not projects:
         con.print("No projects found in ~/.claude/projects/.")
@@ -306,13 +318,19 @@ def render_projects(projects: list[ProjectInfo], *, console: Console | None = No
     table.add_column("Project", style="bold")
     table.add_column("Sessions", justify="right", style="dim")
     table.add_column("Last session", style="dim")
+    table.add_column("Status")
 
     for proj in projects:
         last = proj.latest_time.strftime("%Y-%m-%d") if proj.latest_time else "—"
+        if proj.project_dir.name in live_project_ids:
+            status_cell = Text("● live", style="green bold")
+        else:
+            status_cell = Text("")
         table.add_row(
             proj.display_name,
             str(proj.session_count),
             last,
+            status_cell,
         )
     con.print(table)
     con.print()
@@ -326,8 +344,14 @@ def render_projects(projects: list[ProjectInfo], *, console: Console | None = No
     )
 
 
-def render_sessions(project: ProjectInfo, *, console: Console | None = None) -> None:
+def render_sessions(
+    project: ProjectInfo,
+    *,
+    live_statuses: dict[str, str] | None = None,
+    console: Console | None = None,
+) -> None:
     con = console or _default_console()
+    _live = live_statuses or {}
 
     con.print(Rule(f"cctx — {project.display_name}"))
     if not project.sessions:
@@ -339,14 +363,20 @@ def render_sessions(project: ProjectInfo, *, console: Console | None = None) -> 
     table.add_column("Date", style="dim")
     table.add_column("Branch", style="dim")
     table.add_column("Path", style="dim")
+    table.add_column("Status")
 
     for s in project.sessions:
         date_str = s.start_time.strftime("%Y-%m-%d %H:%M") if s.start_time else "—"
+        if s.session_id in _live:
+            status_cell = Text(f"● {_live[s.session_id]}", style="green bold")
+        else:
+            status_cell = Text("")
         table.add_row(
             s.session_id[:8],
             date_str,
             s.git_branch or "—",
             str(s.path),
+            status_cell,
         )
     con.print(table)
     con.print()
