@@ -2,6 +2,71 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-05-20)
+
+### Bug Fixes
+
+- Deduplicate harvest check import, align severity badge output
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- Move defaultdict import to top-level, add _words() return type
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- Use removeprefix instead of lstrip to preserve .claude/skills/ dot prefix
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+### Documentation
+
+- M15 harvest --check depth design spec ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- M15 harvest --check depth implementation plan
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+### Features
+
+- --check-severity flag and severity badges in harvest --check output
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- Check_contradictions() — always/never keyword heuristic
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- Check_redundancy() — Jaccard similarity ≥ 0.8 on section word sets
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- Check_staleness() — backtick function refs grepped against project source
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- CheckSeverity enum, severity field on CheckFinding, new CheckIssue values
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- Harvest --check depth — contradiction, redundancy, staleness detectors + --check-severity
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- Wire all four detectors into check_claude_md ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+### Refactoring
+
+- Check_redundancy — compute _words once per section, remove dead union guard
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+- Check_staleness — module-level _STALENESS_EXCLUDED, min-len in regex, per-file search
+  ([#87](https://github.com/jacquardlabs/cctx/pull/87),
+  [`ee08734`](https://github.com/jacquardlabs/cctx/commit/ee0873431383b285769195efc4b2f70f5d07cdeb))
+
+
 ## v1.3.0 (2026-05-17)
 
 ### Bug Fixes
