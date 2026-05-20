@@ -186,3 +186,100 @@ def test_watch_missing_project_dir(tmp_path: Path) -> None:
     nonexistent = tmp_path / "does-not-exist"
     result = runner.invoke(cli, ["watch", str(nonexistent)])
     assert result.exit_code != 0
+
+
+def test_find_active_session_prefers_live_session(tmp_path: Path) -> None:
+    """When live_sessions() returns a cwd match, that JSONL wins over mtime."""
+    import time
+    from datetime import datetime, timezone
+    from unittest.mock import patch
+
+    from cctx.agents import LiveSession
+
+    # Build a fake project dir whose name equals the encoded cwd.
+    cwd_path = tmp_path / "myproject"
+    cwd_path.mkdir()
+    encoded_name = cwd_path.resolve().as_posix().replace("/", "-")
+    project_dir = tmp_path / encoded_name
+    project_dir.mkdir()
+
+    # live-session.jsonl is OLDER by mtime; other-session.jsonl is NEWER.
+    live_jl = project_dir / "live-session.jsonl"
+    other_jl = project_dir / "other-session.jsonl"
+    live_jl.write_text("{}\n")
+    time.sleep(0.02)
+    other_jl.write_text("{}\n")
+
+    live = [LiveSession(
+        session_id="live-session",
+        cwd=str(cwd_path),
+        status="busy",
+        pid=1,
+        kind="interactive",
+        started_at=datetime.now(timezone.utc),
+    )]
+
+    with patch("cctx.watcher.live_sessions", return_value=live):
+        from cctx.watcher import _find_active_session
+        result = _find_active_session(project_dir)
+
+    assert result == live_jl
+
+
+def test_find_active_session_falls_back_to_mtime_when_no_live(tmp_path: Path) -> None:
+    """When live_sessions() returns [], mtime fallback picks the newest file."""
+    import time
+    from unittest.mock import patch
+
+    old = tmp_path / "old.jsonl"
+    new = tmp_path / "new.jsonl"
+    old.write_text("{}\n")
+    time.sleep(0.02)
+    new.write_text("{}\n")
+
+    with patch("cctx.watcher.live_sessions", return_value=[]):
+        from cctx.watcher import _find_active_session
+        result = _find_active_session(tmp_path)
+
+    assert result == new
+
+
+def test_tail_exits_early_when_session_leaves_live_list(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """_tail exits as soon as the session disappears from live_sessions(), not after 30s."""
+    import time as _time
+    from datetime import datetime, timezone
+    from unittest.mock import patch
+
+    import cctx.watcher as watcher_mod
+    from cctx.agents import LiveSession
+
+    session_path = tmp_path / "abc123.jsonl"
+    session_path.write_text("{}\n")
+
+    live_session = LiveSession(
+        session_id="abc123",
+        cwd=str(tmp_path),
+        status="busy",
+        pid=1,
+        kind="interactive",
+        started_at=datetime.now(timezone.utc),
+    )
+
+    call_count: dict[str, int] = {"n": 0}
+
+    def fake_live_sessions() -> list[LiveSession]:
+        call_count["n"] += 1
+        return [live_session] if call_count["n"] == 1 else []
+
+    monkeypatch.setattr(watcher_mod, "_IDLE_TIMEOUT", 30.0)  # would be slow if hit
+    monkeypatch.setattr(watcher_mod, "_POLL_INTERVAL", 0.01)
+
+    start = _time.monotonic()
+    with patch("cctx.watcher.live_sessions", side_effect=fake_live_sessions):
+        count = watcher_mod._tail(session_path)
+    elapsed = _time.monotonic() - start
+
+    assert isinstance(count, int)
+    assert elapsed < 5.0, f"_tail took {elapsed:.1f}s — should have exited early via live detection"

@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from cctx import diagnostician
+from cctx.agents import live_sessions
 from cctx.models import KIND_LABEL, Finding, FindingKind
 
 _POLL_INTERVAL = 1.0    # seconds between size checks
@@ -34,11 +35,20 @@ def _format_finding(f: Finding) -> str:
 
 
 def _find_active_session(project_dir: Path) -> Path | None:
-    """Return the most recently modified JSONL in project_dir, or None.
+    """Return the JSONL for the active session in project_dir.
 
-    Uses st_mtime (not embedded session start_time) so that a currently-active
-    session sorts above older completed sessions regardless of their timestamps.
+    Prefers the live session from `claude agents --json` when available;
+    falls back to most-recently-modified JSONL.
     """
+    encoded_name = project_dir.name
+    for live in live_sessions():
+        if live.cwd:
+            live_encoded = Path(live.cwd).resolve().as_posix().replace("/", "-")
+            if live_encoded == encoded_name:
+                candidate = project_dir / f"{live.session_id}.jsonl"
+                if candidate.exists():
+                    return candidate
+
     candidates = list(project_dir.glob("*.jsonl"))
     if not candidates:
         return None
@@ -69,6 +79,8 @@ def _tail(session_path: Path) -> int:
     seen_keys: set[tuple[FindingKind, int]] = set()
     last_size = 0
     idle_since: float | None = None
+    session_id = session_path.stem
+    session_seen_live = False  # True once we've confirmed claude is available
 
     print(f"Watching {session_path.name} …  Ctrl+C to stop.", flush=True)
 
@@ -99,13 +111,25 @@ def _tail(session_path: Path) -> int:
             now = time.monotonic()
             if idle_since is None:
                 idle_since = now
-            elif now - idle_since >= _IDLE_TIMEOUT:
-                print(
-                    f"\nSession idle for {_IDLE_TIMEOUT:.0f}s — analysis complete. "
-                    f"Findings detected: {len(seen_keys)}",
-                    flush=True,
-                )
-                return len(seen_keys)
+            else:
+                live = live_sessions()
+                live_ids = {s.session_id for s in live}
+                if live:
+                    session_seen_live = True
+                if session_seen_live and session_id not in live_ids:
+                    print(
+                        f"\nSession ended — analysis complete. "
+                        f"Findings detected: {len(seen_keys)}",
+                        flush=True,
+                    )
+                    return len(seen_keys)
+                if now - idle_since >= _IDLE_TIMEOUT:
+                    print(
+                        f"\nSession idle for {_IDLE_TIMEOUT:.0f}s — analysis complete. "
+                        f"Findings detected: {len(seen_keys)}",
+                        flush=True,
+                    )
+                    return len(seen_keys)
 
         time.sleep(_POLL_INTERVAL)
 
