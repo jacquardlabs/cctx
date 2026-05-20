@@ -407,7 +407,7 @@ def _check_structure(
 
         # Dead skill references
         for match in _SKILL_REF_RE.finditer(body):
-            skill_path_str = match.group(1).lstrip("./")
+            skill_path_str = match.group(1).removeprefix("./")
             # Try resolving from target_dir and from home
             candidates = [
                 target_dir / skill_path_str,

@@ -52,6 +52,19 @@ def test_dead_skill_reference(tmp_path):
     assert any(f.issue is CheckIssue.DEAD_SKILL_REF for f in findings)
 
 
+def test_existing_skill_reference_no_finding(tmp_path):
+    from cctx.harvest import check_claude_md
+
+    skill_dir = tmp_path / ".claude" / "skills"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "my-skill.md").write_text("# skill")
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Skills\n\nUse `.claude/skills/my-skill.md`.\n"
+    )
+    findings = check_claude_md(tmp_path)
+    assert not any("my-skill.md" in f.detail for f in findings)
+
+
 def test_empty_section_detected(tmp_path):
     from cctx.harvest import CheckIssue, check_claude_md
 
