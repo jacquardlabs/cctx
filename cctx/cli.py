@@ -19,6 +19,7 @@ from typing import IO
 import rich_click as click
 
 from cctx import diagnostician
+from cctx.agents import live_sessions as _live_sessions
 from cctx.diagnostician import aggregate
 from cctx.diagnostician.patterns import project_specific
 from cctx.discovery import complete_project as _complete_project
@@ -196,9 +197,11 @@ def ls(project: Path | None) -> None:
     """
     from cctx.discovery import ProjectInfo, find_project_dir, list_projects, list_sessions
 
+    live_statuses = {s.session_id: s.status for s in _live_sessions()}
+
     if project is None:
         projects = list_projects()
-        render_projects(projects)
+        render_projects(projects, live_statuses=live_statuses)
     else:
         cwd = project if project.is_dir() else project.parent
         project_dir = find_project_dir(cwd)
@@ -213,7 +216,7 @@ def ls(project: Path | None) -> None:
             display_name=str(cwd).replace(str(Path.home()), "~"),
             sessions=sessions,
         )
-        render_sessions(info)
+        render_sessions(info, live_statuses=live_statuses)
 
 
 @cli.command()
