@@ -106,6 +106,7 @@ def test_tail_exits_on_idle(tmp_path: Path, monkeypatch) -> None:
     # Patch IDLE_TIMEOUT to 0.05s so the test runs fast
     monkeypatch.setattr(watcher_mod, "_IDLE_TIMEOUT", 0.05)
     monkeypatch.setattr(watcher_mod, "_POLL_INTERVAL", 0.01)
+    monkeypatch.setattr(watcher_mod, "live_sessions", lambda: [])
 
     count = _tail(session_path)
     assert isinstance(count, int)
@@ -151,6 +152,7 @@ def test_tail_reports_new_findings_once(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(diag_mod, "run", _fake_diag)
     monkeypatch.setattr(watcher_mod, "_IDLE_TIMEOUT", 0.05)
     monkeypatch.setattr(watcher_mod, "_POLL_INTERVAL", 0.01)
+    monkeypatch.setattr(watcher_mod, "live_sessions", lambda: [])
 
     with patch("builtins.print") as mock_print:
         _tail(session_path)
@@ -245,7 +247,7 @@ def test_find_active_session_falls_back_to_mtime_when_no_live(tmp_path: Path) ->
 
 
 def test_tail_exits_early_when_session_leaves_live_list(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, capsys
 ) -> None:
     """_tail exits as soon as the session disappears from live_sessions(), not after 30s."""
     import time as _time
@@ -280,6 +282,8 @@ def test_tail_exits_early_when_session_leaves_live_list(
     with patch("cctx.watcher.live_sessions", side_effect=fake_live_sessions):
         count = watcher_mod._tail(session_path)
     elapsed = _time.monotonic() - start
+    captured = capsys.readouterr()
 
     assert isinstance(count, int)
     assert elapsed < 5.0, f"_tail took {elapsed:.1f}s — should have exited early via live detection"
+    assert "Session ended" in captured.out

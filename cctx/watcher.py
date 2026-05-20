@@ -4,7 +4,7 @@ Public API:
     watch(target) -> None
 
 Layering rules (MUST respect):
-- Imports parser and diagnostician only.
+- Imports parser, diagnostician, and agents only.
 - Does NOT import renderers, click, rich, or anthropic.
 - Uses a compact single-line formatter defined here (not imported from renderers).
 """
@@ -40,10 +40,12 @@ def _find_active_session(project_dir: Path) -> Path | None:
     Prefers the live session from `claude agents --json` when available;
     falls back to most-recently-modified JSONL.
     """
+    from cctx.discovery import _encode_path
+
     encoded_name = project_dir.name
     for live in live_sessions():
         if live.cwd:
-            live_encoded = Path(live.cwd).resolve().as_posix().replace("/", "-")
+            live_encoded = _encode_path(Path(live.cwd))
             if live_encoded == encoded_name:
                 candidate = project_dir / f"{live.session_id}.jsonl"
                 if candidate.exists():
@@ -80,7 +82,7 @@ def _tail(session_path: Path) -> int:
     last_size = 0
     idle_since: float | None = None
     session_id = session_path.stem
-    session_seen_live = False  # True once we've confirmed claude is available
+    claude_is_responsive = False  # True once we've confirmed claude is available
 
     print(f"Watching {session_path.name} …  Ctrl+C to stop.", flush=True)
 
@@ -115,8 +117,8 @@ def _tail(session_path: Path) -> int:
                 live = live_sessions()
                 live_ids = {s.session_id for s in live}
                 if live:
-                    session_seen_live = True
-                if session_seen_live and session_id not in live_ids:
+                    claude_is_responsive = True
+                if claude_is_responsive and session_id not in live_ids:
                     print(
                         f"\nSession ended — analysis complete. "
                         f"Findings detected: {len(seen_keys)}",
