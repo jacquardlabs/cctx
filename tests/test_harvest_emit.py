@@ -61,3 +61,39 @@ def test_retarget_excludes_non_claude_md_patches():
 def test_emit_targets_has_agents():
     from cctx.harvest import EMIT_TARGETS
     assert EMIT_TARGETS["agents"] == "AGENTS.md"
+
+
+def test_sync_returns_managed_sections_only(tmp_path):
+    from cctx.harvest import sync_managed_sections
+    (tmp_path / "CLAUDE.md").write_text(
+        "# Project\n\n"
+        "## Retry discipline\n\nRetry rule body.\n\n"
+        "## My hand-written section\n\nNot managed by cctx.\n\n"
+        "## Project-specific: Bash(pnpm install)\n\nUse pnpm --filter.\n",
+        encoding="utf-8",
+    )
+    patches = sync_managed_sections(tmp_path, "agents")
+    headings = {p.unified_diff.splitlines()[0] for p in patches}
+    assert "+## Retry discipline" in headings
+    assert "+## Project-specific: Bash(pnpm install)" in headings
+    assert "+## My hand-written section" not in headings
+    assert all(p.target_file == "AGENTS.md" for p in patches)
+
+
+def test_sync_finding_kind_reverse_lookup(tmp_path):
+    from cctx.models import FindingKind
+    from cctx.harvest import sync_managed_sections
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Context hygiene\n\nbody\n\n"
+        "## Project-specific: Bash(x)\n\nbody\n",
+        encoding="utf-8",
+    )
+    patches = sync_managed_sections(tmp_path, "agents")
+    by_heading = {p.unified_diff.splitlines()[0]: p.finding_kind for p in patches}
+    assert by_heading["+## Context hygiene"] is FindingKind.STALE_CONTEXT
+    assert by_heading["+## Project-specific: Bash(x)"] is FindingKind.PROJECT_PATTERN
+
+
+def test_sync_no_claude_md_returns_empty(tmp_path):
+    from cctx.harvest import sync_managed_sections
+    assert sync_managed_sections(tmp_path, "agents") == []

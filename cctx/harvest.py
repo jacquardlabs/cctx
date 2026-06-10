@@ -21,6 +21,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from cctx.models import MANAGED_HEADINGS, MANAGED_HEADING_PREFIX
+
 if TYPE_CHECKING:
     from cctx.models import Patch
 
@@ -126,6 +128,49 @@ def retarget_patches(patches: list[Patch], emit_target: str) -> list[Patch]:
         for p in patches
         if p.target_file == "CLAUDE.md"
     ]
+
+
+# Reverse map: exact managed heading -> the FindingKind that owns it.
+_HEADING_TO_KIND = {heading: kind for kind, heading in MANAGED_HEADINGS.items()}
+
+
+def sync_managed_sections(target_dir: Path, emit_target: str) -> list[Patch]:
+    """Build synthetic patches mirroring CLAUDE.md's cctx-managed sections.
+
+    Reads CLAUDE.md in target_dir, keeps sections whose heading is an exact
+    MANAGED_HEADINGS value or starts with MANAGED_HEADING_PREFIX, and returns
+    one Patch per kept section targeting the emit file. Returns [] if CLAUDE.md
+    is absent. The CLI routes these through preview_patches / apply_patches, so
+    idempotency and dry-run come for free from the existing machinery.
+    """
+    from cctx.models import FindingKind, Patch  # local import: avoid import cycle at module load
+
+    claude_md = target_dir / "CLAUDE.md"
+    if not claude_md.exists():
+        return []
+
+    dest = EMIT_TARGETS[emit_target]
+    content = claude_md.read_text(encoding="utf-8")
+    patches: list[Patch] = []
+
+    for heading, body in _parse_sections(content):
+        is_fixed = heading in _HEADING_TO_KIND
+        is_prefixed = heading.startswith(MANAGED_HEADING_PREFIX)
+        if not (is_fixed or is_prefixed):
+            continue
+
+        kind = _HEADING_TO_KIND[heading] if is_fixed else FindingKind.PROJECT_PATTERN
+        diff_lines = [heading] + body.splitlines()
+        unified_diff = "\n".join(f"+{line}" for line in diff_lines)
+        patches.append(Patch(
+            target_file=dest,
+            description=heading,
+            unified_diff=unified_diff,
+            finding_kind=kind,
+            evidence_summary="synced from CLAUDE.md",
+        ))
+
+    return patches
 
 
 def apply_patch(patch: Patch, target_dir: Path) -> ApplyResult:
