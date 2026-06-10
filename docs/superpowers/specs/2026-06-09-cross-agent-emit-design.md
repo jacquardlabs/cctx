@@ -154,8 +154,13 @@ under their full path.
 ## Error contract
 
 - Never raises. All failures return `ApplyResult(status=ERROR, message=...)`.
-- `--sync` with no CLAUDE.md: returns `[]` (not an error), logged as a
-  single `SKIPPED` line: "CLAUDE.md not found — nothing to sync."
+- `--sync` with no CLAUDE.md: `sync_managed_sections` returns `[]` (not an
+  error). Because it returns patches rather than applying inline (see the
+  deviation note above), there is no `SKIPPED` line for the missing file — the
+  empty result simply contributes nothing, and if no other patches exist the CLI
+  prints its standard "No patches to apply." message. (The original draft
+  emitted a "CLAUDE.md not found — nothing to sync." line; that belonged to the
+  inline-apply design and no longer applies.)
 - Emit target directory is created by `apply_patch`'s existing `parent.mkdir`.
 
 ---

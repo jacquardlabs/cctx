@@ -190,3 +190,15 @@ def test_sync_apply_creates_agents_md(tmp_path):
     assert result.exit_code == 0
     assert (tmp_path / "AGENTS.md").exists()
     assert "## Retry discipline" in (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+
+
+def test_emit_applies_both_targets(tmp_path):
+    """End-to-end fan-out: a CLAUDE.md patch and its retargeted clone both land,
+    one in CLAUDE.md and one in AGENTS.md (mirrors the CLI's base+retarget flow)."""
+    from cctx.harvest import ApplyStatus, apply_patches, retarget_patches
+    base = [_patch()]  # one CLAUDE.md patch
+    combined = base + retarget_patches(base, "agents")
+    results = apply_patches(combined, tmp_path)
+    assert all(r.status is ApplyStatus.APPLIED for r in results)
+    assert "## Retry discipline" in (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "## Retry discipline" in (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
