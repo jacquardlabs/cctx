@@ -184,6 +184,22 @@ KIND_LABEL: dict[FindingKind, str] = {
     FindingKind.PROJECT_PATTERN: "PROJECT PATTERN",
 }
 
+# Maps FindingKind to the exact ## heading emitted by its recommender patch
+# template. Single source of truth for "which CLAUDE.md sections cctx owns."
+# harvest.py imports this (never reaches into recommender/) so emit/sync can
+# identify cctx-managed sections without depending on the patch generator.
+MANAGED_HEADINGS: dict[FindingKind, str] = {
+    FindingKind.RETRY_LOOP:    "## Retry discipline",
+    FindingKind.SCOPE_CREEP:   "## Scope discipline",
+    FindingKind.STALE_CONTEXT: "## Context hygiene",
+    FindingKind.TOOL_THRASH:   "## Tool-call discipline",
+    FindingKind.DEAD_END:      "## Exploration discipline",
+}
+
+# Project-specific patterns use a heading that embeds tool+key, so the managed
+# section is identified by prefix rather than exact match.
+MANAGED_HEADING_PREFIX: str = "## Project-specific: "
+
 
 class Severity(str, Enum):
     HIGH   = "high"

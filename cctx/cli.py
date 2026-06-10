@@ -23,6 +23,7 @@ from cctx.agents import live_sessions as _live_sessions
 from cctx.diagnostician import aggregate
 from cctx.diagnostician.patterns import project_specific
 from cctx.discovery import complete_project as _complete_project
+from cctx.harvest import EMIT_TARGETS
 from cctx.models import KIND_LABEL, AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
@@ -570,6 +571,22 @@ def trace(target: Path | None, latest: bool) -> None:
     show_default=True,
     help="Minimum severity that causes --check to exit 1.",
 )
+@click.option(
+    "--emit",
+    "emit_targets",
+    multiple=True,
+    type=click.Choice(list(EMIT_TARGETS)),
+    help="Also write applicable patches to another agent's instruction file "
+         "(e.g. AGENTS.md). Repeatable.",
+)
+@click.option(
+    "--sync",
+    "sync_mode",
+    is_flag=True,
+    default=False,
+    help="With --emit: also mirror already-harvested cctx-managed sections "
+         "from CLAUDE.md into the emit target.",
+)
 def harvest(
     target: Path,
     since: str | None,
@@ -578,9 +595,20 @@ def harvest(
     target_dir: Path | None,
     check_mode: bool,
     check_severity: str,
+    emit_targets: tuple[str, ...],
+    sync_mode: bool,
 ) -> None:
     """Apply autopsy patches to CLAUDE.md."""
-    from cctx.harvest import apply_patches, check_claude_md, preview_patches
+    from cctx.harvest import (
+        apply_patches,
+        check_claude_md,
+        preview_patches,
+        retarget_patches,
+        sync_managed_sections,
+    )
+
+    if sync_mode and not emit_targets:
+        raise click.UsageError("--sync requires --emit.")
 
     if check_mode:
         from cctx.harvest import CheckSeverity
@@ -625,6 +653,13 @@ def harvest(
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
         patches = diagnosis.patches
+
+    base = patches
+    for t in emit_targets:
+        emitted = retarget_patches(base, t)
+        if sync_mode:
+            emitted = emitted + sync_managed_sections(resolved_dir, t)
+        patches = patches + emitted
 
     if not patches:
         render_harvest_results([], dry_run=dry_run)
