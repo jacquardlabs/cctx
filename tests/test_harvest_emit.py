@@ -148,3 +148,45 @@ def test_preview_same_heading_same_target_dedups(tmp_path):
     ]
     statuses = [r.status for r in preview_patches(patches, tmp_path)]
     assert statuses == [ApplyStatus.APPLIED, ApplyStatus.SKIPPED]
+
+
+def test_sync_without_emit_errors(tmp_path):
+    from click.testing import CliRunner  # noqa: I001
+    from cctx.cli import cli
+    (tmp_path / "CLAUDE.md").write_text("## Retry discipline\n\nbody\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "harvest", str(tmp_path), "--since", "7",
+        "--sync", "--target-dir", str(tmp_path),
+    ])
+    assert result.exit_code != 0
+    assert "--sync" in result.output and "--emit" in result.output
+
+
+def test_sync_dry_run_writes_nothing(tmp_path):
+    from click.testing import CliRunner  # noqa: I001
+    from cctx.cli import cli
+    (tmp_path / "CLAUDE.md").write_text("## Retry discipline\n\nbody\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "harvest", str(tmp_path), "--since", "7",
+        "--emit", "agents", "--sync", "--dry-run",
+        "--target-dir", str(tmp_path),
+    ])
+    assert result.exit_code == 0
+    assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_sync_apply_creates_agents_md(tmp_path):
+    from click.testing import CliRunner  # noqa: I001
+    from cctx.cli import cli
+    (tmp_path / "CLAUDE.md").write_text("## Retry discipline\n\nbody\n", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "harvest", str(tmp_path), "--since", "7",
+        "--emit", "agents", "--sync", "--apply",
+        "--target-dir", str(tmp_path),
+    ])
+    assert result.exit_code == 0
+    assert (tmp_path / "AGENTS.md").exists()
+    assert "## Retry discipline" in (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
