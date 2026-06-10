@@ -41,11 +41,29 @@ _STALE_CONTEXT_DIFF = """\
 +without re-referencing it. Prefer re-running the tool over dragging stale context
 +forward — the compaction system handles removal."""
 
+_TOOL_THRASH_DIFF = """\
++## Tool-call discipline
++
++Before reaching for a tool, decide what specific information the call must return
++and how it changes the next step. Don't fan out near-identical searches or re-read
++the same file from different angles hoping something turns up. If two or three calls
++haven't moved you forward, stop and form a hypothesis before the next one."""
+
+_DEAD_END_DIFF = """\
++## Exploration discipline
++
++When an approach stops making progress, name the dead end explicitly and back out
++rather than pushing deeper on a path that isn't working. Re-read the goal, list the
++approaches already ruled out, and pick a meaningfully different one. Sunk effort on a
++failing approach is not a reason to continue it."""
+
 _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     # kind → (description, diff_body, target_file)
-    FindingKind.RETRY_LOOP:    ("Add retry discipline rule",    _RETRY_LOOP_DIFF,    "CLAUDE.md"),
-    FindingKind.SCOPE_CREEP:   ("Add scope discipline rule",    _SCOPE_CREEP_DIFF,   "CLAUDE.md"),
-    FindingKind.STALE_CONTEXT: ("Add context hygiene rule",     _STALE_CONTEXT_DIFF, "CLAUDE.md"),
+    FindingKind.RETRY_LOOP:    ("Add retry discipline rule", _RETRY_LOOP_DIFF, "CLAUDE.md"),
+    FindingKind.SCOPE_CREEP:   ("Add scope discipline rule", _SCOPE_CREEP_DIFF, "CLAUDE.md"),
+    FindingKind.STALE_CONTEXT: ("Add context hygiene rule", _STALE_CONTEXT_DIFF, "CLAUDE.md"),
+    FindingKind.TOOL_THRASH:   ("Add tool-call discipline rule", _TOOL_THRASH_DIFF, "CLAUDE.md"),
+    FindingKind.DEAD_END:      ("Add exploration discipline rule", _DEAD_END_DIFF, "CLAUDE.md"),
 }
 
 
