@@ -13,6 +13,7 @@ Layering rules (MUST respect):
 """
 from __future__ import annotations
 
+import dataclasses
 import re
 from collections import defaultdict
 from dataclasses import dataclass
@@ -104,6 +105,27 @@ def _is_supported_target(patch: Patch) -> bool:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+# Maps an --emit target name to the destination filename. Single place to add
+# future targets (Cursor, Windsurf, Copilot) when demand exists.
+EMIT_TARGETS: dict[str, str] = {
+    "agents": "AGENTS.md",
+}
+
+
+def retarget_patches(patches: list[Patch], emit_target: str) -> list[Patch]:
+    """Clone CLAUDE.md-targeted patches to the emit target's file.
+
+    Only patches whose target_file is exactly "CLAUDE.md" are emitted —
+    .claude/rules/ and .claude/skills/ patches are Claude Code-specific and do
+    not translate to other agents. Returns clones; inputs are unmodified.
+    """
+    dest = EMIT_TARGETS[emit_target]
+    return [
+        dataclasses.replace(p, target_file=dest)
+        for p in patches
+        if p.target_file == "CLAUDE.md"
+    ]
 
 
 def apply_patch(patch: Patch, target_dir: Path) -> ApplyResult:

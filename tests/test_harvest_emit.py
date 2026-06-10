@@ -29,3 +29,35 @@ def test_registry_matches_templates():
         assert first_line == f"+{heading}", (
             f"{kind}: template heading {first_line!r} != registry {('+' + heading)!r}"
         )
+
+
+def _patch(target_file="CLAUDE.md", heading="## Retry discipline"):
+    from cctx.models import FindingKind, Patch
+    return Patch(
+        target_file=target_file,
+        description="desc",
+        unified_diff=f"+{heading}\n+\n+body line",
+        finding_kind=FindingKind.RETRY_LOOP,
+        evidence_summary="ev",
+    )
+
+
+def test_retarget_clones_claude_md_patches_to_agents():
+    from cctx.harvest import retarget_patches
+    out = retarget_patches([_patch()], "agents")
+    assert len(out) == 1
+    assert out[0].target_file == "AGENTS.md"
+    assert out[0].unified_diff == _patch().unified_diff
+
+
+def test_retarget_excludes_non_claude_md_patches():
+    from cctx.harvest import retarget_patches
+    rules_patch = _patch(target_file=".claude/rules/foo.md")
+    out = retarget_patches([_patch(), rules_patch], "agents")
+    assert len(out) == 1
+    assert out[0].target_file == "AGENTS.md"
+
+
+def test_emit_targets_has_agents():
+    from cctx.harvest import EMIT_TARGETS
+    assert EMIT_TARGETS["agents"] == "AGENTS.md"
