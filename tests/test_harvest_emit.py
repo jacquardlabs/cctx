@@ -81,8 +81,8 @@ def test_sync_returns_managed_sections_only(tmp_path):
 
 
 def test_sync_finding_kind_reverse_lookup(tmp_path):
-    from cctx.models import FindingKind
     from cctx.harvest import sync_managed_sections
+    from cctx.models import FindingKind
     (tmp_path / "CLAUDE.md").write_text(
         "## Context hygiene\n\nbody\n\n"
         "## Project-specific: Bash(x)\n\nbody\n",
@@ -100,7 +100,7 @@ def test_sync_no_claude_md_returns_empty(tmp_path):
 
 
 def test_emit_apply_then_reapply_is_idempotent(tmp_path):
-    from cctx.harvest import retarget_patches, apply_patches, ApplyStatus
+    from cctx.harvest import ApplyStatus, apply_patches, retarget_patches
     patches = retarget_patches([_patch()], "agents")
     first = apply_patches(patches, tmp_path)
     assert [r.status for r in first] == [ApplyStatus.APPLIED]
@@ -111,7 +111,7 @@ def test_emit_apply_then_reapply_is_idempotent(tmp_path):
 
 
 def test_sync_apply_then_reapply_is_idempotent(tmp_path):
-    from cctx.harvest import sync_managed_sections, apply_patches, ApplyStatus
+    from cctx.harvest import ApplyStatus, apply_patches, sync_managed_sections
     (tmp_path / "CLAUDE.md").write_text(
         "## Retry discipline\n\nRetry rule body.\n", encoding="utf-8"
     )
@@ -121,3 +121,30 @@ def test_sync_apply_then_reapply_is_idempotent(tmp_path):
     assert all(r.status is ApplyStatus.SKIPPED for r in second)
     text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
     assert text.count("## Retry discipline") == 1
+
+
+def test_preview_same_heading_different_targets_both_applied(tmp_path):
+    """Two patches with the same heading but different target files must both
+    preview as APPLIED — dedup is per-(file, heading), not heading-only."""
+    from cctx.harvest import ApplyStatus, preview_patches
+    from cctx.models import FindingKind, Patch
+    diff = "+## Retry discipline\n+\n+body"
+    patches = [
+        Patch("CLAUDE.md", "d", diff, FindingKind.RETRY_LOOP, "e"),
+        Patch("AGENTS.md", "d", diff, FindingKind.RETRY_LOOP, "e"),
+    ]
+    statuses = [r.status for r in preview_patches(patches, tmp_path)]
+    assert statuses == [ApplyStatus.APPLIED, ApplyStatus.APPLIED]
+
+
+def test_preview_same_heading_same_target_dedups(tmp_path):
+    """Two patches with the same heading AND same target: second is SKIPPED."""
+    from cctx.harvest import ApplyStatus, preview_patches
+    from cctx.models import FindingKind, Patch
+    diff = "+## Retry discipline\n+\n+body"
+    patches = [
+        Patch("AGENTS.md", "d", diff, FindingKind.RETRY_LOOP, "e"),
+        Patch("AGENTS.md", "d", diff, FindingKind.RETRY_LOOP, "e"),
+    ]
+    statuses = [r.status for r in preview_patches(patches, tmp_path)]
+    assert statuses == [ApplyStatus.APPLIED, ApplyStatus.SKIPPED]

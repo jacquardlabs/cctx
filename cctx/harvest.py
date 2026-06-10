@@ -21,7 +21,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from cctx.models import MANAGED_HEADINGS, MANAGED_HEADING_PREFIX
+from cctx.models import MANAGED_HEADING_PREFIX, MANAGED_HEADINGS
 
 if TYPE_CHECKING:
     from cctx.models import Patch
@@ -228,8 +228,10 @@ def apply_patch(patch: Patch, target_dir: Path) -> ApplyResult:
 def preview_patches(patches: list[Patch], target_dir: Path) -> list[ApplyResult]:
     """Compute what would happen without writing. Returns APPLIED or SKIPPED."""
     results = []
-    # Track fingerprints already "seen" within this preview run (idempotency)
-    seen_fingerprints: set[str] = set()
+    # Track (target_path, fingerprint) pairs already "seen" within this preview
+    # run (idempotency). Keyed by file so the same heading in two different
+    # target files is correctly treated as two independent patches.
+    seen_fingerprints: set[tuple[Path, str]] = set()
 
     for patch in patches:
         target_path = target_dir / patch.target_file
@@ -248,7 +250,8 @@ def preview_patches(patches: list[Patch], target_dir: Path) -> list[ApplyResult]
 
         content = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
 
-        if fp is not None and (_already_present(content, fp) or fp in seen_fingerprints):
+        already_seen = fp is not None and (target_path, fp) in seen_fingerprints
+        if fp is not None and (_already_present(content, fp) or already_seen):
             results.append(ApplyResult(
                 patch=patch,
                 status=ApplyStatus.SKIPPED,
@@ -257,7 +260,7 @@ def preview_patches(patches: list[Patch], target_dir: Path) -> list[ApplyResult]
             ))
         else:
             if fp is not None:
-                seen_fingerprints.add(fp)
+                seen_fingerprints.add((target_path, fp))
             results.append(ApplyResult(
                 patch=patch,
                 status=ApplyStatus.APPLIED,
