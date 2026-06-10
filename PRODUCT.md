@@ -76,6 +76,7 @@ Six commands (`ls`, `autopsy`, `harvest`, `watch`, `trace`, `export`). No comman
 | Memory-hygiene depth | `harvest --check` + `--check-severity` | v1.4.0 (M13) |
 | Live session badges | `cctx ls` | unreleased |
 | Live session detection, early idle exit | `cctx watch` | unreleased |
+| Cross-agent emit | `cctx harvest --emit agents [--sync]` | M15; mirror CLAUDE.md sections to AGENTS.md — unreleased |
 
 ### Pattern classifiers (v1.4.0)
 

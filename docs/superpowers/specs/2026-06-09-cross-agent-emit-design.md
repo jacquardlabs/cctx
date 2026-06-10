@@ -88,12 +88,21 @@ Clones patches suitable for emission:
   reach here given the above filter, but stated explicitly for clarity).
 - Returns clones via `dataclasses.replace(patch, target_file=EMIT_TARGETS[emit_target])`.
 
-### `sync_managed_sections(target_dir, emit_target) -> list[ApplyResult]`
+### `sync_managed_sections(target_dir, emit_target) -> list[Patch]`
+
+> **Implementation deviation (2026-06-10):** This function returns
+> `list[Patch]` rather than applying patches inline (the original draft returned
+> `list[ApplyResult]` and called `apply_patch` itself). The CLI appends these
+> patches to the same list it routes through `preview_patches` / `apply_patches`.
+> Returning patches keeps `--dry-run` write-free by construction and matches the
+> codebase's "CLI decides preview vs. apply" layering — applying inline could not
+> preview, contradicting the `--dry-run` requirement and `test_dry_run_no_writes`.
 
 1. Reads `CLAUDE.md` from `target_dir`. Returns empty list if absent.
 2. Calls `_parse_sections(content)` (already in `harvest.py`).
 3. Keeps sections whose heading is exactly in `MANAGED_HEADINGS.values()` OR
-   starts with `MANAGED_HEADING_PREFIX`.
+   starts with `MANAGED_HEADING_PREFIX`. The leading `("(preamble)", …)` pair
+   matches neither branch and is skipped.
 4. For each kept section, constructs a synthetic `Patch` with:
    - `target_file = EMIT_TARGETS[emit_target]`
    - `unified_diff = "\n".join(f"+{line}" for line in [heading] + body.splitlines())`
@@ -102,8 +111,10 @@ Clones patches suitable for emission:
      `FindingKind.PROJECT_PATTERN` for `## Project-specific: …` prefixed headings
    - `description = heading`
    - `evidence_summary = "synced from CLAUDE.md"`
-5. Applies each synthetic patch via `apply_patch`, which handles idempotency
-   via `_already_present` (the `## Heading` line is the fingerprint).
+5. Returns the list of synthetic patches. The CLI routes them through the
+   existing `preview_patches` / `apply_patches` machinery, which handles
+   idempotency via `_already_present` (the `## Heading` line is the fingerprint)
+   and dry-run preview without writing.
 
 ---
 
