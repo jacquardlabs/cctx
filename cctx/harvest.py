@@ -143,7 +143,7 @@ def sync_managed_sections(target_dir: Path, emit_target: str) -> list[Patch]:
     is absent. The CLI routes these through preview_patches / apply_patches, so
     idempotency and dry-run come for free from the existing machinery.
     """
-    from cctx.models import FindingKind, Patch  # runtime use; Patch is TYPE_CHECKING-only at module scope
+    from cctx.models import FindingKind, Patch  # runtime use (Patch is TYPE_CHECKING-only above)
 
     claude_md = target_dir / "CLAUDE.md"
     if not claude_md.exists():
