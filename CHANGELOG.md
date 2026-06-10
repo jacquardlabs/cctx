@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.5.1 (2026-06-10)
+
+### Bug Fixes
+
+- Recommender — add TOOL_THRASH/DEAD_END patch templates
+  ([#107](https://github.com/jacquardlabs/cctx/pull/107),
+  [`3c79d58`](https://github.com/jacquardlabs/cctx/commit/3c79d58a55af106d3fd81542e70b8f892569185c))
+
+### Documentation
+
+- Product review 2026-06-09 + M15 cross-agent emit spec
+  ([#107](https://github.com/jacquardlabs/cctx/pull/107),
+  [`3c79d58`](https://github.com/jacquardlabs/cctx/commit/3c79d58a55af106d3fd81542e70b8f892569185c))
+
+
 ## v1.5.0 (2026-05-20)
 
 ### Bug Fixes
