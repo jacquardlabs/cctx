@@ -1,6 +1,75 @@
 """Tests for cctx/recommender/claude_md.py — generate_from_patterns."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+
+def _make_finding(kind):
+    from cctx.models import Confidence, Finding, Severity
+    return Finding(
+        kind=kind,
+        severity=Severity.MEDIUM,
+        confidence=Confidence.MEDIUM,
+        first_turn=3,
+        last_turn=7,
+        evidence={},
+        cost_usd=0.50,
+        summary=f"{kind.value} occurred",
+    )
+
+
+def _make_diagnosis(findings):
+    from cctx.models import Diagnosis
+    return Diagnosis(
+        session_id="s1",
+        findings=findings,
+        inflection_turn=None,
+        patches=[],
+        total_cost_usd=1.0,
+        waste_cost_usd=0.5,
+        analysed_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
+    )
+
+
+def test_generate_handles_tool_thrash_finding():
+    """Regression: single-session generate() must not KeyError on TOOL_THRASH."""
+    from cctx.models import FindingKind
+    from cctx.recommender.claude_md import generate
+    diagnosis = _make_diagnosis([_make_finding(FindingKind.TOOL_THRASH)])
+    result = generate(diagnosis)
+    assert len(result.patches) == 1
+    assert result.patches[0].unified_diff.splitlines()[0] == "+## Tool-call discipline"
+
+
+def test_generate_handles_dead_end_finding():
+    """Regression: single-session generate() must not KeyError on DEAD_END."""
+    from cctx.models import FindingKind
+    from cctx.recommender.claude_md import generate
+    diagnosis = _make_diagnosis([_make_finding(FindingKind.DEAD_END)])
+    result = generate(diagnosis)
+    assert len(result.patches) == 1
+    assert result.patches[0].unified_diff.splitlines()[0] == "+## Exploration discipline"
+
+
+def test_generate_from_evidence_emits_tool_thrash_and_dead_end():
+    """Cross-session path must now emit these kinds instead of silently skipping."""
+    from cctx.models import FindingKind, KindEvidence
+    from cctx.recommender.claude_md import generate_from_evidence
+    ev = {
+        FindingKind.TOOL_THRASH: KindEvidence(
+            kind=FindingKind.TOOL_THRASH, session_count=3,
+            total_waste_usd=2.0, example_summaries=["thrash example"],
+        ),
+        FindingKind.DEAD_END: KindEvidence(
+            kind=FindingKind.DEAD_END, session_count=1,
+            total_waste_usd=0.5, example_summaries=["dead end example"],
+        ),
+    }
+    patches = generate_from_evidence(ev)
+    kinds = {p.finding_kind for p in patches}
+    assert FindingKind.TOOL_THRASH in kinds
+    assert FindingKind.DEAD_END in kinds
+
 
 def _make_pattern(failure_key="pnpm install", fix_key="pnpm --filter app", session_count=7):
     from cctx.models import ProjectPattern
