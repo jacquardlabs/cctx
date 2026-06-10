@@ -2,6 +2,65 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-06-10)
+
+### Bug Fixes
+
+- Harvest — preview_patches dedup per (target, heading) not heading-only
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+- Harvest — shorten local-import comment under 100-char line limit
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+### Documentation
+
+- Harvest — correct misleading local-import comment
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+- Spec deviation note (sync returns patches) + PRODUCT.md cross-agent emit row
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+### Features
+
+- Cctx harvest --emit — cross-agent layer to AGENTS.md (#82)
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+- Cli — harvest --emit / --sync cross-agent emit
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+- Harvest — EMIT_TARGETS + retarget_patches (fan-out to AGENTS.md)
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+- Harvest — sync_managed_sections backfills CLAUDE.md into emit target
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+- Models — MANAGED_HEADINGS registry for cctx-owned CLAUDE.md sections
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+### Testing
+
+- Emit + sync idempotency through apply_patches
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+- End-to-end fan-out to both targets; spec: reconcile sync error contract
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+- Lock MANAGED_HEADINGS registry to recommender templates
+  ([#108](https://github.com/jacquardlabs/cctx/pull/108),
+  [`afa964c`](https://github.com/jacquardlabs/cctx/commit/afa964c68b445030e1fafe9f41c67a0de4afcd2d))
+
+
 ## v1.5.1 (2026-06-10)
 
 ### Bug Fixes
