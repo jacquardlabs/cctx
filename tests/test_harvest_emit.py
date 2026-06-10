@@ -1,8 +1,6 @@
 """Tests for cctx/harvest.py cross-agent emit (M15) and the managed-heading registry."""
 from __future__ import annotations
 
-from pathlib import Path
-
 
 def test_managed_headings_cover_the_five_diagnostic_kinds():
     from cctx.models import MANAGED_HEADINGS, FindingKind
