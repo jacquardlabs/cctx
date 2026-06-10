@@ -97,3 +97,27 @@ def test_sync_finding_kind_reverse_lookup(tmp_path):
 def test_sync_no_claude_md_returns_empty(tmp_path):
     from cctx.harvest import sync_managed_sections
     assert sync_managed_sections(tmp_path, "agents") == []
+
+
+def test_emit_apply_then_reapply_is_idempotent(tmp_path):
+    from cctx.harvest import retarget_patches, apply_patches, ApplyStatus
+    patches = retarget_patches([_patch()], "agents")
+    first = apply_patches(patches, tmp_path)
+    assert [r.status for r in first] == [ApplyStatus.APPLIED]
+    second = apply_patches(patches, tmp_path)
+    assert [r.status for r in second] == [ApplyStatus.SKIPPED]
+    text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert text.count("## Retry discipline") == 1
+
+
+def test_sync_apply_then_reapply_is_idempotent(tmp_path):
+    from cctx.harvest import sync_managed_sections, apply_patches, ApplyStatus
+    (tmp_path / "CLAUDE.md").write_text(
+        "## Retry discipline\n\nRetry rule body.\n", encoding="utf-8"
+    )
+    patches = sync_managed_sections(tmp_path, "agents")
+    apply_patches(patches, tmp_path)
+    second = apply_patches(patches, tmp_path)
+    assert all(r.status is ApplyStatus.SKIPPED for r in second)
+    text = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert text.count("## Retry discipline") == 1
