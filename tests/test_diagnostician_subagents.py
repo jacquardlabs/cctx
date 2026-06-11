@@ -4,8 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cctx.models import SessionTrace, ToolUse, ToolResult, Turn, Usage
-
+from cctx.models import SessionTrace, ToolUse, Turn, Usage
 
 # ---------------------------------------------------------------------------
 # Helpers — synthetic trace builders (real fixtures have scrubbed tokens)
