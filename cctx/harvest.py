@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import dataclasses
 import re
+import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -274,6 +276,34 @@ def preview_patches(patches: list[Patch], target_dir: Path) -> list[ApplyResult]
 def apply_patches(patches: list[Patch], target_dir: Path) -> list[ApplyResult]:
     """Apply all applicable patches in sequence."""
     return [apply_patch(patch, target_dir) for patch in patches]
+
+
+def managed_heading_dates(target_dir: Path) -> dict[str, datetime | None]:
+    """Return the git introduction date for each MANAGED_HEADINGS heading.
+
+    For each heading, runs:
+        git log --reverse --format="%ai" -S"<heading>" -- CLAUDE.md
+
+    --reverse gives oldest-first; the first line is the introduction commit.
+    -S (pickaxe) fires when the occurrence count of the literal string changes.
+    Returns None for any heading not found in git history, or if git fails.
+    Never raises.
+    """
+    result: dict[str, datetime | None] = {}
+    for heading in MANAGED_HEADINGS.values():
+        try:
+            proc = subprocess.run(
+                ["git", "log", "--reverse", "--format=%ai", f"-S{heading}", "--", "CLAUDE.md"],
+                cwd=target_dir,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            lines = proc.stdout.strip().splitlines()
+            result[heading] = datetime.fromisoformat(lines[0]) if lines else None
+        except Exception:  # noqa: BLE001
+            result[heading] = None
+    return result
 
 
 # ---------------------------------------------------------------------------
