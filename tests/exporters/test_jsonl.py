@@ -229,6 +229,42 @@ def test_write_produces_one_line_per_session() -> None:
     assert ids == {"sess-001", "sess-002"}
 
 
+def test_export_diagnosis_includes_subagent_costs() -> None:
+    """JSON export includes subagent_costs array with correct fields."""
+    import dataclasses
+
+    from cctx.models import SubagentAttribution
+    from cctx.exporters.jsonl import export_diagnosis
+
+    diag = _make_diagnosis()
+    trace = _make_trace()
+    diag = dataclasses.replace(diag, subagent_costs=[
+        SubagentAttribution(
+            session_id="child-1",
+            label="My task",
+            total_cost_usd=0.020,
+            depth=1,
+            model="claude-sonnet-4",
+        )
+    ])
+    data = json.loads(export_diagnosis(diag, trace))
+    assert "subagent_costs" in data
+    assert len(data["subagent_costs"]) == 1
+    assert data["subagent_costs"][0]["session_id"] == "child-1"
+    assert data["subagent_costs"][0]["cost_usd"] == pytest.approx(0.020)
+    assert data["subagent_costs"][0]["depth"] == 1
+
+
+def test_export_diagnosis_subagent_costs_empty_by_default() -> None:
+    """JSON export has subagent_costs: [] when no subagents."""
+    from cctx.exporters.jsonl import export_diagnosis
+
+    diag = _make_diagnosis()
+    trace = _make_trace()
+    data = json.loads(export_diagnosis(diag, trace))
+    assert data["subagent_costs"] == []
+
+
 def test_write_empty_list_produces_no_output() -> None:
     """write() with an empty list produces no output."""
     from cctx.exporters.jsonl import write

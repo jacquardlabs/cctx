@@ -266,6 +266,29 @@ def test_autopsy_html_flag_writes_file(tmp_path):
     assert session_id in content
 
 
+def test_html_includes_subagent_costs():
+    """HTML output contains subagent label and cost when subagent_costs present."""
+    import dataclasses
+
+    from cctx.models import SubagentAttribution
+    from cctx.renderers.report import render_html
+
+    diag = _make_diagnosis()
+    trace = _simple_trace()
+    diag = dataclasses.replace(diag, subagent_costs=[
+        SubagentAttribution(
+            session_id="child-1",
+            label="Analyze the database schema",
+            total_cost_usd=0.025,
+            depth=1,
+            model="claude-sonnet-4",
+        )
+    ])
+    html = render_html(diag, trace)
+    assert "Analyze the database schema" in html
+    assert "0.025" in html
+
+
 def test_autopsy_html_with_since_errors(tmp_path):
     """--html and --since together should error, not silently ignore --html."""
 
