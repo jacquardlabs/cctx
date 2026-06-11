@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from cctx.diagnostician import inflection
 from cctx.diagnostician.patterns import (
     dead_end,
+    fan_out,
     retry_loop,
     scope_creep,
     stale_context,
@@ -37,6 +38,45 @@ def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
         if f.kind is FindingKind.STALE_CONTEXT:
             tt = f.evidence.get("total_token_turns", 0)
             f = dataclasses.replace(f, cost_usd=round(tt * price, 4))
+        result.append(f)
+    return result
+
+
+def _patch_fanout_costs(
+    findings: list[Finding],
+    subagent_costs: list[SubagentAttribution],
+) -> list[Finding]:
+    """Fill cost_usd on FANOUT_WASTE findings from subagent attribution data.
+
+    For overlap findings: picks the cheaper of the two subagents as waste.
+    For retry findings: attributes the full cost of the failed subagent.
+    Populates evidence['subagent_session_ids'] so run()'s dedup pass works.
+    """
+    cost_map = {a.session_id: a.total_cost_usd for a in subagent_costs}
+    result: list[Finding] = []
+    for f in findings:
+        if f.kind is FindingKind.FANOUT_WASTE:
+            signal = f.evidence.get("signal")
+            if signal == "overlap":
+                pair = [sid for sid in f.evidence.get("overlap_pair", []) if sid is not None]
+                if pair:
+                    cheaper_cost, cheaper_sid = min(
+                        (cost_map.get(sid, 0.0), sid) for sid in pair
+                    )
+                    f = dataclasses.replace(
+                        f,
+                        cost_usd=round(cheaper_cost, 4),
+                        evidence={**f.evidence, "subagent_session_ids": [cheaper_sid]},
+                    )
+            elif signal == "retry":
+                failed_sid = f.evidence.get("failed_session_id")
+                if failed_sid is not None:
+                    cost = cost_map.get(failed_sid, 0.0)
+                    f = dataclasses.replace(
+                        f,
+                        cost_usd=round(cost, 4),
+                        evidence={**f.evidence, "subagent_session_ids": [failed_sid]},
+                    )
         result.append(f)
     return result
 
@@ -111,17 +151,32 @@ def run(trace: SessionTrace) -> Diagnosis:
         *stale_context.classify(trace),
         *tool_thrash.classify(trace),
         *dead_end.classify(trace),
+        *fan_out.classify(trace),
     ]
     findings.sort(key=lambda f: f.first_turn)
 
     inflection_turn = inflection.detect(findings)
     findings = _patch_costs(findings, trace.primary_model)
 
-    total_cost = round(_compute_inclusive_cost(trace), 4)
-    waste_cost = sum(f.cost_usd for f in findings if f.cost_usd is not None)
-    waste_cost = min(waste_cost, total_cost)
-
+    # Fan-out cost patching requires attributions first.
     subagent_costs = _collect_attributions(trace)
+    findings = _patch_fanout_costs(findings, subagent_costs)
+
+    total_cost = round(_compute_inclusive_cost(trace), 4)
+
+    # Deduplicate fan-out waste: a subagent flagged by both overlap AND retry
+    # must not be double-counted. Collect unique wasted session IDs, sum once.
+    cost_map = {a.session_id: a.total_cost_usd for a in subagent_costs}
+    wasted_sids: set[str] = set()
+    for f in findings:
+        if f.kind is FindingKind.FANOUT_WASTE:
+            wasted_sids.update(f.evidence.get("subagent_session_ids", []))
+    fanout_waste = sum(cost_map.get(sid, 0.0) for sid in wasted_sids)
+    other_waste = sum(
+        f.cost_usd for f in findings
+        if f.cost_usd is not None and f.kind is not FindingKind.FANOUT_WASTE
+    )
+    waste_cost = min(other_waste + fanout_waste, total_cost)
 
     return Diagnosis(
         session_id=trace.session_id,

@@ -172,6 +172,7 @@ class FindingKind(str, Enum):
     STALE_CONTEXT = "stale_context"
     TOOL_THRASH   = "tool_thrash"
     DEAD_END      = "dead_end"
+    FANOUT_WASTE  = "fanout_waste"
     PROJECT_PATTERN = "project_pattern"
 
 
@@ -181,6 +182,7 @@ KIND_LABEL: dict[FindingKind, str] = {
     FindingKind.STALE_CONTEXT: "STALE CONTEXT",
     FindingKind.TOOL_THRASH:   "TOOL THRASH",
     FindingKind.DEAD_END:      "DEAD END",
+    FindingKind.FANOUT_WASTE:  "FANOUT WASTE",
     FindingKind.PROJECT_PATTERN: "PROJECT PATTERN",
 }
 
@@ -194,6 +196,7 @@ MANAGED_HEADINGS: dict[FindingKind, str] = {
     FindingKind.STALE_CONTEXT: "## Context hygiene",
     FindingKind.TOOL_THRASH:   "## Tool-call discipline",
     FindingKind.DEAD_END:      "## Exploration discipline",
+    FindingKind.FANOUT_WASTE:  "## Fan-out discipline",
 }
 
 # Project-specific patterns use a heading that embeds tool+key, so the managed
