@@ -1,6 +1,14 @@
 """Tests for fan_out classifier (M16 #89) and related models."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from pathlib import Path
+
+from cctx.models import SessionTrace, ToolResult, ToolUse, Turn, Usage
+
+# ---------------------------------------------------------------------------
+# Smoke tests — models
+# ---------------------------------------------------------------------------
 
 def test_fanout_waste_kind_exists():
     from cctx.models import FindingKind
@@ -21,18 +29,14 @@ def test_fanout_waste_has_managed_heading():
 # Test helpers
 # ---------------------------------------------------------------------------
 
-from datetime import datetime, timezone
-from pathlib import Path
-
-from cctx.models import (
-    Attachment, RawToolResultFile, SessionTrace, ToolResult, ToolUse, Turn, Usage,
-)
-
 _TS = datetime(2026, 6, 10, tzinfo=timezone.utc)
 _USAGE = Usage(100, 50, 0, 0, 0, None)
 
 
-def _tu(tool_name: str, uid: str, tool_input: dict, subagent_session_id: str | None = None) -> ToolUse:
+def _tu(
+    tool_name: str, uid: str, tool_input: dict,
+    subagent_session_id: str | None = None,
+) -> ToolUse:
     return ToolUse(
         tool_name=tool_name,
         tool_use_id=uid,
@@ -51,7 +55,10 @@ def _tr(tool_name: str, uid: str, content: str = "ok", is_error: bool = False) -
     )
 
 
-def _turn(n: int, role: str, tool_uses: list | None = None, tool_results: list | None = None, text: str = "") -> Turn:
+def _turn(
+    n: int, role: str, tool_uses: list | None = None,
+    tool_results: list | None = None, text: str = "",
+) -> Turn:
     return Turn(
         turn_number=n,
         uuid=f"uuid-{n}",
@@ -157,7 +164,9 @@ def test_no_agents_no_findings():
 def test_single_agent_no_findings():
     from cctx.diagnostician.patterns.fan_out import classify
     trace = _trace([
-        _turn(1, "assistant", tool_uses=[_tu("Agent", "tu1", {"prompt": _LONG_OVERLAP_A}, "child-1")]),
+        _turn(1, "assistant", tool_uses=[
+            _tu("Agent", "tu1", {"prompt": _LONG_OVERLAP_A}, "child-1"),
+        ]),
     ])
     assert classify(trace) == []
 
@@ -166,8 +175,12 @@ def test_overlapping_prompts_fires():
     from cctx.diagnostician.patterns.fan_out import classify
     from cctx.models import FindingKind
     trace = _trace([
-        _turn(1, "assistant", tool_uses=[_tu("Agent", "tu1", {"prompt": _LONG_OVERLAP_A}, "child-1")]),
-        _turn(2, "assistant", tool_uses=[_tu("Agent", "tu2", {"prompt": _LONG_OVERLAP_B}, "child-2")]),
+        _turn(1, "assistant", tool_uses=[
+            _tu("Agent", "tu1", {"prompt": _LONG_OVERLAP_A}, "child-1"),
+        ]),
+        _turn(2, "assistant", tool_uses=[
+            _tu("Agent", "tu2", {"prompt": _LONG_OVERLAP_B}, "child-2"),
+        ]),
     ])
     findings = classify(trace)
     assert len(findings) == 1
@@ -181,8 +194,12 @@ def test_overlapping_prompts_fires():
 def test_non_overlapping_prompts_clean():
     from cctx.diagnostician.patterns.fan_out import classify
     trace = _trace([
-        _turn(1, "assistant", tool_uses=[_tu("Agent", "tu1", {"prompt": _LONG_DISTINCT_A}, "child-1")]),
-        _turn(2, "assistant", tool_uses=[_tu("Agent", "tu2", {"prompt": _LONG_DISTINCT_B}, "child-2")]),
+        _turn(1, "assistant", tool_uses=[
+            _tu("Agent", "tu1", {"prompt": _LONG_DISTINCT_A}, "child-1"),
+        ]),
+        _turn(2, "assistant", tool_uses=[
+            _tu("Agent", "tu2", {"prompt": _LONG_DISTINCT_B}, "child-2"),
+        ]),
     ])
     assert classify(trace) == []
 
@@ -191,8 +208,12 @@ def test_short_prompts_below_overlap_threshold_clean():
     """Prompts under 50 words must not be compared even if textually similar."""
     from cctx.diagnostician.patterns.fan_out import classify
     trace = _trace([
-        _turn(1, "assistant", tool_uses=[_tu("Agent", "tu1", {"prompt": _SHORT_SIMILAR_A}, "child-1")]),
-        _turn(2, "assistant", tool_uses=[_tu("Agent", "tu2", {"prompt": _SHORT_SIMILAR_B}, "child-2")]),
+        _turn(1, "assistant", tool_uses=[
+            _tu("Agent", "tu1", {"prompt": _SHORT_SIMILAR_A}, "child-1"),
+        ]),
+        _turn(2, "assistant", tool_uses=[
+            _tu("Agent", "tu2", {"prompt": _SHORT_SIMILAR_B}, "child-2"),
+        ]),
     ])
     assert classify(trace) == []
 
@@ -205,9 +226,13 @@ def test_failed_retry_fires():
     from cctx.diagnostician.patterns.fan_out import classify
     from cctx.models import FindingKind
     trace = _trace([
-        _turn(1, "assistant", tool_uses=[_tu("Agent", "tu1", {"prompt": _RETRY_ORIGINAL}, "child-1")]),
+        _turn(1, "assistant", tool_uses=[
+            _tu("Agent", "tu1", {"prompt": _RETRY_ORIGINAL}, "child-1"),
+        ]),
         _turn(2, "user", tool_results=[_tr("Agent", "tu1", "Error: timeout", is_error=True)]),
-        _turn(3, "assistant", tool_uses=[_tu("Agent", "tu2", {"prompt": _RETRY_SIMILAR}, "child-2")]),
+        _turn(3, "assistant", tool_uses=[
+            _tu("Agent", "tu2", {"prompt": _RETRY_SIMILAR}, "child-2"),
+        ]),
     ])
     findings = classify(trace)
     assert len(findings) == 1
@@ -221,9 +246,13 @@ def test_failed_no_retry_clean():
     """is_error=True followed by a DIFFERENT Agent prompt: no finding."""
     from cctx.diagnostician.patterns.fan_out import classify
     trace = _trace([
-        _turn(1, "assistant", tool_uses=[_tu("Agent", "tu1", {"prompt": _RETRY_ORIGINAL}, "child-1")]),
+        _turn(1, "assistant", tool_uses=[
+            _tu("Agent", "tu1", {"prompt": _RETRY_ORIGINAL}, "child-1"),
+        ]),
         _turn(2, "user", tool_results=[_tr("Agent", "tu1", "Error", is_error=True)]),
-        _turn(3, "assistant", tool_uses=[_tu("Agent", "tu2", {"prompt": _RETRY_DIFFERENT}, "child-2")]),
+        _turn(3, "assistant", tool_uses=[
+            _tu("Agent", "tu2", {"prompt": _RETRY_DIFFERENT}, "child-2"),
+        ]),
     ])
     assert classify(trace) == []
 
@@ -232,9 +261,13 @@ def test_failed_retry_short_prompts_clean():
     """Retry prompts under 30 words must not trigger even if similar."""
     from cctx.diagnostician.patterns.fan_out import classify
     trace = _trace([
-        _turn(1, "assistant", tool_uses=[_tu("Agent", "tu1", {"prompt": "Fix the bug."}, "child-1")]),
+        _turn(1, "assistant", tool_uses=[
+            _tu("Agent", "tu1", {"prompt": "Fix the bug."}, "child-1"),
+        ]),
         _turn(2, "user", tool_results=[_tr("Agent", "tu1", "Error", is_error=True)]),
-        _turn(3, "assistant", tool_uses=[_tu("Agent", "tu2", {"prompt": "Fix the bug please."}, "child-2")]),
+        _turn(3, "assistant", tool_uses=[
+            _tu("Agent", "tu2", {"prompt": "Fix the bug please."}, "child-2"),
+        ]),
     ])
     assert classify(trace) == []
 
@@ -245,10 +278,13 @@ def test_failed_retry_short_prompts_clean():
 
 def test_patch_fanout_costs_overlap_picks_cheaper():
     """overlap finding: cost_usd = cheaper subagent's cost; subagent_session_ids updated."""
-    import dataclasses
     from cctx.diagnostician import _patch_fanout_costs
     from cctx.models import (
-        Confidence, Finding, FindingKind, Severity, SubagentAttribution,
+        Confidence,
+        Finding,
+        FindingKind,
+        Severity,
+        SubagentAttribution,
     )
     finding = Finding(
         kind=FindingKind.FANOUT_WASTE,
@@ -279,7 +315,11 @@ def test_patch_fanout_costs_retry_sets_failed_cost():
     """retry finding: cost_usd = the failed subagent's cost."""
     from cctx.diagnostician import _patch_fanout_costs
     from cctx.models import (
-        Confidence, Finding, FindingKind, Severity, SubagentAttribution,
+        Confidence,
+        Finding,
+        FindingKind,
+        Severity,
+        SubagentAttribution,
     )
     finding = Finding(
         kind=FindingKind.FANOUT_WASTE,
