@@ -329,3 +329,33 @@ def test_render_efficacy_low_sample(tmp_path):
     render_efficacy_report(report, tmp_path, tmp_path, console=con)
     out = con.file.getvalue()
     assert "low sample" in out
+
+
+# ---------------------------------------------------------------------------
+# CLI integration — Task E
+# ---------------------------------------------------------------------------
+
+def test_cli_efficacy_requires_directory(tmp_path):
+    """--efficacy with a .jsonl file path → usage error."""
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+    session_file = tmp_path / "session.jsonl"
+    session_file.write_text("{}\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["harvest", str(session_file), "--efficacy"])
+    assert result.exit_code != 0
+
+
+def test_cli_efficacy_empty_project(tmp_path):
+    """--efficacy on a directory with no sessions → 'No sessions found'."""
+    from click.testing import CliRunner
+
+    from cctx.cli import cli
+    runner = CliRunner()
+    result = runner.invoke(cli, [
+        "harvest", str(tmp_path), "--efficacy",
+        "--target-dir", str(tmp_path),
+    ])
+    assert result.exit_code == 0
+    assert "No sessions" in result.output

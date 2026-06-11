@@ -32,6 +32,7 @@ from cctx.renderers.terminal import (
     render_aggregate,
     render_aggregate_drilldown,
     render_diagnosis,
+    render_efficacy_report,
     render_harvest_results,
     render_projects,
     render_sessions,
@@ -587,6 +588,13 @@ def trace(target: Path | None, latest: bool) -> None:
     help="With --emit: also mirror already-harvested cctx-managed sections "
          "from CLAUDE.md into the emit target.",
 )
+@click.option(
+    "--efficacy",
+    "efficacy_mode",
+    is_flag=True,
+    default=False,
+    help="Report whether applied patches reduced their target patterns (before vs. after).",
+)
 def harvest(
     target: Path,
     since: str | None,
@@ -597,6 +605,7 @@ def harvest(
     check_severity: str,
     emit_targets: tuple[str, ...],
     sync_mode: bool,
+    efficacy_mode: bool,
 ) -> None:
     """Apply autopsy patches to CLAUDE.md."""
     from cctx.harvest import (
@@ -609,6 +618,22 @@ def harvest(
 
     if sync_mode and not emit_targets:
         raise click.UsageError("--sync requires --emit.")
+
+    if efficacy_mode:
+        if target.is_file():
+            raise click.UsageError(
+                "--efficacy requires a project directory, not a .jsonl file."
+            )
+        resolved_dir = target_dir or Path.cwd()
+        from cctx.harvest import managed_heading_dates
+        from cctx.recommender.evidence import efficacy as _run_efficacy
+        start = datetime(2020, 1, 1, tzinfo=UTC)
+        end   = datetime(2035, 1, 1, tzinfo=UTC)
+        pairs = aggregate.run(target, start, end)
+        h_dates = managed_heading_dates(resolved_dir)
+        report  = _run_efficacy(pairs, h_dates)
+        render_efficacy_report(report, resolved_dir, target)
+        return
 
     if check_mode:
         from cctx.harvest import CheckSeverity
