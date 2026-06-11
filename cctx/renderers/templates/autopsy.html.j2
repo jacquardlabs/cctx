@@ -176,6 +176,21 @@ footer {
       <dt>Waste attributed</dt><dd>~${{ "%.2f"|format(diag.waste_cost_usd) }}</dd>
       {% if diag.inflection_turn is not none %}<dt>Inflection turn</dt><dd>{{ diag.inflection_turn }}</dd>{% endif %}
     </dl>
+    {% if diag.subagent_costs %}
+    <details class="subagent-costs">
+      <summary>Subagents: {{ diag.subagent_costs | selectattr("depth", "equalto", 1) | list | length }} — ${{ "%.3f" % (diag.subagent_costs | selectattr("depth", "equalto", 1) | map(attribute="total_cost_usd") | sum) }}</summary>
+      <table>
+        <tr><th>Label</th><th>Depth</th><th>Cost</th></tr>
+        {% for a in diag.subagent_costs %}
+        <tr>
+          <td>{{ a.label | truncate(80) }}</td>
+          <td>{{ a.depth }}</td>
+          <td>${{ "%.3f" % a.total_cost_usd }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </details>
+    {% endif %}
     <p class="meta">Costs are estimates (~85–95% of actual billing; system framing not observable in JSONL)</p>
     <p class="meta">Analysed {{ diag.analysed_at.strftime("%Y-%m-%d %H:%M UTC") }}</p>
   </div>

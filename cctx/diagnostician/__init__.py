@@ -1,9 +1,9 @@
 """Autopsy diagnostician — public entry point.
 
 run(trace) -> Diagnosis
-  Runs all three pattern classifiers, detects inflection turn,
-  patches cost attribution for stale_context findings, and returns
-  a Diagnosis with patches=[].
+  Runs all pattern classifiers, detects inflection turn,
+  patches stale_context cost attribution, and returns
+  a Diagnosis with patches=[] and subagent_costs populated.
 
 The Recommender (cctx.recommender.claude_md) populates patches.
 """
@@ -21,7 +21,7 @@ from cctx.diagnostician.patterns import (
     stale_context,
     tool_thrash,
 )
-from cctx.models import Diagnosis, Finding, FindingKind
+from cctx.models import Diagnosis, Finding, FindingKind, SubagentAttribution
 from cctx.pricing import price_per_tok as _price_per_tok
 
 if TYPE_CHECKING:
@@ -41,8 +41,8 @@ def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
     return result
 
 
-def _compute_total_cost(trace: SessionTrace, model: str | None) -> float:
-    """Approximate total session cost including cache reads and writes.
+def _compute_own_cost(trace: SessionTrace, model: str | None) -> float:
+    """Parent-turns-only cost — does not recurse into subagents.
 
     Billing rates relative to base input price:
       cache_read:  ×0.10  (read from prompt cache)
@@ -59,6 +59,50 @@ def _compute_total_cost(trace: SessionTrace, model: str | None) -> float:
     return round(total, 4)
 
 
+def _compute_inclusive_cost(trace: SessionTrace) -> float:
+    """Recursive cost: own turns + all subagent turns at every depth."""
+    own = _compute_own_cost(trace, trace.primary_model)
+    return own + sum(_compute_inclusive_cost(sa) for sa in trace.subagents)
+
+
+def _build_label_map(trace: SessionTrace) -> dict[str, str]:
+    """Map child session_id → display label from the parent's Agent ToolUse inputs."""
+    label_map: dict[str, str] = {}
+    for turn in trace.turns:
+        for tu in turn.tool_uses:
+            if tu.subagent_session_id:
+                ti = tu.tool_input
+                label_map[tu.subagent_session_id] = (
+                    ti.get("description")
+                    or (ti.get("prompt") or "")[:80]
+                    or tu.subagent_session_id[:12]
+                )
+    return label_map
+
+
+def _collect_attributions(
+    trace: SessionTrace,
+    depth: int = 1,
+    label_map: dict[str, str] | None = None,
+) -> list[SubagentAttribution]:
+    """Flat DFS list of SubagentAttribution, one per subagent at every depth."""
+    if label_map is None:
+        label_map = _build_label_map(trace)
+    result: list[SubagentAttribution] = []
+    for child in trace.subagents:
+        label = label_map.get(child.session_id, child.session_id[:12])
+        cost = _compute_inclusive_cost(child)
+        result.append(SubagentAttribution(
+            session_id=child.session_id,
+            label=label,
+            total_cost_usd=round(cost, 4),
+            depth=depth,
+            model=child.primary_model,
+        ))
+        result.extend(_collect_attributions(child, depth + 1, None))
+    return result
+
+
 def run(trace: SessionTrace) -> Diagnosis:
     """Diagnose a single SessionTrace. Returns Diagnosis with patches=[]."""
     findings: list[Finding] = [
@@ -73,10 +117,11 @@ def run(trace: SessionTrace) -> Diagnosis:
     inflection_turn = inflection.detect(findings)
     findings = _patch_costs(findings, trace.primary_model)
 
-    total_cost = _compute_total_cost(trace, trace.primary_model)
+    total_cost = round(_compute_inclusive_cost(trace), 4)
     waste_cost = sum(f.cost_usd for f in findings if f.cost_usd is not None)
-    # Waste cannot exceed total session cost — cap as a logical invariant.
     waste_cost = min(waste_cost, total_cost)
+
+    subagent_costs = _collect_attributions(trace)
 
     return Diagnosis(
         session_id=trace.session_id,
@@ -86,4 +131,5 @@ def run(trace: SessionTrace) -> Diagnosis:
         total_cost_usd=total_cost,
         waste_cost_usd=round(waste_cost, 4),
         analysed_at=datetime.now(UTC),
+        subagent_costs=subagent_costs,
     )

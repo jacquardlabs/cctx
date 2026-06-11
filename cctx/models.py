@@ -234,6 +234,17 @@ class Patch:
 
 
 @dataclass
+class SubagentAttribution:
+    """Cost attribution for a single subagent session."""
+
+    session_id:     str
+    label:          str        # from Agent tool_input['description'], else prompt[:80]
+    total_cost_usd: float      # inclusive: this subagent + its own children
+    depth:          int        # 1 = direct child, 2 = grandchild, …
+    model:          str | None
+
+
+@dataclass
 class Diagnosis:
     session_id:      str
     findings:        list[Finding]
@@ -242,6 +253,7 @@ class Diagnosis:
     total_cost_usd:  float
     waste_cost_usd:  float
     analysed_at:     datetime
+    subagent_costs:  list[SubagentAttribution] = field(default_factory=list)
 
     @property
     def verdict(self) -> str:
