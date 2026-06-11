@@ -297,6 +297,31 @@ class AggregateReport:
     project_patterns:       list[ProjectPattern] = field(default_factory=list)
 
 
+@dataclass
+class EfficacyRow:
+    """One row in a patch efficacy report — before/after session counts for a managed heading."""
+
+    heading: str                  # e.g. "## Retry discipline"
+    kind: FindingKind | None      # reverse lookup from MANAGED_HEADINGS; None = not found
+    applied_at: datetime | None   # first git commit that introduced this heading; None if unknown
+    sessions_before: int          # sessions with this kind's finding before applied_at
+    sessions_after: int           # sessions with this kind's finding from applied_at onward
+    total_before: int             # total sessions analysed before applied_at
+    total_after: int              # total sessions analysed from applied_at onward
+    weeks_before: float           # (applied_at - oldest_session_start).days / 7
+    weeks_after: float            # (newest_session_start - applied_at).days / 7
+
+
+@dataclass
+class EfficacyReport:
+    """Aggregated before/after report across all managed CLAUDE.md headings."""
+
+    rows: list[EfficacyRow]
+    total_sessions: int
+    oldest_session: datetime | None  # min start_time across all analysed sessions
+    newest_session: datetime | None  # max start_time across all analysed sessions
+
+
 # ---------------------------------------------------------------------------
 # Renderer helper
 # ---------------------------------------------------------------------------
