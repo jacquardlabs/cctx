@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
+
+from rich.console import Console as RichConsole
 
 from cctx.models import (
     Confidence,
@@ -225,3 +228,104 @@ def test_efficacy_all_six_headings_in_report():
     assert len(report.rows) == len(MANAGED_HEADINGS)
     headings_in_report = {r.heading for r in report.rows}
     assert headings_in_report == set(MANAGED_HEADINGS.values())
+
+
+# ---------------------------------------------------------------------------
+# render_efficacy_report — Task D
+# ---------------------------------------------------------------------------
+
+
+def _make_report(rows=None, total=0, oldest=None, newest=None):
+    from cctx.models import EfficacyReport
+    return EfficacyReport(
+        rows=rows or [],
+        total_sessions=total,
+        oldest_session=oldest,
+        newest_session=newest,
+    )
+
+
+def _make_row(
+    heading="## Retry discipline",
+    kind=None,
+    applied_at=_APPLIED_AT,
+    sb=5, sa=0, tb=12, ta=11,
+    wb=3.0, wa=3.0,
+):
+    from cctx.models import EfficacyRow, FindingKind
+    return EfficacyRow(
+        heading=heading,
+        kind=kind or FindingKind.RETRY_LOOP,
+        applied_at=applied_at,
+        sessions_before=sb, sessions_after=sa,
+        total_before=tb, total_after=ta,
+        weeks_before=wb, weeks_after=wa,
+    )
+
+
+def _con() -> RichConsole:
+    return RichConsole(file=StringIO(), highlight=False, markup=False)
+
+
+def test_render_efficacy_no_sessions(tmp_path):
+    """Empty pairs → 'No sessions found' message."""
+    from cctx.renderers.terminal import render_efficacy_report
+    con = _con()
+    render_efficacy_report(_make_report(), tmp_path, tmp_path, console=con)
+    out = con.file.getvalue()
+    assert "No sessions" in out
+
+
+def test_render_efficacy_not_in_git(tmp_path):
+    """applied_at=None → 'not in git' in output."""
+    from cctx.renderers.terminal import render_efficacy_report
+    con = _con()
+    row = _make_row(applied_at=None)
+    report = _make_report(rows=[row], total=5)
+    render_efficacy_report(report, tmp_path, tmp_path, console=con)
+    out = con.file.getvalue()
+    assert "not in git" in out
+
+
+def test_render_efficacy_effective_signal(tmp_path):
+    """rate_after == 0 with baseline → 'effective' in output."""
+    from cctx.renderers.terminal import render_efficacy_report
+    con = _con()
+    row = _make_row(sb=5, sa=0, tb=12, ta=11, wb=3.0, wa=3.0)
+    report = _make_report(rows=[row], total=23)
+    render_efficacy_report(report, tmp_path, tmp_path, console=con)
+    out = con.file.getvalue()
+    assert "effective" in out
+
+
+def test_render_efficacy_persisting_signal(tmp_path):
+    """High rate_after relative to rate_before → 'persisting' in output."""
+    from cctx.renderers.terminal import render_efficacy_report
+    con = _con()
+    row = _make_row(sb=5, sa=4, tb=8, ta=8, wb=2.0, wa=2.0)
+    report = _make_report(rows=[row], total=16)
+    render_efficacy_report(report, tmp_path, tmp_path, console=con)
+    out = con.file.getvalue()
+    assert "persisting" in out
+
+
+def test_render_efficacy_no_baseline(tmp_path):
+    """sessions_before == 0 with a known applied_at → 'no baseline'."""
+    from cctx.renderers.terminal import render_efficacy_report
+    con = _con()
+    row = _make_row(sb=0, sa=3, tb=0, ta=12, wb=0.0, wa=3.0)
+    report = _make_report(rows=[row], total=12)
+    render_efficacy_report(report, tmp_path, tmp_path, console=con)
+    out = con.file.getvalue()
+    assert "no baseline" in out
+
+
+def test_render_efficacy_low_sample(tmp_path):
+    """total_before < 3 → 'low sample' in output."""
+    from cctx.renderers.terminal import render_efficacy_report
+    con = _con()
+    row = _make_row(sb=1, sa=0, tb=2, ta=5, wb=1.0, wa=3.0)
+    report = _make_report(rows=[row], total=7)
+    render_efficacy_report(report, tmp_path, tmp_path, console=con)
+    out = con.file.getvalue()
+    assert "low sample" in out
