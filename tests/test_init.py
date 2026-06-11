@@ -67,7 +67,9 @@ def test_install_preserves_existing_settings(tmp_path, monkeypatch):
     existing = {
         "permissions": {"allow": ["Bash(git*)"]},
         "hooks": {
-            "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "echo pre"}]}]
+            "PreToolUse": [
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo pre"}]}
+            ]
         },
     }
     settings_path.write_text(json.dumps(existing))
@@ -195,7 +197,11 @@ def test_init_installs_hook(runner, tmp_path):
     # Note: monkeypatching cwd is simpler in unit tests; CLI uses Path(".claude/...")
     # relative to cwd — just check exit code and output shape
     assert result.exit_code == 0
-    assert "✓" in result.output or "already" in result.output.lower() or "installed" in result.output.lower()
+    assert (
+        "✓" in result.output
+        or "already" in result.output.lower()
+        or "installed" in result.output.lower()
+    )
 
 
 def test_init_idempotent_cli(runner, tmp_path, monkeypatch):
@@ -282,9 +288,10 @@ def test_autopsy_quiet_with_findings_emits_verdict(runner, tmp_path, monkeypatch
     session = _make_session_file(tmp_path, "quiet-dirty-01")
 
     # Inject a finding via monkeypatch so we don't need a real problematic session
+    from datetime import datetime, timezone
+
     from cctx import diagnostician
     from cctx.models import Diagnosis
-    from datetime import datetime, timezone
 
     def fake_run(trace):
         return Diagnosis(
