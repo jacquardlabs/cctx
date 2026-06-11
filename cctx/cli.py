@@ -9,6 +9,7 @@ Commands:
   cctx harvest <session>           Apply autopsy patches to CLAUDE.md
   cctx harvest <project> --since   Cross-session harvest
   cctx watch [project]             Live waste signals during an active session
+  cctx init                        Install opt-in SessionEnd hook for auto-diagnostics
 """
 from __future__ import annotations
 
@@ -292,7 +293,15 @@ def ls(project: Path | None) -> None:
     "json_out",
     is_flag=True,
     default=False,
-    help="Output diagnosis as JSON to stdout (single-session only).",
+    help="Output diagnosis (or aggregate) as JSON to stdout.",
+)
+@click.option(
+    "--quiet",
+    "quiet",
+    is_flag=True,
+    default=False,
+    help="Print one verdict line only when findings exist; nothing if clean. "
+         "Designed for SessionEnd hook use (cctx init).",
 )
 def autopsy(
     target: Path | None,
@@ -305,6 +314,7 @@ def autopsy(
     top_n: int | None,
     turn_num: int | None,
     json_out: bool,
+    quiet: bool,
 ) -> None:
     """Diagnose a session or project directory.
 
@@ -408,7 +418,11 @@ def autopsy(
         trace = tokenize_session(parse_session(target))
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
-        if json_out:
+        if quiet:
+            if diagnosis.findings:
+                kinds = list(dict.fromkeys(f.kind.value for f in diagnosis.findings))
+                click.echo(f"{len(diagnosis.findings)} finding(s): {', '.join(kinds)}")
+        elif json_out:
             import json as _json
 
             from cctx.exporters.jsonl import export_diagnosis as _export_diag
@@ -729,3 +743,58 @@ def watch(target: Path | None) -> None:
     """
     from cctx.watcher import watch as _watch
     _watch(target)
+
+
+@cli.command("init")
+@click.option(
+    "--global",
+    "global_",
+    is_flag=True,
+    default=False,
+    help="Install to ~/.claude/settings.json (user scope) instead of .claude/settings.json.",
+)
+@click.option(
+    "--remove",
+    "remove_",
+    is_flag=True,
+    default=False,
+    help="Remove the SessionEnd hook instead of installing it.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Reinstall even if hook is already present.",
+)
+def init_cmd(global_: bool, remove_: bool, force: bool) -> None:
+    """Install an opt-in SessionEnd hook for automatic post-session diagnostics.
+
+    Writes a hook to .claude/settings.json (project) or ~/.claude/settings.json
+    (--global) that runs 'cctx autopsy --latest --quiet' when a Claude Code
+    session ends. Output appears only when findings exist.
+
+    Idempotent — running twice does not duplicate the hook.
+    """
+    from cctx import hook_installer
+
+    if force and remove_:
+        raise click.UsageError("--force and --remove are mutually exclusive.")
+
+    scope = "~/.claude/settings.json" if global_ else ".claude/settings.json"
+
+    if remove_:
+        path = hook_installer.remove(global_=global_)
+        if path is None:
+            click.echo(f"No cctx hook found in {scope} — nothing to remove.")
+        else:
+            click.echo(f"✓ SessionEnd hook removed from {scope}")
+        return
+
+    result = hook_installer.install(global_=global_, force=force)
+    if result == "already_installed":
+        click.echo(f"! SessionEnd hook already installed in {scope}")
+        click.echo("  Use 'cctx init --force' to reinstall.")
+    else:
+        click.echo(f"✓ SessionEnd hook installed to {scope}")
+        remove_flag = "--global --remove" if global_ else "--remove"
+        click.echo(f"  Run 'cctx init {remove_flag}' to uninstall.")
