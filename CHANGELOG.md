@@ -2,6 +2,57 @@
 
 <!-- version list -->
 
+## v1.9.0 (2026-06-11)
+
+### Bug Fixes
+
+- Combine split import in test_efficacy (ruff I001)
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+- Normalize Z-suffix UTC timestamps for Python 3.10 fromisoformat
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+- Remove unused timezone import (ruff F401) ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+- Use %aI git format for Python 3.10 compat; guard total_after==0 signal
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+### Documentation
+
+- Add managed_heading_dates to harvest.py module docstring
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+### Features
+
+- EfficacyRow + EfficacyReport dataclasses (M17 #90)
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+- Evidence.efficacy — before/after session bucketing (M17 #90)
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+- Harvest --efficacy CLI flag (M17 #90) ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+- Managed_heading_dates — git-based patch introduction dates (M17 #90)
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+- Patch efficacy report — harvest --efficacy (M17 #90)
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+- Render_efficacy_report — efficacy table renderer (M17 #90)
+  ([#111](https://github.com/jacquardlabs/cctx/pull/111),
+  [`d40fe5b`](https://github.com/jacquardlabs/cctx/commit/d40fe5b15643546ef7d9dc75ffcf1b62d4ec051b))
+
+
 ## v1.8.0 (2026-06-11)
 
 ### Bug Fixes
