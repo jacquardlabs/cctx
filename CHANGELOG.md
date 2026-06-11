@@ -2,6 +2,36 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-06-11)
+
+### Bug Fixes
+
+- Add _FANOUT_WASTE_DIFF template so MANAGED_HEADINGS stays in sync
+  ([#110](https://github.com/jacquardlabs/cctx/pull/110),
+  [`0123588`](https://github.com/jacquardlabs/cctx/commit/01235884bde2158307441c71f38d4cf96a2d8481))
+
+- Ruff lint — move imports to top, break long lines in test file
+  ([#110](https://github.com/jacquardlabs/cctx/pull/110),
+  [`0123588`](https://github.com/jacquardlabs/cctx/commit/01235884bde2158307441c71f38d4cf96a2d8481))
+
+### Features
+
+- Add FindingKind.FANOUT_WASTE + KIND_LABEL + MANAGED_HEADINGS
+  ([#110](https://github.com/jacquardlabs/cctx/pull/110),
+  [`0123588`](https://github.com/jacquardlabs/cctx/commit/01235884bde2158307441c71f38d4cf96a2d8481))
+
+- Fan-out waste classifier (M16 #89) ([#110](https://github.com/jacquardlabs/cctx/pull/110),
+  [`0123588`](https://github.com/jacquardlabs/cctx/commit/01235884bde2158307441c71f38d4cf96a2d8481))
+
+- Fan_out classifier — Signal A (overlap) + Signal B (retry)
+  ([#110](https://github.com/jacquardlabs/cctx/pull/110),
+  [`0123588`](https://github.com/jacquardlabs/cctx/commit/01235884bde2158307441c71f38d4cf96a2d8481))
+
+- Wire fan_out classifier into diagnostician, add _patch_fanout_costs
+  ([#110](https://github.com/jacquardlabs/cctx/pull/110),
+  [`0123588`](https://github.com/jacquardlabs/cctx/commit/01235884bde2158307441c71f38d4cf96a2d8481))
+
+
 ## v1.7.0 (2026-06-11)
 
 ### Bug Fixes
