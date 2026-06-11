@@ -5,6 +5,7 @@ Public API:
     preview_patches(patches, target_dir) -> list[ApplyResult]
     apply_patches(patches, target_dir) -> list[ApplyResult]
     check_claude_md(target_dir) -> list[CheckFinding]
+    managed_heading_dates(target_dir) -> dict[str, datetime | None]
 
 Layering rules (MUST respect):
 - Does NOT import click, rich_click, or anthropic.
