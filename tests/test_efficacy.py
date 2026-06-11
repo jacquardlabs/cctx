@@ -79,7 +79,6 @@ def test_managed_heading_dates_returns_none_for_absent_heading(tmp_path):
 
 def test_managed_heading_dates_handles_utc_z_suffix():
     """fromisoformat on Python 3.10 rejects 'Z'; ensure we normalize it."""
-    from datetime import timezone
     from unittest.mock import MagicMock, patch
 
     from cctx.harvest import managed_heading_dates
