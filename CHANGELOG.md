@@ -2,6 +2,47 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-06-11)
+
+### Bug Fixes
+
+- Jsonl exporter — subagent_costs in dict literal; fix import sort
+  ([#109](https://github.com/jacquardlabs/cctx/pull/109),
+  [`d1bc0fa`](https://github.com/jacquardlabs/cctx/commit/d1bc0fa039070ecfa671f38f5c43c864ed17e61a))
+
+- Remove unused ToolResult import in test_diagnostician_subagents
+  ([#109](https://github.com/jacquardlabs/cctx/pull/109),
+  [`d1bc0fa`](https://github.com/jacquardlabs/cctx/commit/d1bc0fa039070ecfa671f38f5c43c864ed17e61a))
+
+### Documentation
+
+- Restore billing-rate explanation in _compute_own_cost
+  ([#109](https://github.com/jacquardlabs/cctx/pull/109),
+  [`d1bc0fa`](https://github.com/jacquardlabs/cctx/commit/d1bc0fa039070ecfa671f38f5c43c864ed17e61a))
+
+### Features
+
+- Diagnostician — inclusive cost + per-subagent attribution
+  ([#109](https://github.com/jacquardlabs/cctx/pull/109),
+  [`d1bc0fa`](https://github.com/jacquardlabs/cctx/commit/d1bc0fa039070ecfa671f38f5c43c864ed17e61a))
+
+- HTML report + JSON exporter — subagent_costs output
+  ([#109](https://github.com/jacquardlabs/cctx/pull/109),
+  [`d1bc0fa`](https://github.com/jacquardlabs/cctx/commit/d1bc0fa039070ecfa671f38f5c43c864ed17e61a))
+
+- Per-subagent cost attribution in autopsy (#88)
+  ([#109](https://github.com/jacquardlabs/cctx/pull/109),
+  [`d1bc0fa`](https://github.com/jacquardlabs/cctx/commit/d1bc0fa039070ecfa671f38f5c43c864ed17e61a))
+
+- SubagentAttribution model + Diagnosis.subagent_costs field
+  ([#109](https://github.com/jacquardlabs/cctx/pull/109),
+  [`d1bc0fa`](https://github.com/jacquardlabs/cctx/commit/d1bc0fa039070ecfa671f38f5c43c864ed17e61a))
+
+- Terminal renderer — subagent cost table in autopsy output
+  ([#109](https://github.com/jacquardlabs/cctx/pull/109),
+  [`d1bc0fa`](https://github.com/jacquardlabs/cctx/commit/d1bc0fa039070ecfa671f38f5c43c864ed17e61a))
+
+
 ## v1.6.0 (2026-06-10)
 
 ### Bug Fixes
