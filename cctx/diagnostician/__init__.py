@@ -42,7 +42,12 @@ def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
 
 
 def _compute_own_cost(trace: SessionTrace, model: str | None) -> float:
-    """Parent-turns-only cost — does not recurse into subagents."""
+    """Parent-turns-only cost — does not recurse into subagents.
+
+    Billing rates relative to base input price:
+      cache_read:  ×0.10  (read from prompt cache)
+      cache_write: ×1.25  (write to prompt cache, both 5-min and 1-hr TTLs)
+    """
     price = _price_per_tok(model)
     total = 0.0
     for turn in trace.turns:
