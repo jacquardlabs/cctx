@@ -77,6 +77,23 @@ def test_managed_heading_dates_returns_none_for_absent_heading(tmp_path):
     assert dates["## Fan-out discipline"] is None
 
 
+def test_managed_heading_dates_handles_utc_z_suffix():
+    """fromisoformat on Python 3.10 rejects 'Z'; ensure we normalize it."""
+    from datetime import timezone
+    from unittest.mock import MagicMock, patch
+
+    from cctx.harvest import managed_heading_dates
+
+    mock_proc = MagicMock()
+    mock_proc.stdout = "2026-06-11T01:54:42Z\n"
+    with patch("cctx.harvest.subprocess.run", return_value=mock_proc):
+        dates = managed_heading_dates(None)  # type: ignore[arg-type]
+    for v in dates.values():
+        assert isinstance(v, datetime), f"expected datetime, got {v!r}"
+        assert v.tzinfo is not None
+        assert v.utcoffset().total_seconds() == 0
+
+
 def test_managed_heading_dates_no_git_returns_all_none(tmp_path):
     """No git repo → all headings map to None; no exception raised."""
     (tmp_path / "CLAUDE.md").write_text("## Retry discipline\n\nBody.\n")

@@ -301,7 +301,11 @@ def managed_heading_dates(target_dir: Path) -> dict[str, datetime | None]:
                 timeout=10,
             )
             lines = proc.stdout.strip().splitlines()
-            result[heading] = datetime.fromisoformat(lines[0]) if lines else None
+            if lines:
+                date_str = lines[0].replace("Z", "+00:00")
+                result[heading] = datetime.fromisoformat(date_str)
+            else:
+                result[heading] = None
         except Exception:  # noqa: BLE001
             result[heading] = None
     return result
