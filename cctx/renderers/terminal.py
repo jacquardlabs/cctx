@@ -421,6 +421,8 @@ def _efficacy_signal(row: EfficacyRow) -> str:
         return "? not in git"
     if row.sessions_before == 0:
         return "? no baseline"
+    if row.total_after == 0:
+        return "? no post-patch data"
     rate_before = row.sessions_before / max(row.weeks_before, 0.5)
     rate_after  = row.sessions_after  / max(row.weeks_after,  0.5)
     low = " (low sample)" if row.total_before < 3 or row.total_after < 3 else ""

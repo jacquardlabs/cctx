@@ -331,6 +331,18 @@ def test_render_efficacy_low_sample(tmp_path):
     assert "low sample" in out
 
 
+def test_render_efficacy_no_post_patch_data(tmp_path):
+    """total_after == 0 → '? no post-patch data', not '✓ effective'."""
+    from cctx.renderers.terminal import render_efficacy_report
+    con = _con()
+    row = _make_row(sb=3, sa=0, tb=5, ta=0, wb=3.0, wa=0.0)
+    report = _make_report(rows=[row], total=5)
+    render_efficacy_report(report, tmp_path, tmp_path, console=con)
+    out = con.file.getvalue()
+    assert "no post-patch data" in out
+    assert "effective" not in out
+
+
 # ---------------------------------------------------------------------------
 # CLI integration — Task E
 # ---------------------------------------------------------------------------

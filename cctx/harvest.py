@@ -283,7 +283,7 @@ def managed_heading_dates(target_dir: Path) -> dict[str, datetime | None]:
     """Return the git introduction date for each MANAGED_HEADINGS heading.
 
     For each heading, runs:
-        git log --reverse --format="%ai" -S"<heading>" -- CLAUDE.md
+        git log --reverse --format="%aI" -S"<heading>" -- CLAUDE.md
 
     --reverse gives oldest-first; the first line is the introduction commit.
     -S (pickaxe) fires when the occurrence count of the literal string changes.
@@ -294,7 +294,7 @@ def managed_heading_dates(target_dir: Path) -> dict[str, datetime | None]:
     for heading in MANAGED_HEADINGS.values():
         try:
             proc = subprocess.run(
-                ["git", "log", "--reverse", "--format=%ai", f"-S{heading}", "--", "CLAUDE.md"],
+                ["git", "log", "--reverse", "--format=%aI", f"-S{heading}", "--", "CLAUDE.md"],
                 cwd=target_dir,
                 capture_output=True,
                 text=True,
