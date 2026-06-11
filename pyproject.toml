@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cctx-cli"
-version = "1.9.0"
+version = "1.10.0"
 description = "Diagnose Claude Code sessions — find what went wrong, what it cost, and what to add to CLAUDE.md"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.10.0 (2026-06-11)
+
+### Features
+
+- Autopsy --json aggregate output for --since mode (closes #97)
+  ([#112](https://github.com/jacquardlabs/cctx/pull/112),
+  [`86b10e0`](https://github.com/jacquardlabs/cctx/commit/86b10e0787efa99e9af251e979e311053d7b8b72))
+
+
 ## v1.9.0 (2026-06-11)
 
 ### Bug Fixes
