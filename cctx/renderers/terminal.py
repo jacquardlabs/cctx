@@ -5,6 +5,7 @@ render_aggregate(report, console=None) -> None
 render_harvest_results(results, dry_run=False, console=None) -> None
 render_projects(projects, live_statuses=None, console=None) -> None
 render_sessions(project, live_statuses=None, console=None) -> None
+render_efficacy_report(report, target_dir, project_dir, console=None) -> None
 
 Uses rich for formatting. Accepts an optional Console for testing.
 """
@@ -24,7 +25,7 @@ from cctx.models import KIND_LABEL, FindingKind, Severity
 
 if TYPE_CHECKING:
     from cctx.discovery import ProjectInfo
-    from cctx.models import AggregateReport, Diagnosis, SessionTrace
+    from cctx.models import AggregateReport, Diagnosis, EfficacyReport, EfficacyRow, SessionTrace
 
 _SEVERITY_STYLE = {
     Severity.HIGH:   "bold red",
@@ -37,6 +38,11 @@ _KIND_LABEL = KIND_LABEL
 
 def _default_console() -> Console:
     return Console()
+
+
+def _wide_console() -> Console:
+    """Console with fixed wide width to prevent table cell wrapping."""
+    return Console(width=200)
 
 
 def render_diagnosis(
@@ -407,3 +413,89 @@ def render_sessions(
         Text("cctx autopsy <path>", style="bold") +
         Text("  to diagnose a session", style="dim")
     )
+
+
+def _efficacy_signal(row: EfficacyRow) -> str:
+    """Classify efficacy: ✓ effective | ↓ reduced | ✗ persisting | ? no baseline | ? not in git."""
+    if row.applied_at is None:
+        return "? not in git"
+    if row.sessions_before == 0:
+        return "? no baseline"
+    if row.total_after == 0:
+        return "? no post-patch data"
+    rate_before = row.sessions_before / max(row.weeks_before, 0.5)
+    rate_after  = row.sessions_after  / max(row.weeks_after,  0.5)
+    low = " (low sample)" if row.total_before < 3 or row.total_after < 3 else ""
+    if rate_after == 0 or rate_after < rate_before * 0.25:
+        return f"✓ effective{low}"
+    if rate_after < rate_before * 0.75:
+        return f"↓ reduced{low}"
+    return f"✗ persisting{low}"
+
+
+def render_efficacy_report(
+    report: EfficacyReport,
+    target_dir: Path,
+    project_dir: Path,
+    *,
+    console: Console | None = None,
+) -> None:
+    """Render patch efficacy table to terminal."""
+    con = console or _default_console()
+
+    if report.total_sessions == 0:
+        con.print(f"No sessions found in {project_dir}.")
+        return
+
+    if not report.rows:
+        con.print(f"No managed headings found in CLAUDE.md at {target_dir / 'CLAUDE.md'}.")
+        return
+
+    range_str = ""
+    if report.oldest_session and report.newest_session:
+        oldest = report.oldest_session.strftime("%Y-%m-%d")
+        newest = report.newest_session.strftime("%Y-%m-%d")
+        range_str = f"   Range: {oldest} — {newest}"
+    con.print(Rule("cctx harvest --efficacy"))
+    con.print(f"Sessions: {report.total_sessions}{range_str}")
+    con.print(f"CLAUDE.md: {target_dir / 'CLAUDE.md'}")
+    con.print()
+
+    _SIGNAL_STYLE = {
+        "✓": "bold green",
+        "↓": "bold yellow",
+        "✗": "bold red",
+        "?": "dim",
+    }
+
+    # Build table for heading + applied + before/after counts.
+    # Signal is printed as a separate styled line per row so it is never
+    # truncated or wrapped regardless of terminal width.
+    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
+    table.add_column("Heading", style="bold", no_wrap=True)
+    table.add_column("Applied", no_wrap=True)
+    table.add_column("Before", no_wrap=True)
+    table.add_column("After", no_wrap=True)
+
+    row_signals: list[tuple[str, str]] = []  # (signal_text, style)
+
+    for row in report.rows:
+        if row.applied_at is None:
+            applied_str = "(not in git)"
+            before_str = "—"
+        else:
+            applied_str = row.applied_at.strftime("%Y-%m-%d")
+            before_str = f"{row.sessions_before}/{row.total_before} sessions"
+        after_str = f"{row.sessions_after}/{row.total_after} sessions"
+        signal = _efficacy_signal(row)
+        first_char = signal[0] if signal else "?"
+        signal_style = _SIGNAL_STYLE.get(first_char, "")
+        table.add_row(row.heading, applied_str, before_str, after_str)
+        row_signals.append((signal, signal_style))
+
+    con.print(table)
+    con.print()
+    for (signal, style), row in zip(row_signals, report.rows, strict=True):
+        prefix = Text(f"  {row.heading}: ", style="dim")
+        signal_text = Text(signal, style=style)
+        con.print(prefix + signal_text, soft_wrap=True)
