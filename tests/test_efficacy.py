@@ -8,8 +8,7 @@ _TS = datetime(2026, 5, 1, tzinfo=UTC)
 
 
 def test_efficacy_row_exists():
-    from cctx.models import EfficacyRow
-    from cctx.models import FindingKind
+    from cctx.models import EfficacyRow, FindingKind
     row = EfficacyRow(
         heading="## Retry discipline",
         kind=FindingKind.RETRY_LOOP,
