@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cctx.models import SessionTrace, ToolUse, Turn, Usage
+from cctx.models import Diagnosis, SessionTrace, ToolUse, Turn, Usage
 
 # ---------------------------------------------------------------------------
 # Helpers — synthetic trace builders (real fixtures have scrubbed tokens)
@@ -212,3 +212,87 @@ def test_total_cost_not_less_than_depth1_sum():
     diag = run(parent)
     depth1_sum = sum(a.total_cost_usd for a in diag.subagent_costs if a.depth == 1)
     assert diag.total_cost_usd >= depth1_sum
+
+
+# ---------------------------------------------------------------------------
+# Renderer tests
+# ---------------------------------------------------------------------------
+
+def _make_diagnosis_with_subagents(n: int = 2) -> Diagnosis:
+    from cctx.models import Diagnosis, SubagentAttribution
+    attributions = [
+        SubagentAttribution(
+            session_id=f"child-{i}",
+            label=f"Task {i}: do something useful",
+            total_cost_usd=round(0.010 * (i + 1), 4),
+            depth=1,
+            model="claude-sonnet-4",
+        )
+        for i in range(n)
+    ]
+    return Diagnosis(
+        session_id="parent-session",
+        findings=[],
+        inflection_turn=None,
+        patches=[],
+        total_cost_usd=round(0.030 + sum(a.total_cost_usd for a in attributions), 4),
+        waste_cost_usd=0.0,
+        analysed_at=_TS,
+        subagent_costs=attributions,
+    )
+
+
+def test_render_diagnosis_shows_subagent_summary():
+    """Cost line mentions subagent count and sum when subagents present."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from cctx.renderers.terminal import render_diagnosis
+    buf = StringIO()
+    con = Console(file=buf, no_color=True, width=120)
+    diag = _make_diagnosis_with_subagents(2)
+    render_diagnosis(diag, console=con)
+    out = buf.getvalue()
+    assert "2 subagent" in out
+    assert "$0.03" in out  # subagent sum = 0.010 + 0.020 = 0.030
+
+
+def test_render_diagnosis_shows_subagent_table():
+    """Subagent table lists each agent's label and cost."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from cctx.renderers.terminal import render_diagnosis
+    buf = StringIO()
+    con = Console(file=buf, no_color=True, width=120)
+    diag = _make_diagnosis_with_subagents(2)
+    render_diagnosis(diag, console=con)
+    out = buf.getvalue()
+    assert "Task 0: do something useful" in out
+    assert "Task 1: do something useful" in out
+
+
+def test_render_diagnosis_no_subagents_no_table():
+    """When subagent_costs is empty, no subagent table is shown."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from cctx.models import Diagnosis
+    from cctx.renderers.terminal import render_diagnosis
+    buf = StringIO()
+    con = Console(file=buf, no_color=True, width=120)
+    diag = Diagnosis(
+        session_id="s1",
+        findings=[],
+        inflection_turn=None,
+        patches=[],
+        total_cost_usd=0.05,
+        waste_cost_usd=0.0,
+        analysed_at=_TS,
+    )
+    render_diagnosis(diag, console=con)
+    out = buf.getvalue()
+    assert "subagent" not in out.lower()

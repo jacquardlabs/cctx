@@ -52,7 +52,13 @@ def render_diagnosis(
     verdict = diagnosis.verdict
     verdict_style = "bold green" if not diagnosis.findings else "bold red"
     con.print(Text(f"Verdict: {verdict}", style=verdict_style))
+    subagent_sum = sum(a.total_cost_usd for a in diagnosis.subagent_costs if a.depth == 1)
+    n_sub = len([a for a in diagnosis.subagent_costs if a.depth == 1])
     cost_line = f"Session cost: ~${diagnosis.total_cost_usd:.2f}"
+    if n_sub:
+        cost_line += (
+            f" (includes {n_sub} subagent{'s' if n_sub != 1 else ''}: ~${subagent_sum:.2f})"
+        )
     if diagnosis.waste_cost_usd > 0:
         pct = (
             diagnosis.waste_cost_usd / diagnosis.total_cost_usd * 100
@@ -64,6 +70,22 @@ def render_diagnosis(
     con.print(Text(
         "~85–95% of actual billing; system framing not observable in JSONL", style="dim"
     ))
+
+    if diagnosis.subagent_costs:
+        show_depth = any(a.depth > 1 for a in diagnosis.subagent_costs)
+        tbl = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
+        tbl.add_column("Subagent", no_wrap=False, max_width=48)
+        if show_depth:
+            tbl.add_column("Depth", justify="right", width=6)
+        tbl.add_column("Cost", justify="right", width=8)
+        for a in diagnosis.subagent_costs:
+            label = a.label if len(a.label) <= 45 else a.label[:44] + "…"
+            cost_cell = f"${a.total_cost_usd:.3f}"
+            if show_depth:
+                tbl.add_row(label, str(a.depth), cost_cell)
+            else:
+                tbl.add_row(label, cost_cell)
+        con.print(tbl)
 
     if not diagnosis.findings:
         con.print("\nNo findings — session looks clean.")
