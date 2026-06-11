@@ -5,7 +5,7 @@ import json
 from typing import IO, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from cctx.models import Diagnosis, SessionTrace
+    from cctx.models import AggregateReport, Diagnosis, SessionTrace
 
 
 def export_diagnosis(
@@ -60,6 +60,50 @@ def export_diagnosis(
             }
             for a in diagnosis.subagent_costs
         ],
+    }
+    return json.dumps(obj)
+
+
+def export_aggregate(report: AggregateReport) -> str:
+    """Serialize an AggregateReport to a JSON string."""
+    by_kind = {
+        k.value: {
+            "session_count": v.session_count,
+            "total_waste_usd": v.total_waste_usd,
+            "example_summaries": v.example_summaries,
+        }
+        for k, v in report.by_kind.items()
+    }
+    patches = [
+        {
+            "target_file": p.target_file,
+            "finding_kind": p.finding_kind.value,
+            "description": p.description,
+            "evidence_summary": p.evidence_summary,
+        }
+        for p in report.patches
+    ]
+    project_patterns = [
+        {
+            "tool_name": pp.tool_name,
+            "failure_key": pp.failure_key,
+            "fix_key": pp.fix_key,
+            "session_count": pp.session_count,
+            "avg_wasted_turns": pp.avg_wasted_turns,
+            "total_waste_usd": pp.total_waste_usd,
+            "example_sessions": pp.example_sessions,
+        }
+        for pp in report.project_patterns
+    ]
+    obj = {
+        "period_label": report.period_label,
+        "sessions_analysed": report.sessions_analysed,
+        "sessions_with_findings": report.sessions_with_findings,
+        "total_cost_usd": report.total_cost_usd,
+        "waste_cost_usd": report.waste_cost_usd,
+        "by_kind": by_kind,
+        "patches": patches,
+        "project_patterns": project_patterns,
     }
     return json.dumps(obj)
 
