@@ -237,3 +237,68 @@ def test_failed_retry_short_prompts_clean():
         _turn(3, "assistant", tool_uses=[_tu("Agent", "tu2", {"prompt": "Fix the bug please."}, "child-2")]),
     ])
     assert classify(trace) == []
+
+
+# ---------------------------------------------------------------------------
+# _patch_fanout_costs — unit tests
+# ---------------------------------------------------------------------------
+
+def test_patch_fanout_costs_overlap_picks_cheaper():
+    """overlap finding: cost_usd = cheaper subagent's cost; subagent_session_ids updated."""
+    import dataclasses
+    from cctx.diagnostician import _patch_fanout_costs
+    from cctx.models import (
+        Confidence, Finding, FindingKind, Severity, SubagentAttribution,
+    )
+    finding = Finding(
+        kind=FindingKind.FANOUT_WASTE,
+        severity=Severity.MEDIUM,
+        confidence=Confidence.MEDIUM,
+        first_turn=1, last_turn=2,
+        evidence={
+            "signal": "overlap",
+            "overlap_pair": ["child-1", "child-2"],
+            "jaccard": 0.72,
+            "prompt_a": "x", "prompt_b": "y",
+            "subagent_session_ids": [],
+        },
+        cost_usd=None,
+        summary="test",
+    )
+    attrs = [
+        SubagentAttribution("child-1", "label1", 0.05, 1, "claude-sonnet-4-6"),
+        SubagentAttribution("child-2", "label2", 0.02, 1, "claude-sonnet-4-6"),
+    ]
+    patched = _patch_fanout_costs([finding], attrs)
+    assert len(patched) == 1
+    assert patched[0].cost_usd == 0.02           # cheaper one
+    assert patched[0].evidence["subagent_session_ids"] == ["child-2"]
+
+
+def test_patch_fanout_costs_retry_sets_failed_cost():
+    """retry finding: cost_usd = the failed subagent's cost."""
+    from cctx.diagnostician import _patch_fanout_costs
+    from cctx.models import (
+        Confidence, Finding, FindingKind, Severity, SubagentAttribution,
+    )
+    finding = Finding(
+        kind=FindingKind.FANOUT_WASTE,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=1, last_turn=3,
+        evidence={
+            "signal": "retry",
+            "failed_session_id": "child-1",
+            "jaccard": 0.55,
+            "failed_prompt": "x", "retry_prompt": "y",
+            "subagent_session_ids": [],
+        },
+        cost_usd=None,
+        summary="test",
+    )
+    attrs = [
+        SubagentAttribution("child-1", "label1", 0.08, 1, "claude-sonnet-4-6"),
+    ]
+    patched = _patch_fanout_costs([finding], attrs)
+    assert patched[0].cost_usd == 0.08
+    assert patched[0].evidence["subagent_session_ids"] == ["child-1"]
