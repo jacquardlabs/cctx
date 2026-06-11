@@ -57,6 +57,15 @@ _DEAD_END_DIFF = """\
 +approaches already ruled out, and pick a meaningfully different one. Sunk effort on a
 +failing approach is not a reason to continue it."""
 
+_FANOUT_WASTE_DIFF = """\
++## Fan-out discipline
++
++Before spawning multiple subagents in parallel, state what each one will return
++and verify the tasks don't overlap. After each subagent completes, confirm its
++result is actually consumed by the parent before spawning retries. Retry only
++after changing something meaningful about the task — identical re-spawns waste
++the full subagent cost with no new information."""
+
 _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     # kind → (description, diff_body, target_file)
     FindingKind.RETRY_LOOP:    ("Add retry discipline rule", _RETRY_LOOP_DIFF, "CLAUDE.md"),
@@ -64,6 +73,7 @@ _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     FindingKind.STALE_CONTEXT: ("Add context hygiene rule", _STALE_CONTEXT_DIFF, "CLAUDE.md"),
     FindingKind.TOOL_THRASH:   ("Add tool-call discipline rule", _TOOL_THRASH_DIFF, "CLAUDE.md"),
     FindingKind.DEAD_END:      ("Add exploration discipline rule", _DEAD_END_DIFF, "CLAUDE.md"),
+    FindingKind.FANOUT_WASTE:  ("Add fan-out discipline rule", _FANOUT_WASTE_DIFF, "CLAUDE.md"),
 }
 
 
