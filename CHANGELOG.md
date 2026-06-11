@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.11.0 (2026-06-11)
+
+### Bug Fixes
+
+- Ruff E501 + I001 in test_init.py (line length + import order)
+  ([#113](https://github.com/jacquardlabs/cctx/pull/113),
+  [`a04426e`](https://github.com/jacquardlabs/cctx/commit/a04426ef62cfeaa4ba7ea392bdf0dd49975cffbb))
+
+### Features
+
+- Cctx init — SessionEnd hook installer + autopsy --quiet (closes #92)
+  ([#113](https://github.com/jacquardlabs/cctx/pull/113),
+  [`a04426e`](https://github.com/jacquardlabs/cctx/commit/a04426ef62cfeaa4ba7ea392bdf0dd49975cffbb))
+
+
 ## v1.10.0 (2026-06-11)
 
 ### Features
