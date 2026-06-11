@@ -326,8 +326,6 @@ def autopsy(
         raise click.UsageError("--turn is not supported with --since.")
     if until_date is not None and since is None:
         raise click.UsageError("--until requires --since.")
-    if json_out and since is not None:
-        raise click.UsageError("--json is not supported with --since.")
 
     if target is None:
         if not latest:
@@ -392,8 +390,14 @@ def autopsy(
             patches=patches,
             project_patterns=patterns,
         )
-        render_aggregate(report)
-        _aggregate_drilldown(report, diagnoses)
+        if json_out:
+            import json as _json
+
+            from cctx.exporters.jsonl import export_aggregate as _export_agg
+            click.echo(_json.dumps(_json.loads(_export_agg(report)), indent=2))
+        else:
+            render_aggregate(report)
+            _aggregate_drilldown(report, diagnoses)
     else:
         # Single-session path
         if target.is_dir():

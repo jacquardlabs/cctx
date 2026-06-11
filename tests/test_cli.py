@@ -488,17 +488,42 @@ def test_autopsy_json_outputs_valid_json(runner, session_jsonl):
     assert "findings" in data
 
 
-def test_autopsy_json_incompatible_with_since(runner, tmp_path):
-    """--json + --since → non-zero exit (UsageError)."""
+def test_autopsy_json_aggregate_outputs_valid_json(runner, tmp_path):
+    """--json + --since → valid aggregate JSON with expected top-level keys."""
     from cctx.cli import cli
 
     project_dir = tmp_path / "-Users-test-Projects-demo"
     project_dir.mkdir()
 
+    session_id = "json-agg-test-01"
+    line = {
+        "type": "user",
+        "uuid": f"{session_id}-u1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "timestamp": "2026-05-14T10:00:00.000Z",
+        "sessionId": session_id,
+        "version": "2.1.138",
+        "cwd": "/Users/test/Projects/demo",
+        "gitBranch": "main",
+        "userType": "external",
+        "entrypoint": "cli",
+        "message": {"role": "user", "content": "hello"},
+    }
+    (project_dir / f"{session_id}.jsonl").write_text(json.dumps(line) + "\n")
+
     result = runner.invoke(
         cli, ["autopsy", str(project_dir), "--since", "7", "--json"],
+        catch_exceptions=False,
     )
-    assert result.exit_code != 0
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert "sessions_analysed" in data
+    assert "total_cost_usd" in data
+    assert "waste_cost_usd" in data
+    assert "by_kind" in data
+    assert "patches" in data
+    assert "project_patterns" in data
 
 
 def test_autopsy_json_contains_cost(runner, session_jsonl):
