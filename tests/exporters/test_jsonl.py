@@ -232,9 +232,10 @@ def test_write_produces_one_line_per_session() -> None:
 def test_export_diagnosis_includes_subagent_costs() -> None:
     """JSON export includes subagent_costs array with correct fields."""
     import dataclasses
+    import json
 
-    from cctx.models import SubagentAttribution
     from cctx.exporters.jsonl import export_diagnosis
+    from cctx.models import SubagentAttribution
 
     diag = _make_diagnosis()
     trace = _make_trace()

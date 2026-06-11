@@ -50,17 +50,17 @@ def export_diagnosis(
         "patches": patches,
         "turn_count": len(trace.turns),
         "model": trace.primary_model,
+        "subagent_costs": [
+            {
+                "session_id": a.session_id,
+                "label":      a.label,
+                "cost_usd":   a.total_cost_usd,
+                "depth":      a.depth,
+                "model":      a.model,
+            }
+            for a in diagnosis.subagent_costs
+        ],
     }
-    obj["subagent_costs"] = [
-        {
-            "session_id": a.session_id,
-            "label":      a.label,
-            "cost_usd":   a.total_cost_usd,
-            "depth":      a.depth,
-            "model":      a.model,
-        }
-        for a in diagnosis.subagent_costs
-    ]
     return json.dumps(obj)
 
 
