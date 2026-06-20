@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -135,7 +134,7 @@ def test_project_digest_row_model():
 
 
 def test_cross_project_digest_model():
-    from cctx.models import CrossProjectDigest, FindingKind, KindEvidence, ProjectDigestRow
+    from cctx.models import CrossProjectDigest, ProjectDigestRow
     digest = CrossProjectDigest(
         period_label="last 7 days",
         projects=[
@@ -346,7 +345,9 @@ def test_all_global_patches_target_global_claude_md(runner, tmp_path, monkeypatc
 def test_render_cross_project_digest_no_global_patterns():
     """Digest with no global patterns prints the expected empty message."""
     from io import StringIO
+
     from rich.console import Console
+
     from cctx.models import CrossProjectDigest, ProjectDigestRow
     from cctx.renderers.terminal import render_cross_project_digest
 
@@ -372,7 +373,9 @@ def test_render_cross_project_digest_no_global_patterns():
 def test_render_cross_project_digest_with_global_patterns():
     """Digest with global patterns shows the global patterns table."""
     from io import StringIO
+
     from rich.console import Console
+
     from cctx.models import (
         CrossProjectDigest,
         FindingKind,
@@ -410,6 +413,7 @@ def test_render_cross_project_digest_with_global_patterns():
 
 
 def test_export_cross_project_digest_structure():
+    from cctx.exporters.jsonl import export_cross_project_digest
     from cctx.models import (
         CrossProjectDigest,
         FindingKind,
@@ -417,7 +421,6 @@ def test_export_cross_project_digest_structure():
         Patch,
         ProjectDigestRow,
     )
-    from cctx.exporters.jsonl import export_cross_project_digest
 
     kind = FindingKind.UNUSED_CONTEXT
     ev = KindEvidence(kind=kind, session_count=2, total_waste_usd=0.0, example_summaries=["ex"])
