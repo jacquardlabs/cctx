@@ -59,9 +59,12 @@ The parser groups spans by `trace_id`, reconstructs the parent/child tree via `p
 | `FunctionSpan` child of `GenerationSpan` | `ToolUse` + `ToolResult` on the parent turn |
 | `HandoffSpan` / child `AgentSpan` | child `SessionTrace` in `subagents` |
 | Parallel child `AgentSpan`s | multiple `subagents` — same structure as Claude Code fan-out |
+| Grandchild `AgentSpan`s (depth > 1) | recursively built `subagents` on the child — see below |
 | Unknown span type | `ParserWarning` emitted; parse continues |
 
 Turn ordering within a `SessionTrace` follows `startTimeUnixNano`. Parallel sub-agents are ordered by start time and each becomes an independent `SessionTrace` in `subagents`.
+
+`_build_subagents` recurses to **arbitrary depth** (#118): each child `AgentSpan`'s own child `AgentSpan`s become its `subagents`, so handoff chains and multi-level orchestrators (OpenAI Agents SDK, LangGraph) are fully represented. A `_visited` span-id set guards against cyclic parent links in malformed traces.
 
 ### Layering
 
