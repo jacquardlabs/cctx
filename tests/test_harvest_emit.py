@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 
-def test_managed_headings_cover_the_six_diagnostic_kinds():
+def test_managed_headings_cover_the_diagnostic_kinds():
     from cctx.models import MANAGED_HEADINGS, FindingKind
     assert MANAGED_HEADINGS == {
         FindingKind.RETRY_LOOP:    "## Retry discipline",
@@ -11,6 +11,7 @@ def test_managed_headings_cover_the_six_diagnostic_kinds():
         FindingKind.TOOL_THRASH:   "## Tool-call discipline",
         FindingKind.DEAD_END:      "## Exploration discipline",
         FindingKind.FANOUT_WASTE:  "## Fan-out discipline",
+        FindingKind.CACHE_HYGIENE: "## Cache hygiene",
     }
 
 
