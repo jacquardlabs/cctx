@@ -27,8 +27,8 @@ from cctx.models import (
 def parse_otel_file(path: Path) -> list[SessionTrace]:
     """Read an OTLP JSONL export; return one SessionTrace per trace_id."""
     path = Path(path)
-    warnings: list[ParserWarning] = []
-    spans = _load_spans(path, warnings)
+    load_warnings: list[ParserWarning] = []
+    spans = _load_spans(path, load_warnings)
 
     by_trace: dict[str, list[dict]] = defaultdict(list)
     for span in spans:
@@ -36,10 +36,12 @@ def parse_otel_file(path: Path) -> list[SessionTrace]:
         if trace_id:
             by_trace[trace_id].append(span)
 
-    return [
-        _build_session_trace(trace_id, trace_spans, path, warnings)
-        for trace_id, trace_spans in by_trace.items()
-    ]
+    traces = []
+    for trace_id, trace_spans in by_trace.items():
+        # Each trace gets its own warnings list; load-time warnings are copied in.
+        trace_warnings = list(load_warnings)
+        traces.append(_build_session_trace(trace_id, trace_spans, path, trace_warnings))
+    return traces
 
 
 def _load_spans(path: Path, warnings: list[ParserWarning]) -> list[dict]:
@@ -150,6 +152,14 @@ def _find_root_agent_span(
             ParserWarning(code="no_root_agent_span", detail="no root AgentSpan found")
         )
         return None
+    if len(roots) > 1:
+        span_ids = ", ".join(r.get("spanId", "?") for r in roots)
+        warnings.append(
+            ParserWarning(
+                code="multiple_root_agent_spans",
+                detail=f"found {len(roots)} root AgentSpans; using first: {span_ids}",
+            )
+        )
     return roots[0]
 
 
@@ -256,9 +266,12 @@ def _build_subagents(
     subagents: list[SessionTrace] = []
     for child in child_agent_spans:
         child_id = child.get("spanId", "")
+        # child_spans: direct children only (used for primary_model / time bounds).
+        # _build_turns receives the full all_spans list so _build_tool_uses can
+        # locate FunctionSpan grandchildren regardless of nesting depth.
         child_spans = [s for s in all_spans if s.get("parentSpanId") == child_id]
         agent_name = _attr_str(child, "gen_ai.agent.name") or child_id
-        child_turns = _build_turns(child, child_spans + [child])
+        child_turns = _build_turns(child, all_spans)
         child_start = _nano_to_dt(child.get("startTimeUnixNano"))
         child_end = _nano_to_dt(child.get("endTimeUnixNano"))
 
