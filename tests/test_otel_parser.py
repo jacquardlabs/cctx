@@ -137,3 +137,63 @@ def test_fanout_orchestrator_has_two_tool_uses() -> None:
     assert tool_names == {"run_subagent"}
     call_ids = {tu.tool_use_id for tu in turn.tool_uses}
     assert call_ids == {"call_sub1", "call_sub2"}
+
+
+def test_handoff_produces_one_subagent() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    root = result[0]
+    assert len(root.subagents) == 1
+
+
+def test_handoff_subagent_agent_name_in_meta() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    child = result[0].subagents[0]
+    assert child.subagent_meta.get("agent_name") == "ResolutionAgent"
+
+
+def test_handoff_subagent_has_one_turn() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    child = result[0].subagents[0]
+    assert len(child.turns) == 1
+    assert child.turns[0].usage is not None
+    assert child.turns[0].usage.input_tokens == 2000
+    assert child.turns[0].usage.output_tokens == 500
+
+
+def test_handoff_subagent_parent_session_id_set() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    child = result[0].subagents[0]
+    assert child.parent_session_id == "aa00000000000001"
+
+
+def test_fanout_produces_two_subagents() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_fanout.jsonl")
+    root = result[0]
+    assert len(root.subagents) == 2
+
+
+def test_fanout_subagent_names() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_fanout.jsonl")
+    names = {s.subagent_meta.get("agent_name") for s in result[0].subagents}
+    assert names == {"SubAgent1", "SubAgent2"}
+
+
+def test_fanout_subagents_each_have_one_turn() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_fanout.jsonl")
+    for sub in result[0].subagents:
+        assert len(sub.turns) == 1
+        assert sub.turns[0].role == "assistant"
