@@ -197,3 +197,98 @@ def test_fanout_subagents_each_have_one_turn() -> None:
     for sub in result[0].subagents:
         assert len(sub.turns) == 1
         assert sub.turns[0].role == "assistant"
+
+
+def test_malformed_json_line_does_not_crash(tmp_path: Path) -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text("not valid json\n")
+    result = parse_otel_file(bad)
+    assert isinstance(result, list)
+
+
+def test_malformed_json_line_records_warning(tmp_path: Path) -> None:
+    import json as _json
+    from cctx.parsers.otel import parse_otel_file
+
+    good_line = _json.dumps({
+        "resourceSpans": [{
+            "resource": {"attributes": []},
+            "scopeSpans": [{
+                "scope": {},
+                "spans": [{
+                    "traceId": "cc00000000000000cc00000000000000",
+                    "spanId": "cc00000000000001",
+                    "name": "agent",
+                    "kind": 3,
+                    "startTimeUnixNano": "1718800000000000000",
+                    "endTimeUnixNano": "1718800010000000000",
+                    "attributes": [
+                        {"key": "gen_ai.operation.name", "value": {"stringValue": "run_agent"}}
+                    ],
+                    "status": {"code": 1},
+                }],
+            }],
+        }],
+    })
+    f = tmp_path / "mixed.jsonl"
+    f.write_text("not valid json\n" + good_line + "\n")
+    result = parse_otel_file(f)
+    assert len(result) == 1
+    assert any(w.code == "malformed_json" for w in result[0].warnings)
+
+
+def test_unknown_span_type_does_not_crash(tmp_path: Path) -> None:
+    import json as _json
+    from cctx.parsers.otel import parse_otel_file
+
+    batch = {
+        "resourceSpans": [{
+            "resource": {"attributes": []},
+            "scopeSpans": [{
+                "scope": {},
+                "spans": [
+                    {
+                        "traceId": "dd00000000000000dd00000000000000",
+                        "spanId": "dd00000000000001",
+                        "name": "agent",
+                        "kind": 3,
+                        "startTimeUnixNano": "1718800000000000000",
+                        "endTimeUnixNano": "1718800010000000000",
+                        "attributes": [
+                            {"key": "gen_ai.operation.name", "value": {"stringValue": "run_agent"}}
+                        ],
+                        "status": {"code": 1},
+                    },
+                    {
+                        "traceId": "dd00000000000000dd00000000000000",
+                        "spanId": "dd00000000000002",
+                        "parentSpanId": "dd00000000000001",
+                        "name": "future_span_type",
+                        "kind": 3,
+                        "startTimeUnixNano": "1718800001000000000",
+                        "endTimeUnixNano": "1718800002000000000",
+                        "attributes": [
+                            {"key": "gen_ai.operation.name", "value": {"stringValue": "future_op"}}
+                        ],
+                        "status": {"code": 1},
+                    },
+                ],
+            }],
+        }],
+    }
+    p = tmp_path / "unknown.jsonl"
+    p.write_text(_json.dumps(batch) + "\n")
+    result = parse_otel_file(p)
+    assert len(result) == 1
+    assert result[0].session_id == "dd00000000000000dd00000000000000"
+
+
+def test_empty_file_returns_empty_list(tmp_path: Path) -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("")
+    result = parse_otel_file(empty)
+    assert result == []
