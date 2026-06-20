@@ -328,3 +328,18 @@ def test_detect_source_unknown_raises_usage_error(tmp_path: Path) -> None:
     p.write_text('{"foo": "bar"}\n')
     with pytest.raises(click.UsageError):
         _detect_source(p)
+
+
+def test_autopsy_command_accepts_otel_file() -> None:
+    from click.testing import CliRunner
+    from cctx.cli import cli
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["autopsy", str(FIXTURES / "otel_handoff.jsonl")],
+        env={"CCTX_OFFLINE": "1"},
+        catch_exceptions=False,
+    )
+    assert result.exit_code in (0, 1)
+    assert "Traceback" not in (result.output or "")

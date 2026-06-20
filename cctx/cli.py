@@ -458,7 +458,15 @@ def autopsy(
                 "TARGET is a directory. Use --since N for cross-session mode, "
                 "or pass a .jsonl file directly."
             )
-        trace = tokenize_session(parse_session(target))
+        source = _detect_source(target)
+        if source == "otel":
+            from cctx.parsers.otel import parse_otel_file as _parse_otel_file
+            otel_traces = _parse_otel_file(target)
+            if not otel_traces:
+                raise click.UsageError(f"No traces found in {target}")
+            trace = tokenize_session(otel_traces[0])
+        else:
+            trace = tokenize_session(parse_session(target))
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
         if quiet:
