@@ -66,6 +66,16 @@ _FANOUT_WASTE_DIFF = """\
 +after changing something meaningful about the task — identical re-spawns waste
 +the full subagent cost with no new information."""
 
+_CACHE_HYGIENE_DIFF = """\
++## Cache hygiene
++
++Keep the prompt prefix stable across turns so Claude's KV-cache can be reused.
++Avoid changing tool definitions mid-session, keep system prompt content
++consistent, and prefer append-only context updates over rewrites. If context
++compaction fires frequently, consider splitting long sessions into shorter ones
++with a stable, cacheable preamble. A 10× cost difference separates a warm
++cache hit from a cold input read."""
+
 _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     # kind → (description, diff_body, target_file)
     FindingKind.RETRY_LOOP:    ("Add retry discipline rule", _RETRY_LOOP_DIFF, "CLAUDE.md"),
@@ -74,6 +84,7 @@ _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     FindingKind.TOOL_THRASH:   ("Add tool-call discipline rule", _TOOL_THRASH_DIFF, "CLAUDE.md"),
     FindingKind.DEAD_END:      ("Add exploration discipline rule", _DEAD_END_DIFF, "CLAUDE.md"),
     FindingKind.FANOUT_WASTE:  ("Add fan-out discipline rule", _FANOUT_WASTE_DIFF, "CLAUDE.md"),
+    FindingKind.CACHE_HYGIENE: ("Add cache hygiene rule", _CACHE_HYGIENE_DIFF, "CLAUDE.md"),
 }
 
 

@@ -174,6 +174,7 @@ class FindingKind(str, Enum):
     DEAD_END      = "dead_end"
     FANOUT_WASTE  = "fanout_waste"
     PROJECT_PATTERN = "project_pattern"
+    CACHE_HYGIENE = "cache_hygiene"
 
 
 KIND_LABEL: dict[FindingKind, str] = {
@@ -184,6 +185,7 @@ KIND_LABEL: dict[FindingKind, str] = {
     FindingKind.DEAD_END:      "DEAD END",
     FindingKind.FANOUT_WASTE:  "FANOUT WASTE",
     FindingKind.PROJECT_PATTERN: "PROJECT PATTERN",
+    FindingKind.CACHE_HYGIENE: "CACHE HYGIENE",
 }
 
 # Maps FindingKind to the exact ## heading emitted by its recommender patch
@@ -197,6 +199,7 @@ MANAGED_HEADINGS: dict[FindingKind, str] = {
     FindingKind.TOOL_THRASH:   "## Tool-call discipline",
     FindingKind.DEAD_END:      "## Exploration discipline",
     FindingKind.FANOUT_WASTE:  "## Fan-out discipline",
+    FindingKind.CACHE_HYGIENE: "## Cache hygiene",
 }
 
 # Project-specific patterns use a heading that embeds tool+key, so the managed

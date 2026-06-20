@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.13.0 (2026-06-20)
+
+### Documentation
+
+- OTEL quickstart for LangGraph + README multi-framework callout
+  ([#119](https://github.com/jacquardlabs/cctx/pull/119),
+  [`98d89d9`](https://github.com/jacquardlabs/cctx/commit/98d89d9fbf882021f0f54eb7f6676ceb3fbc8ca0))
+
+### Features
+
+- KV-cache hygiene diagnosis — hit rate + cause (#96)
+  ([#121](https://github.com/jacquardlabs/cctx/pull/121),
+  [`2a3f49c`](https://github.com/jacquardlabs/cctx/commit/2a3f49cc253d3aacda1cde987138f19518537b89))
+
+
 ## v1.12.1 (2026-06-20)
 
 ### Bug Fixes
