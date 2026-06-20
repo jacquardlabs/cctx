@@ -38,3 +38,60 @@ def test_parse_otel_file_fanout_returns_one_trace() -> None:
     result = parse_otel_file(FIXTURES / "otel_fanout.jsonl")
     assert len(result) == 1
     assert result[0].session_id == "bbccddee00112233bbccddee00112233"
+
+
+def test_handoff_root_has_one_turn() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    root = result[0]
+    assert len(root.turns) == 1
+
+
+def test_handoff_turn_role_is_assistant() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    turn = result[0].turns[0]
+    assert turn.role == "assistant"
+
+
+def test_handoff_turn_usage_populated() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    usage = result[0].turns[0].usage
+    assert usage is not None
+    assert usage.input_tokens == 1200
+    assert usage.output_tokens == 350
+
+
+def test_handoff_turn_model() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    assert result[0].turns[0].model == "gpt-4o"
+
+
+def test_handoff_turn_number_is_one_based() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    assert result[0].turns[0].turn_number == 1
+
+
+def test_handoff_primary_model() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    assert result[0].primary_model == "gpt-4o"
+
+
+def test_handoff_start_end_times_set() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    trace = result[0]
+    assert trace.start_time is not None
+    assert trace.end_time is not None
+    assert trace.end_time > trace.start_time
