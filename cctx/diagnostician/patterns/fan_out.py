@@ -12,6 +12,17 @@ positives on paraphrased references and is not ship-ready.
 
 cost_usd is set to None here; _patch_fanout_costs() in diagnostician/__init__.py
 fills it in from SubagentAttribution data after run() collects attributions.
+
+Evidence (Finding.evidence, kind=FANOUT_WASTE):
+    signal
+    overlap_pair
+    jaccard
+    prompt_a
+    prompt_b
+    subagent_session_ids
+    retry_prompt
+    failed_prompt
+    failed_session_id
 """
 from __future__ import annotations
 

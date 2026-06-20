@@ -143,7 +143,7 @@ def parse_since(value: str) -> tuple[datetime, datetime, str]:
 
     return now - delta, now, label
 
-click.rich_click.USE_RICH_MARKUP = True
+click.rich_click.TEXT_MARKUP = "rich"  # replaces deprecated USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True
 
 

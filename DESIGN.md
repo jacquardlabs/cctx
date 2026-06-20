@@ -62,7 +62,7 @@ The canonical headline is **count-based** and comes from a single source — the
 | HTML report | Per-finding `<details>` with evidence as formatted JSON |
 | TUI FindingModal | Summary + raw evidence |
 
-`Finding.evidence` is a `dict[str, Any]` whose shape varies per `FindingKind` (e.g. `retry_loop` carries `occurrences`/`loop_length`; `stale_context` carries `stale_items`/`total_token_turns`). The recommender reads specific keys with `.get()` fallbacks. Documenting the per-kind evidence schema is tracked in #145.
+`Finding.evidence` is a `dict[str, Any]` whose shape varies per `FindingKind` (e.g. `retry_loop` carries `occurrences`/`loop_length`; `stale_context` carries `stale_items`/`total_token_turns`). The recommender reads specific keys with `.get()` fallbacks. The authoritative per-kind schema lives in each producing classifier's module docstring under an `Evidence (Finding.evidence, kind=...)` block (e.g. `cctx/diagnostician/patterns/retry_loop.py`); `recommender/claude_md.py:summarize()` points back to it.
 
 ## Anti-patterns
 

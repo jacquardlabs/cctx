@@ -3,6 +3,9 @@
 Fires only on explicit re-scoping phrases in assistant turn text (conservative
 v0). No structural heuristics. One Finding per session; all phrase matches
 bundled into evidence.
+
+Evidence (Finding.evidence, kind=SCOPE_CREEP):
+    phrases
 """
 from __future__ import annotations
 

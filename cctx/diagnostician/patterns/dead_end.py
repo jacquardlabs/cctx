@@ -14,6 +14,10 @@ resets the error run counter — prior state is gone.
 
 Thresholds:
   N_FAIL_MIN = 2  — minimum consecutive errors before a backtrack counts
+
+Evidence (Finding.evidence, kind=DEAD_END):
+    dead_ends
+    total_fails
 """
 from __future__ import annotations
 

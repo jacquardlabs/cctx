@@ -7,6 +7,10 @@ staleness resets to zero at compaction events.
 Thresholds (per spec):
   T_size  = 2_000 tokens (minimum size to be a candidate)
   N_stale = 5 turns after last reference before "stale"
+
+Evidence (Finding.evidence, kind=STALE_CONTEXT):
+    stale_items
+    total_token_turns
 """
 from __future__ import annotations
 

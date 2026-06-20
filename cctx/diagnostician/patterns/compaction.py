@@ -7,6 +7,12 @@ are read again after (token cost of the re-read attributed to the compaction).
 Exported helpers:
   is_compaction_turn(turn) — canonical compaction predicate used by
     stale_context.py and dead_end.py (replaces their local implementations).
+
+Evidence (Finding.evidence, kind=COMPACTION):
+    n_compactions
+    compaction_turns
+    re_fetches
+    total_refetch_tokens
 """
 from __future__ import annotations
 

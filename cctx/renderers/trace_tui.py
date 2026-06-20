@@ -5,6 +5,7 @@ Public API:
     verdict(diagnosis) -> str
     finding_modal_text(findings) -> str
     flags_label(findings) -> str
+    build_app(trace, diagnosis) -> App   # for tests (Pilot); not run
     launch(trace, diagnosis) -> None
 
 Internal:
@@ -90,8 +91,12 @@ def _build_flagged_index(findings: list[Finding], trace: SessionTrace) -> dict[i
 # ---------------------------------------------------------------------------
 
 
-def launch(trace: SessionTrace, diagnosis: Diagnosis) -> None:  # noqa: C901
-    """Build and run the Textual app (blocking). Imports textual on first call."""
+def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
+    """Build the Textual app and return it (does NOT run it). Imports textual on call.
+
+    Returned rather than run so tests can drive it via App.run_test() (Textual
+    Pilot). launch() wraps this with .run() for the blocking CLI path.
+    """
     from textual.app import App, ComposeResult
     from textual.binding import Binding
     from textual.containers import ScrollableContainer
@@ -301,4 +306,9 @@ def launch(trace: SessionTrace, diagnosis: Diagnosis) -> None:  # noqa: C901
         def action_show_help(self) -> None:
             self.push_screen(HelpScreen())
 
-    TraceTUI().run()
+    return TraceTUI()
+
+
+def launch(trace: SessionTrace, diagnosis: Diagnosis) -> None:
+    """Build and run the Textual app (blocking). Imports textual on first call."""
+    build_app(trace, diagnosis).run()

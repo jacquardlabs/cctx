@@ -121,6 +121,12 @@ _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
 
 
 def summarize(finding: Finding) -> str:
+    # Reads kind-specific keys from finding.evidence. The authoritative schema
+    # for each key lives in the producing classifier's module docstring under
+    # "Evidence (Finding.evidence, kind=...)" — e.g. cctx/diagnostician/patterns/
+    # retry_loop.py documents occurrences/loop_length. Keep accesses defensive
+    # (.get with defaults) so a schema change degrades to finding.summary rather
+    # than raising.
     ev = finding.evidence
     match finding.kind:
         case FindingKind.RETRY_LOOP:

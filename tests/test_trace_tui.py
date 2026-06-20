@@ -324,3 +324,131 @@ def test_build_flagged_index_no_last_turn():
     index = _build_flagged_index([f], trace)
     assert set(index.keys()) == {3}
     assert index[3] == [f]
+
+
+# ---------------------------------------------------------------------------
+# Textual Pilot UI tests (#146)
+#
+# build_app() returns the App without running it, so App.run_test() (Pilot)
+# can drive it headlessly. Tests are sync wrappers around asyncio.run() so they
+# don't depend on pytest-asyncio being active. Screen identity is asserted via
+# type(...).__name__ since the modal classes are nested inside build_app().
+# ---------------------------------------------------------------------------
+
+
+def _simple_trace():
+    return make_trace([
+        make_user_turn(1),
+        make_assistant_turn(2, text="working on it"),
+        make_assistant_turn(3, text="done"),
+    ])
+
+
+def _clean_diag():
+    from cctx.models import Diagnosis
+
+    return Diagnosis(
+        session_id="sess-tui",
+        findings=[],
+        inflection_turn=None,
+        patches=[],
+        total_cost_usd=0.0,
+        waste_cost_usd=0.0,
+        analysed_at=datetime(2026, 6, 20, tzinfo=timezone.utc),
+    )
+
+
+def _diag_flagging_turn_1():
+    """A diagnosis whose finding's affected turns include turn 1 (first table row)."""
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
+
+    finding = Finding(
+        kind=FindingKind.TOOL_THRASH,  # else-branch in affected_turns -> range(first, last+1)
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=1,
+        last_turn=1,
+        evidence={},
+        cost_usd=0.05,
+        summary="thrashing on the same tool",
+    )
+    return Diagnosis(
+        session_id="sess-tui",
+        findings=[finding],
+        inflection_turn=1,
+        patches=[],
+        total_cost_usd=1.0,
+        waste_cost_usd=0.05,
+        analysed_at=datetime(2026, 6, 20, tzinfo=timezone.utc),
+    )
+
+
+def test_build_app_populates_turn_table():
+    import asyncio
+
+    from textual.widgets import DataTable
+
+    from cctx.renderers.trace_tui import build_app
+
+    trace = _simple_trace()
+
+    async def scenario():
+        app = build_app(trace, _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            table = app.query_one("#turns", DataTable)
+            assert table.row_count == len(trace.turns)
+
+    asyncio.run(scenario())
+
+
+def test_help_screen_opens_and_closes():
+    import asyncio
+
+    from cctx.renderers.trace_tui import build_app
+
+    async def scenario():
+        app = build_app(_simple_trace(), _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.press("question_mark")
+            await pilot.pause()
+            assert type(app.screen).__name__ == "HelpScreen"
+            await pilot.press("escape")
+            await pilot.pause()
+            assert type(app.screen).__name__ != "HelpScreen"
+
+    asyncio.run(scenario())
+
+
+def test_quit_binding_exits_app():
+    import asyncio
+
+    from cctx.renderers.trace_tui import build_app
+
+    async def scenario():
+        app = build_app(_simple_trace(), _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.press("q")
+            await pilot.pause()
+        # context exits cleanly == app stopped on quit
+        assert app.is_running is False
+
+    asyncio.run(scenario())
+
+
+def test_finding_modal_opens_on_flagged_turn():
+    import asyncio
+
+    from cctx.renderers.trace_tui import build_app
+
+    diag = _diag_flagging_turn_1()
+
+    async def scenario():
+        app = build_app(_simple_trace(), diag)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("f")  # cursor starts on row 0 == turn 1 (flagged)
+            await pilot.pause()
+            assert type(app.screen).__name__ == "FindingModal"
+
+    asyncio.run(scenario())

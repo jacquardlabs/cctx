@@ -8,6 +8,13 @@ Thresholds:
   MIN_TOTAL_TOKENS    = 5_000   — skip tiny sessions
   HIT_RATE_THRESHOLD  = 0.50   — below this → fire finding
   HALF_DROP_THRESHOLD = 0.20   — early_rate - late_rate drop to flag as degrading
+
+Evidence (Finding.evidence, kind=CACHE_HYGIENE):
+    overall_hit_rate
+    early_hit_rate
+    late_hit_rate
+    total_tokens
+    cause
 """
 from __future__ import annotations
 

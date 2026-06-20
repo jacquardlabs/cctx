@@ -13,6 +13,10 @@ Finding with evidence listing each burst.
 Thresholds:
   MIN_REPEATS = 3  — a tool must appear ≥ 3 times with identical input
   WINDOW      = 20 — calls must occur within a 20-turn window
+
+Evidence (Finding.evidence, kind=TOOL_THRASH):
+    bursts
+    total_calls
 """
 from __future__ import annotations
 
