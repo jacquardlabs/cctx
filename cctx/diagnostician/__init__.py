@@ -34,6 +34,31 @@ if TYPE_CHECKING:
 
 UTC = timezone.utc
 
+# Single-session classifiers, run in order. Each is invoked through
+# _safe_classify so one classifier raising never aborts the whole diagnosis.
+# A tuple of modules (not bound functions) keeps `module.classify` a call-time
+# lookup, so the error policy lives in exactly one place.
+_CLASSIFIER_MODULES = (
+    retry_loop,
+    scope_creep,
+    stale_context,
+    tool_thrash,
+    dead_end,
+    fan_out,
+    cache_hygiene,
+    compaction,
+    exploration_thrash,
+    unused_context,
+)
+
+
+def _safe_classify(classify, trace: SessionTrace) -> list[Finding]:
+    """Run one classifier, isolating failures so the diagnosis still completes."""
+    try:
+        return classify(trace)
+    except Exception:
+        return []
+
 
 def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
     price = _price_per_tok(model)
@@ -149,18 +174,9 @@ def _collect_attributions(
 
 def run(trace: SessionTrace) -> Diagnosis:
     """Diagnose a single SessionTrace. Returns Diagnosis with patches=[]."""
-    findings: list[Finding] = [
-        *retry_loop.classify(trace),
-        *scope_creep.classify(trace),
-        *stale_context.classify(trace),
-        *tool_thrash.classify(trace),
-        *dead_end.classify(trace),
-        *fan_out.classify(trace),
-        *cache_hygiene.classify(trace),
-        *compaction.classify(trace),
-        *exploration_thrash.classify(trace),
-        *unused_context.classify(trace),
-    ]
+    findings: list[Finding] = []
+    for module in _CLASSIFIER_MODULES:
+        findings.extend(_safe_classify(module.classify, trace))
     findings.sort(key=lambda f: f.first_turn)
 
     inflection_turn = inflection.detect(findings)

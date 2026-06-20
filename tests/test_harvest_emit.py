@@ -48,7 +48,7 @@ def _patch(target_file="CLAUDE.md", heading="## Retry discipline"):
 
 
 def test_retarget_clones_claude_md_patches_to_agents():
-    from cctx.harvest import retarget_patches
+    from cctx.emit import retarget_patches
     out = retarget_patches([_patch()], "agents")
     assert len(out) == 1
     assert out[0].target_file == "AGENTS.md"
@@ -56,7 +56,7 @@ def test_retarget_clones_claude_md_patches_to_agents():
 
 
 def test_retarget_excludes_non_claude_md_patches():
-    from cctx.harvest import retarget_patches
+    from cctx.emit import retarget_patches
     rules_patch = _patch(target_file=".claude/rules/foo.md")
     out = retarget_patches([_patch(), rules_patch], "agents")
     assert len(out) == 1
@@ -64,12 +64,12 @@ def test_retarget_excludes_non_claude_md_patches():
 
 
 def test_emit_targets_has_agents():
-    from cctx.harvest import EMIT_TARGETS
+    from cctx.emit import EMIT_TARGETS
     assert EMIT_TARGETS["agents"] == "AGENTS.md"
 
 
 def test_sync_returns_managed_sections_only(tmp_path):
-    from cctx.harvest import sync_managed_sections
+    from cctx.emit import sync_managed_sections
     (tmp_path / "CLAUDE.md").write_text(
         "# Project\n\n"
         "## Retry discipline\n\nRetry rule body.\n\n"
@@ -86,7 +86,7 @@ def test_sync_returns_managed_sections_only(tmp_path):
 
 
 def test_sync_finding_kind_reverse_lookup(tmp_path):
-    from cctx.harvest import sync_managed_sections
+    from cctx.emit import sync_managed_sections
     from cctx.models import FindingKind
     (tmp_path / "CLAUDE.md").write_text(
         "## Context hygiene\n\nbody\n\n"
@@ -100,12 +100,13 @@ def test_sync_finding_kind_reverse_lookup(tmp_path):
 
 
 def test_sync_no_claude_md_returns_empty(tmp_path):
-    from cctx.harvest import sync_managed_sections
+    from cctx.emit import sync_managed_sections
     assert sync_managed_sections(tmp_path, "agents") == []
 
 
 def test_emit_apply_then_reapply_is_idempotent(tmp_path):
-    from cctx.harvest import ApplyStatus, apply_patches, retarget_patches
+    from cctx.emit import retarget_patches
+    from cctx.harvest import ApplyStatus, apply_patches
     patches = retarget_patches([_patch()], "agents")
     first = apply_patches(patches, tmp_path)
     assert [r.status for r in first] == [ApplyStatus.APPLIED]
@@ -116,7 +117,8 @@ def test_emit_apply_then_reapply_is_idempotent(tmp_path):
 
 
 def test_sync_apply_then_reapply_is_idempotent(tmp_path):
-    from cctx.harvest import ApplyStatus, apply_patches, sync_managed_sections
+    from cctx.emit import sync_managed_sections
+    from cctx.harvest import ApplyStatus, apply_patches
     (tmp_path / "CLAUDE.md").write_text(
         "## Retry discipline\n\nRetry rule body.\n", encoding="utf-8"
     )
@@ -200,7 +202,8 @@ def test_sync_apply_creates_agents_md(tmp_path):
 def test_emit_applies_both_targets(tmp_path):
     """End-to-end fan-out: a CLAUDE.md patch and its retargeted clone both land,
     one in CLAUDE.md and one in AGENTS.md (mirrors the CLI's base+retarget flow)."""
-    from cctx.harvest import ApplyStatus, apply_patches, retarget_patches
+    from cctx.emit import retarget_patches
+    from cctx.harvest import ApplyStatus, apply_patches
     base = [_patch()]  # one CLAUDE.md patch
     combined = base + retarget_patches(base, "agents")
     results = apply_patches(combined, tmp_path)

@@ -1,4 +1,4 @@
-"""Tests for cctx/diagnostician/aggregate.py."""
+"""Tests for cctx/aggregate.py."""
 from __future__ import annotations
 
 import json
@@ -41,7 +41,7 @@ def _now_and_window(days: int) -> tuple[datetime, datetime]:
 
 
 def test_run_returns_diagnoses_for_sessions_in_window(tmp_path):
-    from cctx.diagnostician.aggregate import run
+    from cctx.aggregate import run
 
     _write_session(tmp_path, "session-a")
     _write_session(tmp_path, "session-b")
@@ -56,7 +56,7 @@ def test_run_returns_diagnoses_for_sessions_in_window(tmp_path):
 
 
 def test_run_excludes_old_sessions(tmp_path):
-    from cctx.diagnostician.aggregate import run
+    from cctx.aggregate import run
 
     path = _write_session(tmp_path, "old-session")
     old_time = time.time() - 10 * 86400
@@ -71,7 +71,7 @@ def test_run_excludes_old_sessions(tmp_path):
 
 
 def test_run_empty_dir(tmp_path):
-    from cctx.diagnostician.aggregate import run
+    from cctx.aggregate import run
 
     start, end = _now_and_window(7)
     assert run(tmp_path, start, end) == []

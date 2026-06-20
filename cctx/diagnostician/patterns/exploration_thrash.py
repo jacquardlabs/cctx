@@ -78,7 +78,7 @@ def _tool_key(tool_name: str, tool_input: dict) -> str:
             return json.dumps(tool_input, sort_keys=True)
 
 
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
+def classify(trace: SessionTrace) -> list[Finding]:
     # Only look at assistant turns with tool calls
     active_turns = [
         t for t in trace.turns
@@ -185,8 +185,3 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     )]
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []

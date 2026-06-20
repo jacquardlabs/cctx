@@ -63,7 +63,7 @@ def _detect_cause(trace: SessionTrace, assistant_turns: list[Turn]) -> str | Non
     return None
 
 
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
+def classify(trace: SessionTrace) -> list[Finding]:
     assistant_turns = [t for t in trace.turns if t.role == "assistant" and t.usage]
     if not assistant_turns:
         return []
@@ -118,8 +118,3 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     ]
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []

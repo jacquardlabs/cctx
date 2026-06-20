@@ -41,14 +41,9 @@ def _matches(text: str) -> list[str]:
     return found
 
 
+
+
 def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []
-
-
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
     phrases_found: list[dict] = []
 
     for turn in trace.turns:

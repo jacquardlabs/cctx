@@ -64,7 +64,7 @@ cctx/
 │   ├── __init__.py     # public: run(trace) -> Diagnosis. Wires the 10 single-session
 │   │                   # classifiers + per-subagent cost attribution.
 │   ├── inflection.py   # detect the turn where the session diverged
-│   ├── patterns/
+│   └── patterns/
 │   │   ├── retry_loop.py
 │   │   ├── scope_creep.py
 │   │   ├── stale_context.py
@@ -76,15 +76,20 @@ cctx/
 │   │   ├── exploration_thrash.py # read-heavy circling without progress
 │   │   ├── unused_context.py     # MCP servers loaded but never called
 │   │   └── project_specific.py   # cross-session only -> PROJECT_PATTERN
-│   └── aggregate.py    # cross-session pattern aggregator (--since mode)
+├── aggregate.py        # SHIPPED. Cross-session pipeline ORCHESTRATOR (--since mode):
+│                       # globs sessions, runs parse -> tokenize -> diagnostician.run
+│                       # per session. Lives at top level — it orchestrates, not analyses.
 ├── recommender/
 │   ├── claude_md.py    # Finding -> Patch (CLAUDE.md diff proposals)
 │   └── evidence.py     # session-count + dollar evidence accumulation; efficacy()
 │                       # before/after bucketing for harvest --efficacy.
 ├── harvest.py          # SHIPPED. apply_patch, preview_patches, apply_patches, check_claude_md —
 │                       # append-only, idempotent patching with fingerprint-based deduplication.
-│                       # v2: patches route to any .md target (rules/, skills/).
-│                       # Cross-agent emit (--emit/--sync) to AGENTS.md; managed_heading_dates.
+│                       # v2: patches route to any .md target (rules/, skills/). Patch-apply
+│                       # core + the harvest --check audit only.
+├── emit.py             # SHIPPED. Cross-agent emit (harvest --emit/--sync): EMIT_TARGETS,
+│                       # retarget_patches, sync_managed_sections, managed_heading_dates.
+│                       # Imports harvest's apply core — never the reverse.
 ├── hook_installer.py   # SHIPPED (v1.11.0). cctx init — install/remove SessionEnd hook.
 ├── agents.py           # SHIPPED (v1.5.0). live_sessions() via `claude agents --json`.
 ├── discovery.py        # SHIPPED. list_projects(), latest_session() — navigate ~/.claude/projects/
@@ -107,7 +112,8 @@ These keep the dependency graph clean so modules stay independently testable and
 
 - **Parsers never import the tokenizer, the anthropic SDK, or any analyzer.** A parser takes a path and returns a `SessionTrace` with `token_count: int = 0` placeholders.
 - **Tokenizer is the only module that imports `anthropic`.** Everyone else gets token counts pre-populated on the dataclasses.
-- **Analyzers (diagnostician, recommender, aggregate) never import each other across boundary lines.** Inside the diagnostician package, helpers can compose freely. The recommender takes a Diagnosis and emits Patches without reaching back into the diagnostician's internals.
+- **Analyzers (diagnostician, recommender) never import each other across boundary lines.** Inside the diagnostician package, helpers can compose freely. The recommender takes a Diagnosis and emits Patches without reaching back into the diagnostician's internals.
+- **`aggregate.py` is the cross-session pipeline orchestrator, not an analyzer.** It sits above the analyzers — it may call parser, tokenizer, and `diagnostician.run` to drive the per-session pipeline. It lives at the top level (`cctx/aggregate.py`), not inside `diagnostician/`. Likewise `emit.py` is the cross-agent emit layer that imports `harvest`'s patch-apply core — never the reverse.
 - **Renderers never compute analysis.** They take an analyzer's output and render it. Swapping `terminal.py` for `report.py` should not change a single number or finding.
 - **Only `cli.py` imports `click` and `rich_click`.** Everything else uses plain `rich.Console` if it needs to output. Analyzers and parsers return data; the CLI decides how to display it.
 - **Source-format detection lives in `cli._detect_source()`.** When adding a parser (e.g. a third trace format), add a branch there. Each parser still returns a `SessionTrace`, so nothing downstream of the parser changes.
