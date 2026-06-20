@@ -702,3 +702,37 @@ def test_autopsy_since_two_sessions_no_project_pattern(runner, tmp_path):
     )
     assert result.exit_code == 0
     assert "Project-specific patterns" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# _complete_project — shell completion moved from discovery.py to cli.py (#134)
+# ---------------------------------------------------------------------------
+
+
+def test_complete_project_filters_by_incomplete(monkeypatch):
+    from pathlib import Path
+
+    from cctx import discovery
+    from cctx.cli import _complete_project
+    from cctx.discovery import ProjectInfo
+
+    projects = [
+        ProjectInfo(project_dir=Path("/x/-a-cctx"), display_name="~/Projects/cctx", sessions=[]),
+        ProjectInfo(project_dir=Path("/x/-a-other"), display_name="~/Projects/other", sessions=[]),
+    ]
+    monkeypatch.setattr(discovery, "list_projects", lambda: projects)
+
+    values = [item.value for item in _complete_project(None, None, "cctx")]
+    assert any("cctx" in v for v in values)
+    assert all("other" not in v for v in values)
+
+
+def test_complete_project_returns_empty_on_error(monkeypatch):
+    from cctx import discovery
+    from cctx.cli import _complete_project
+
+    def boom():
+        raise RuntimeError("no projects dir")
+
+    monkeypatch.setattr(discovery, "list_projects", boom)
+    assert _complete_project(None, None, "x") == []

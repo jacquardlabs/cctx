@@ -398,3 +398,51 @@ def test_harvest_panel_title_uses_kind_label():
     output = _render_harvest([result])
     assert "RETRY LOOP" in output
     assert "retry_loop" not in output
+
+
+# ---------------------------------------------------------------------------
+# render_check_results — harvest --check output (#135, moved from cli.py)
+# ---------------------------------------------------------------------------
+
+
+def _make_check_finding(issue_str="dead_file_ref", sev_str="high", heading="## Setup"):
+    from cctx.harvest import CheckFinding, CheckIssue, CheckSeverity
+
+    issue_map = {
+        "dead_file_ref":  CheckIssue.DEAD_FILE_REF,
+        "empty_section":  CheckIssue.EMPTY_SECTION,
+        "contradiction":  CheckIssue.CONTRADICTION,
+    }
+    sev_map = {"high": CheckSeverity.HIGH, "medium": CheckSeverity.MEDIUM, "low": CheckSeverity.LOW}
+    return CheckFinding(
+        heading=heading,
+        issue=issue_map[issue_str],
+        severity=sev_map[sev_str],
+        detail="references missing.py",
+    )
+
+
+def _render_check(findings):
+    from pathlib import Path
+
+    from rich.console import Console
+
+    from cctx.renderers.terminal import render_check_results
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, highlight=False, markup=False)
+    render_check_results(findings, Path("/tmp/proj"), console=console)
+    return buf.getvalue()
+
+
+def test_render_check_results_clean_when_no_findings():
+    output = _render_check([])
+    assert "clean" in output.lower()
+
+
+def test_render_check_results_shows_finding_details():
+    output = _render_check([_make_check_finding("dead_file_ref", "high")])
+    assert "## Setup" in output
+    assert "dead file reference" in output
+    assert "references missing.py" in output
+    assert "HIGH" in output

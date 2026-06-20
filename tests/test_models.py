@@ -1,4 +1,4 @@
-"""Tests for cctx/models.py — dataclass construction and group_into_exchanges()."""
+"""Tests for cctx/models.py — dataclass construction, verdict/kind_summary, health grade."""
 
 from __future__ import annotations
 
@@ -372,107 +372,6 @@ def test_session_trace_nullable_times():
     assert st.start_time is None
     assert st.end_time is None
     assert st.primary_model is None
-
-
-# ---------------------------------------------------------------------------
-# group_into_exchanges
-# ---------------------------------------------------------------------------
-
-
-def _make_turn(turn_number: int, role: str, uuid: str | None = None):
-    """Build a minimal Turn for exchange-grouping tests."""
-    from cctx.models import Turn
-
-    return Turn(
-        turn_number=turn_number,
-        uuid=uuid or f"uuid-{turn_number}",
-        parent_uuid=None,
-        role=role,
-        text="",
-        thinking="",
-        tool_uses=[],
-        tool_results=[],
-        usage=None,
-        model=None,
-        stop_reason=None,
-        timestamp=_utcnow(),
-        duration_ms=None,
-    )
-
-
-def test_group_into_exchanges_empty():
-    from cctx.models import group_into_exchanges
-
-    result = group_into_exchanges([])
-    assert result == []
-
-
-def test_group_into_exchanges_one_user_one_assistant():
-    from cctx.models import group_into_exchanges
-
-    turns = [
-        _make_turn(1, "user"),
-        _make_turn(2, "assistant"),
-    ]
-    result = group_into_exchanges(turns)
-    assert len(result) == 1
-    assert len(result[0]) == 2
-    assert result[0][0].role == "user"
-    assert result[0][1].role == "assistant"
-
-
-def test_group_into_exchanges_multiple():
-    from cctx.models import group_into_exchanges
-
-    turns = [
-        _make_turn(1, "user"),
-        _make_turn(2, "assistant"),
-        _make_turn(3, "tool_result"),
-        _make_turn(4, "assistant"),
-        _make_turn(5, "user"),
-        _make_turn(6, "assistant"),
-    ]
-    result = group_into_exchanges(turns)
-    # Exchange 1: turns 1-2 (user + assistant)
-    # Exchange 2: turns 3-4 (tool_result + assistant)
-    # Exchange 3: turns 5-6 (user + assistant)
-    assert [[t.turn_number for t in ex] for ex in result] == [[1, 2], [3, 4], [5, 6]]
-
-
-def test_group_into_exchanges_tool_result_starts_new_exchange():
-    """A tool_result turn opens a new exchange, like a user turn does."""
-    from cctx.models import group_into_exchanges
-
-    turns = [
-        _make_turn(1, "user"),
-        _make_turn(2, "assistant"),
-        _make_turn(3, "tool_result"),
-        _make_turn(4, "assistant"),
-    ]
-    result = group_into_exchanges(turns)
-    assert len(result) == 2
-    assert [t.turn_number for t in result[0]] == [1, 2]
-    assert [t.turn_number for t in result[1]] == [3, 4]
-
-
-def test_group_into_exchanges_leading_non_user_turns():
-    """Turns before the first user turn land in their own group."""
-    from cctx.models import group_into_exchanges
-
-    turns = [
-        _make_turn(1, "system"),
-        _make_turn(2, "user"),
-        _make_turn(3, "assistant"),
-    ]
-    result = group_into_exchanges(turns)
-    # Leading system turn gets its own exchange (or is included in the first)
-    # The key invariant: we get at least 2 groups or the system turn is bundled.
-    # Either behavior is acceptable but must be consistent.
-    # We test what we implement: leading non-user = own group.
-    # Total groups: at least 1
-    assert len(result) >= 1
-    all_turns = [t for group in result for t in group]
-    assert len(all_turns) == 3
 
 
 # ---------------------------------------------------------------------------

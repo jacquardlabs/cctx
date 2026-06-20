@@ -6,7 +6,6 @@ Public API:
     list_projects(base) -> list[ProjectInfo]
     list_sessions(project_dir) -> list[SessionMeta]
     latest_session(project_dir) -> Path | None
-    complete_project(ctx, param, incomplete) -> list[CompletionItem]
 """
 from __future__ import annotations
 
@@ -163,23 +162,3 @@ def latest_session(project_dir: Path) -> Path | None:
     """Return the path of the most recent session JSONL in a project dir."""
     sessions = list_sessions(project_dir)
     return sessions[0].path if sessions else None
-
-
-def complete_project(ctx: object, param: object, incomplete: str) -> list[object]:
-    """Click shell_complete callback — returns local project paths matching incomplete."""
-    from click.shell_completion import CompletionItem
-
-    try:
-        projects = list_projects()
-    except Exception:
-        return []
-
-    home = str(Path.home())
-    results = []
-    for p in projects:
-        actual = p.display_name.replace("~", home)
-        if incomplete.lower() in actual.lower():
-            results.append(
-                CompletionItem(actual, help=f"{p.session_count} session(s)")
-            )
-    return results
