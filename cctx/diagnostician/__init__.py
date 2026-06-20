@@ -18,6 +18,7 @@ from cctx.diagnostician.patterns import (
     cache_hygiene,
     compaction,
     dead_end,
+    exploration_thrash,
     fan_out,
     retry_loop,
     scope_creep,
@@ -156,6 +157,7 @@ def run(trace: SessionTrace) -> Diagnosis:
         *fan_out.classify(trace),
         *cache_hygiene.classify(trace),
         *compaction.classify(trace),
+        *exploration_thrash.classify(trace),
     ]
     findings.sort(key=lambda f: f.first_turn)
 
