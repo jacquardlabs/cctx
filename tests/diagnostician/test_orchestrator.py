@@ -60,6 +60,25 @@ def test_retry_loop_finding_present():
     assert FindingKind.RETRY_LOOP in kinds
 
 
+def test_run_isolates_a_failing_classifier(monkeypatch):
+    """A classifier that raises must not crash run(); other findings survive (#137).
+
+    Patches unused_context, which has no internal try/except — so the isolation
+    can only come from the orchestrator's _safe_classify wrapper.
+    """
+    from cctx import diagnostician
+    from cctx.diagnostician.patterns import unused_context
+    from cctx.models import FindingKind
+
+    def boom(trace):
+        raise RuntimeError("classifier exploded")
+
+    monkeypatch.setattr(unused_context, "classify", boom)
+
+    diagnosis = diagnostician.run(_retry_trace())  # must not raise
+    assert FindingKind.RETRY_LOOP in [f.kind for f in diagnosis.findings]
+
+
 def test_inflection_turn_set_to_min_first_turn():
     from cctx import diagnostician
 

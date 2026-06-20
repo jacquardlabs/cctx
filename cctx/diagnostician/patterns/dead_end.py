@@ -48,7 +48,7 @@ def _is_error(result: ToolResult) -> bool:
     return c.startswith("Error:") or c.startswith("error:") or c.startswith("FAILED")
 
 
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
+def classify(trace: SessionTrace) -> list[Finding]:
     # Build tool_use_id → ToolResult map
     result_map: dict[str, ToolResult] = {}
     for turn in trace.turns:
@@ -138,8 +138,3 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     )]
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []

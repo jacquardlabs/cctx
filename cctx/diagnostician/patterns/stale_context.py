@@ -39,7 +39,7 @@ def _is_compaction(turn: Turn) -> bool:
     return is_compaction_turn(turn)
 
 
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
+def classify(trace: SessionTrace) -> list[Finding]:
     # Identify large tool results and their first_seen_turn
     candidates: list[dict] = []  # {uid, tool_name, content, tokens, first_seen_turn}
 
@@ -142,8 +142,3 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     )]
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []

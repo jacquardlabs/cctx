@@ -39,7 +39,7 @@ def _is_error(result: ToolResult) -> bool:
     )
 
 
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
+def classify(trace: SessionTrace) -> list[Finding]:
     # Build tool_use_id → (ToolResult, turn_number) map
     result_map: dict[str, tuple[ToolResult, int]] = {}
     for turn in trace.turns:
@@ -138,8 +138,3 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     )]
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []

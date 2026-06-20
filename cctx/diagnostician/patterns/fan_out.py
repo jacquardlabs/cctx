@@ -145,7 +145,7 @@ def _signal_retry(
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
+def classify(trace: SessionTrace) -> list[Finding]:
     # Collect Agent ToolUse in turn order
     agent_calls: list[tuple[int, ToolUse]] = []
     result_map: dict[str, tuple[bool, str]] = {}
@@ -168,8 +168,3 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     return findings
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []

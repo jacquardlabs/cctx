@@ -44,7 +44,7 @@ def _canon_key(tool_name: str, tool_input: dict) -> str:
             return f"{tool_name}:{json.dumps(tool_input, sort_keys=True)}"
 
 
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
+def classify(trace: SessionTrace) -> list[Finding]:
     # Collect (turn_number, tool_name, canon_key) for every tool call
     calls: list[tuple[int, str, str]] = []
     for turn in trace.turns:
@@ -113,8 +113,3 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     )]
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []

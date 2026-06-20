@@ -21,11 +21,10 @@ from typing import IO
 
 import rich_click as click
 
-from cctx import diagnostician
+from cctx import aggregate, diagnostician
 from cctx.agents import live_sessions as _live_sessions
-from cctx.diagnostician import aggregate
 from cctx.diagnostician.patterns import project_specific
-from cctx.harvest import EMIT_TARGETS
+from cctx.emit import EMIT_TARGETS
 from cctx.models import KIND_LABEL, AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
@@ -803,12 +802,11 @@ def harvest(
     efficacy_mode: bool,
 ) -> None:
     """Apply autopsy patches to CLAUDE.md."""
+    from cctx.emit import retarget_patches, sync_managed_sections
     from cctx.harvest import (
         apply_patches,
         check_claude_md,
         preview_patches,
-        retarget_patches,
-        sync_managed_sections,
     )
 
     if sync_mode and not emit_targets:
@@ -820,7 +818,7 @@ def harvest(
                 "--efficacy requires a project directory, not a .jsonl file."
             )
         resolved_dir = target_dir or Path.cwd()
-        from cctx.harvest import managed_heading_dates
+        from cctx.emit import managed_heading_dates
         from cctx.recommender.evidence import efficacy as _run_efficacy
         start = datetime(2020, 1, 1, tzinfo=UTC)
         end   = datetime(2035, 1, 1, tzinfo=UTC)

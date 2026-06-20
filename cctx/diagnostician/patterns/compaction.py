@@ -25,7 +25,7 @@ def is_compaction_turn(turn: Turn) -> bool:
     return turn.text.startswith("<context_window")
 
 
-def _classify_impl(trace: SessionTrace) -> list[Finding]:
+def classify(trace: SessionTrace) -> list[Finding]:
     compaction_turns = [t for t in trace.turns if is_compaction_turn(t)]
     if not compaction_turns:
         return []
@@ -107,8 +107,3 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
     )]
 
 
-def classify(trace: SessionTrace) -> list[Finding]:
-    try:
-        return _classify_impl(trace)
-    except Exception:
-        return []
