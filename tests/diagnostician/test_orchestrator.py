@@ -60,6 +60,47 @@ def test_retry_loop_finding_present():
     assert FindingKind.RETRY_LOOP in kinds
 
 
+def test_compute_own_cost_bills_output_and_split_cache():
+    """Output tokens are billed; 5m/1h cache writes use distinct multipliers (#120)."""
+    import dataclasses
+
+    from cctx.diagnostician import _compute_own_cost
+    from cctx.models import Usage
+
+    usage = Usage(
+        input_tokens=1_000_000,
+        output_tokens=1_000_000,
+        cache_creation_5m=1_000_000,
+        cache_creation_1h=1_000_000,
+        cache_read=1_000_000,
+        service_tier=None,
+    )
+    turn = dataclasses.replace(make_assistant_turn(1, text="x"), usage=usage)
+    trace = make_trace([turn], model="claude-sonnet-4-6")
+
+    cost = _compute_own_cost(trace, "claude-sonnet-4-6")
+    # sonnet $3 in / $15 out; cache 5m 1.25x, 1h 2.0x, read 0.1x of $3:
+    # 3 + 15 + 3*1.25 + 3*2.0 + 3*0.1 = 28.05
+    assert cost == 28.05
+
+
+def test_run_records_unknown_models():
+    """A non-None model priced at default is recorded — the 'new model' signal (#120)."""
+    from cctx import diagnostician
+
+    trace = make_trace([make_assistant_turn(1, text="x")], model="gpt-6-preview")
+    diag = diagnostician.run(trace)
+    assert "gpt-6-preview" in diag.unknown_models
+
+
+def test_run_no_unknown_models_for_known_model():
+    from cctx import diagnostician
+
+    trace = make_trace([make_assistant_turn(1, text="x")], model="claude-sonnet-4-6")
+    diag = diagnostician.run(trace)
+    assert diag.unknown_models == []
+
+
 def test_run_isolates_a_failing_classifier(monkeypatch):
     """A classifier that raises must not crash run(); other findings survive (#137).
 

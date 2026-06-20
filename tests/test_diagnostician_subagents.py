@@ -121,8 +121,9 @@ def test_one_subagent_cost_inclusive():
     child = _make_trace("child-1", input_tokens=10_000)
     parent = _make_trace("parent", input_tokens=5_000, subagents=[child])
     diag = run(parent)
-    # parent: 5000 * 3/1e6 = 0.015; child: 10000 * 3/1e6 = 0.030; total = 0.045
-    assert abs(diag.total_cost_usd - 0.045) < 0.001
+    # sonnet $3 in / $15 out, 50 output tok/turn. input: 15000*3/1e6 = 0.045;
+    # output: 2 turns * 50 * 15/1e6 = 0.0015; total = 0.0465
+    assert abs(diag.total_cost_usd - 0.0465) < 0.001
     assert len(diag.subagent_costs) == 1
     assert diag.subagent_costs[0].session_id == "child-1"
 
@@ -134,8 +135,8 @@ def test_nested_subagents_cost_inclusive():
     child = _make_trace("child", input_tokens=10_000, subagents=[grandchild])
     parent = _make_trace("parent", input_tokens=5_000, subagents=[child])
     diag = run(parent)
-    # 5000 + 10000 + 5000 = 20000 tokens * 3/1e6 = 0.060
-    assert abs(diag.total_cost_usd - 0.060) < 0.001
+    # input: 20000 * 3/1e6 = 0.060; output: 3 turns * 50 * 15/1e6 = 0.00225; total = 0.06225
+    assert abs(diag.total_cost_usd - 0.06225) < 0.001
     assert len(diag.subagent_costs) == 2
 
 
@@ -198,7 +199,8 @@ def test_subagent_cost_no_double_count():
     child2 = _make_trace("c2", input_tokens=20_000)
     parent = _make_trace("parent", input_tokens=5_000, subagents=[child1, child2])
     diag = run(parent)
-    expected = (5_000 + 10_000 + 20_000) * 3 / 1_000_000
+    # input: 35000 * 3/1e6 = 0.105; output: 3 turns * 50 * 15/1e6 = 0.00225
+    expected = (5_000 + 10_000 + 20_000) * 3 / 1_000_000 + 3 * 50 * 15 / 1_000_000
     assert abs(diag.total_cost_usd - expected) < 0.001
     assert len(diag.subagent_costs) == 2
 

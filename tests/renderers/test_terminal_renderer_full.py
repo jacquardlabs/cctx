@@ -365,6 +365,25 @@ def test_render_diagnosis_clean_session_verdict():
     assert "Clean session" in output
 
 
+def test_render_diagnosis_disclaimer_shows_prices_as_of():
+    """The cost disclaimer surfaces the pricing freshness date (#120)."""
+    from cctx.pricing import PRICING_LAST_VERIFIED
+
+    output = _render_diagnosis(_make_diagnosis([]))
+    assert "prices as of" in output
+    assert str(PRICING_LAST_VERIFIED) in output
+
+
+def test_render_diagnosis_warns_on_unknown_model():
+    """An unrecognized model priced at default is flagged in output (#120)."""
+    import dataclasses
+
+    diag = dataclasses.replace(_make_diagnosis([]), unknown_models=["gpt-6-preview"])
+    output = _render_diagnosis(diag)
+    assert "gpt-6-preview" in output
+    assert "default" in output.lower()
+
+
 def test_render_diagnosis_verdict_is_count_based():
     from cctx.models import FindingKind
 

@@ -50,6 +50,7 @@ def export_diagnosis(
         "patches": patches,
         "turn_count": len(trace.turns),
         "model": trace.primary_model,
+        "unknown_models": diagnosis.unknown_models,
         "subagent_costs": [
             {
                 "session_id": a.session_id,

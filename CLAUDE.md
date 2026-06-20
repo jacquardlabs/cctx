@@ -54,8 +54,10 @@ cctx/
 │   └── otel.py         # SHIPPED (v1.12.0). Parse OTLP gen_ai.* spans —
 │                       # OpenAI Agents SDK, LangGraph. Same SessionTrace out.
 ├── tokenizer.py        # SHIPPED. anthropic.count_tokens wrapper; CCTX_OFFLINE heuristic.
-├── pricing.py          # SHIPPED. price_per_tok table; single source of truth for
-│                       # cost computation. Imported by diagnostician, renderers, etc.
+├── pricing.py          # SHIPPED. get_pricing() -> ModelPricing (2D input/output +
+│                       # cache mults) via longest-prefix match; Anthropic + OpenAI.
+│                       # PRICING_LAST_VERIFIED date + freshness tripwire test. Single
+│                       # source of truth for cost; price_per_tok() kept as a shim.
 ├── models.py           # SHIPPED. Turn, ToolUse, ToolResult, Usage, Attachment,
 │                       # RawToolResultFile, SessionTrace, Finding, Patch, Diagnosis,
 │                       # SubagentAttribution, KIND_LABEL, MANAGED_HEADINGS,
