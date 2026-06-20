@@ -1,6 +1,6 @@
 # cctx
 
-Diagnose your Claude Code sessions — find out when they went wrong, why they cost what they did, and what to add to your `CLAUDE.md` so it doesn't happen again.
+Diagnose your Claude Code sessions and OpenTelemetry agent traces — find out when they went wrong, why they cost what they did, and what to add to your `CLAUDE.md` so it doesn't happen again.
 
 [![CI](https://github.com/jacquardlabs/cctx/actions/workflows/ci.yml/badge.svg)](https://github.com/jacquardlabs/cctx/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/cctx-cli)](https://pypi.org/project/cctx-cli/)
@@ -33,6 +33,8 @@ cctx watch                # live signals during an active session
 
 cctx is primarily a forensic tool. You reach for it after a session — when something felt off, when the cost was higher than expected, or on a weekly review pass. `cctx watch` runs during a session and surfaces patterns as they happen. It reads the JSONL logs Claude Code writes to `~/.claude/projects/` and produces findings with attributed cost and copy-pasteable `CLAUDE.md` patches.
 
+cctx also diagnoses OTEL traces from the OpenAI Agents SDK, LangGraph, and any framework that emits `gen_ai.*` semantic convention spans — auto-detected, no flags needed. See [Diagnosing other agent frameworks](docs/quickstart-otel.md).
+
 ## Commands
 
 ### `cctx ls` — list projects and sessions
@@ -56,9 +58,14 @@ cctx autopsy ~/Projects/myapp --since 7
 
 # Write a self-contained HTML report
 cctx autopsy ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --html report.html
+
+# OTEL trace from OpenAI Agents SDK, LangGraph, or any gen_ai.*-instrumented framework
+cctx autopsy agent_trace.jsonl
 ```
 
 Runs three pattern classifiers (retry loop, scope creep, stale context) and prints findings with attributed cost. Use `--since N` to aggregate patterns across multiple sessions in a project.
+
+OTEL traces are auto-detected — cctx sniffs the file format and routes to the right parser. See [docs/quickstart-otel.md](docs/quickstart-otel.md) for how to wire the OTEL exporter in each framework.
 
 ### `cctx harvest` — apply patches to CLAUDE.md
 
