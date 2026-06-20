@@ -1,7 +1,9 @@
 """Shared data model for cctx.
 
-All dataclasses live here. Pure data containers; no behavior except
-the module-level group_into_exchanges() helper.
+All dataclasses live here. Mostly pure data containers, plus a few derived
+helpers that belong with the model rather than a renderer: the
+``Diagnosis.verdict`` / ``Diagnosis.kind_summary`` properties and the
+module-level ``compute_health_grade()`` function.
 
 No imports from: anthropic, click, cctx.parsers, cctx.analyzers,
 cctx.renderers, cctx.exporters, cctx.tokenizer.
@@ -288,6 +290,31 @@ class Diagnosis:
         return " + ".join(KIND_LABEL[k] for k in seen)
 
 
+def compute_health_grade(diagnosis: Diagnosis) -> str:
+    """A–F grade derived from waste fraction and finding severity.
+
+    Analytical logic — lives with the model, not in a renderer, so every
+    surface (terminal, HTML) computes the same grade from one definition.
+    """
+    if not diagnosis.findings:
+        return "A"
+
+    has_high = any(f.severity == Severity.HIGH for f in diagnosis.findings)
+    waste_frac = (
+        diagnosis.waste_cost_usd / diagnosis.total_cost_usd
+        if diagnosis.total_cost_usd > 0
+        else 0.0
+    )
+
+    if has_high and waste_frac > 0.50:
+        return "F"
+    if has_high or waste_frac > 0.25:
+        return "D"
+    if waste_frac > 0.10:
+        return "C"
+    return "B"
+
+
 @dataclass
 class KindEvidence:
     kind:              FindingKind
@@ -367,38 +394,3 @@ class CrossProjectDigest:
     global_patches: list[Patch]
     global_by_kind: dict[FindingKind, KindEvidence]
     global_project_counts: dict[FindingKind, int]  # distinct projects in which each kind appeared
-
-
-# ---------------------------------------------------------------------------
-# Renderer helper
-# ---------------------------------------------------------------------------
-
-
-def group_into_exchanges(turns: list[Turn]) -> list[list[Turn]]:
-    """Group a flat list of turns into render-time exchanges.
-
-    An exchange begins on each ``role == "user"`` or ``role == "tool_result"``
-    turn and includes all subsequent assistant turns until the next
-    user/tool_result turn.
-
-    Leading non-user/tool_result turns (e.g. an initial system notice before
-    the first user message) are gathered into their own exchange at index 0.
-
-    Returns an empty list for empty input.
-    """
-    if not turns:
-        return []
-
-    exchanges: list[list[Turn]] = []
-    current: list[Turn] = []
-
-    for turn in turns:
-        if turn.role in ("user", "tool_result") and current:
-            exchanges.append(current)
-            current = []
-        current.append(turn)
-
-    if current:
-        exchanges.append(current)
-
-    return exchanges

@@ -25,7 +25,6 @@ from cctx import diagnostician
 from cctx.agents import live_sessions as _live_sessions
 from cctx.diagnostician import aggregate
 from cctx.diagnostician.patterns import project_specific
-from cctx.discovery import complete_project as _complete_project
 from cctx.harvest import EMIT_TARGETS
 from cctx.models import KIND_LABEL, AggregateReport
 from cctx.parsers.claude_code import parse_session
@@ -34,6 +33,7 @@ from cctx.recommender import evidence as evidence_mod
 from cctx.renderers.terminal import (
     render_aggregate,
     render_aggregate_drilldown,
+    render_check_results,
     render_diagnosis,
     render_efficacy_report,
     render_harvest_results,
@@ -44,6 +44,30 @@ from cctx.renderers.terminal import (
 from cctx.tokenizer import tokenize_session
 
 UTC = timezone.utc
+
+
+def _complete_project(ctx: object, param: object, incomplete: str) -> list:
+    """Click shell_complete callback — local project paths matching `incomplete`.
+
+    Lives in cli.py (not discovery.py) so only the CLI layer depends on click;
+    discovery.py stays click-free and independently testable.
+    """
+    from click.shell_completion import CompletionItem
+
+    from cctx.discovery import list_projects
+
+    try:
+        projects = list_projects()
+    except Exception:
+        return []
+
+    home = str(Path.home())
+    results = []
+    for p in projects:
+        actual = p.display_name.replace("~", home)
+        if incomplete.lower() in actual.lower():
+            results.append(CompletionItem(actual, help=f"{p.session_count} session(s)"))
+    return results
 
 
 def parse_since(value: str) -> tuple[datetime, datetime, str]:
@@ -146,39 +170,6 @@ def _aggregate_drilldown(report: AggregateReport, diagnoses: list) -> None:
         render_aggregate_drilldown(diagnoses, kinds[idx])
     else:
         click.echo(f"Invalid selection: {val!r}")
-
-
-def _render_check_findings(findings: list, target_dir: Path) -> None:
-    """Print harvest --check results to stdout using rich."""
-    from rich.console import Console
-    from rich.rule import Rule
-
-    from cctx.harvest import CheckIssue, CheckSeverity
-
-    con = Console()
-    claude_md_path = target_dir / "CLAUDE.md"
-    con.print(Rule(f"cctx harvest --check — {claude_md_path}"))
-    if not findings:
-        con.print("✓ CLAUDE.md looks clean — no issues found.")
-        return
-    con.print(f"{len(findings)} issue(s) found:\n")
-    _ISSUE_LABEL = {
-        CheckIssue.DEAD_FILE_REF:    "dead file reference",
-        CheckIssue.DEAD_SKILL_REF:   "dead skill reference",
-        CheckIssue.EMPTY_SECTION:    "empty section",
-        CheckIssue.CONTRADICTION:    "contradiction",
-        CheckIssue.REDUNDANCY:       "redundancy",
-        CheckIssue.STALE_IDENTIFIER: "stale identifier",
-    }
-    _SEV_BADGE = {
-        CheckSeverity.HIGH:   "[HIGH]",
-        CheckSeverity.MEDIUM: "[MED]",
-        CheckSeverity.LOW:    "[LOW]",
-    }
-    for f in findings:
-        badge = _SEV_BADGE.get(f.severity, "      ")
-        label = _ISSUE_LABEL.get(f.issue, f.issue.value)
-        con.print(f"  {badge:<6}  {f.heading}  {label}: {f.detail}")
 
 
 _CLAUDE_CODE_LINE_TYPES = frozenset({
@@ -843,7 +834,7 @@ def harvest(
         from cctx.harvest import CheckSeverity
         resolved_dir = target_dir or Path.cwd()
         findings = check_claude_md(resolved_dir)
-        _render_check_findings(findings, resolved_dir)
+        render_check_results(findings, resolved_dir)
         _SEVERITY_ORDER = {
             CheckSeverity.LOW: 0,
             CheckSeverity.MEDIUM: 1,

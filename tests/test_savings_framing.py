@@ -11,8 +11,15 @@ from datetime import datetime, timezone
 
 import pytest
 
-from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
-from cctx.renderers.terminal import compute_health_grade, render_diagnosis
+from cctx.models import (
+    Confidence,
+    Diagnosis,
+    Finding,
+    FindingKind,
+    Severity,
+    compute_health_grade,
+)
+from cctx.renderers.terminal import render_diagnosis
 
 _TS = datetime(2026, 6, 1, tzinfo=timezone.utc)
 

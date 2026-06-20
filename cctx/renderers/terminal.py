@@ -3,6 +3,7 @@
 render_diagnosis(diagnosis, console=None) -> None
 render_aggregate(report, console=None) -> None
 render_harvest_results(results, dry_run=False, console=None) -> None
+render_check_results(findings, target_dir, console=None) -> None
 render_projects(projects, live_statuses=None, console=None) -> None
 render_sessions(project, live_statuses=None, console=None) -> None
 render_efficacy_report(report, target_dir, project_dir, console=None) -> None
@@ -21,7 +22,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from cctx.models import KIND_LABEL, FindingKind, Severity
+from cctx.models import KIND_LABEL, FindingKind, Severity, compute_health_grade
 
 if TYPE_CHECKING:
     from cctx.discovery import ProjectInfo
@@ -45,34 +46,6 @@ _KIND_LABEL = KIND_LABEL
 
 def _default_console() -> Console:
     return Console()
-
-
-def _wide_console() -> Console:
-    """Console with fixed wide width to prevent table cell wrapping."""
-    return Console(width=200)
-
-
-def compute_health_grade(diagnosis: Diagnosis) -> str:
-    """A–F grade based on waste fraction and finding severity."""
-    if not diagnosis.findings:
-        return "A"
-
-    has_high = any(f.severity == Severity.HIGH for f in diagnosis.findings)
-    waste_frac = (
-        diagnosis.waste_cost_usd / diagnosis.total_cost_usd
-        if diagnosis.total_cost_usd > 0
-        else 0.0
-    )
-
-    if has_high and waste_frac > 0.50:
-        return "F"
-    if has_high or waste_frac > 0.25:
-        return "D"
-    if waste_frac > 0.10:
-        return "C"
-    if diagnosis.findings:
-        return "B"
-    return "A"
 
 
 def render_diagnosis(
@@ -367,6 +340,41 @@ def render_harvest_results(
         con.print("Dry run complete. No changes made.")
     else:
         con.print(f"Applied {applied_count} patch(es).")
+
+
+def render_check_results(
+    findings: list,  # list[CheckFinding] — CheckIssue/CheckSeverity are harvest-internal
+    target_dir: Path,
+    *,
+    console: Console | None = None,
+) -> None:
+    """Render harvest --check results. Rendering only; the analysis is harvest's."""
+    from cctx.harvest import CheckIssue, CheckSeverity
+
+    con = console or _default_console()
+    claude_md_path = target_dir / "CLAUDE.md"
+    con.print(Rule(f"cctx harvest --check — {claude_md_path}"))
+    if not findings:
+        con.print("✓ CLAUDE.md looks clean — no issues found.")
+        return
+    con.print(f"{len(findings)} issue(s) found:\n")
+    issue_label = {
+        CheckIssue.DEAD_FILE_REF:    "dead file reference",
+        CheckIssue.DEAD_SKILL_REF:   "dead skill reference",
+        CheckIssue.EMPTY_SECTION:    "empty section",
+        CheckIssue.CONTRADICTION:    "contradiction",
+        CheckIssue.REDUNDANCY:       "redundancy",
+        CheckIssue.STALE_IDENTIFIER: "stale identifier",
+    }
+    sev_badge = {
+        CheckSeverity.HIGH:   "[HIGH]",
+        CheckSeverity.MEDIUM: "[MED]",
+        CheckSeverity.LOW:    "[LOW]",
+    }
+    for f in findings:
+        badge = sev_badge.get(f.severity, "      ")
+        label = issue_label.get(f.issue, f.issue.value)
+        con.print(f"  {badge:<6}  {f.heading}  {label}: {f.detail}")
 
 
 def render_projects(
