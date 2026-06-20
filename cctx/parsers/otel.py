@@ -251,11 +251,24 @@ def _build_subagents(
     all_spans: list[dict],
     source_path: Path,
     warnings: list[ParserWarning],
+    _visited: set[str] | None = None,
 ) -> list[SessionTrace]:
-    """Build child SessionTraces from child AgentSpans (handoffs + parallel sub-agents)."""
+    """Build child SessionTraces from child AgentSpans, recursing to arbitrary depth.
+
+    Handoff chains and orchestrators nest 3+ agents deep (OpenAI Agents SDK,
+    LangGraph); each child's own child AgentSpans are built recursively so no
+    grandchild is dropped. `_visited` guards against cyclic parent links in
+    malformed span trees.
+    """
     if not root_span:
         return []
+    if _visited is None:
+        _visited = set()
     root_id = root_span.get("spanId", "")
+    if root_id and root_id in _visited:
+        return []
+    if root_id:
+        _visited.add(root_id)
     child_agent_spans = [
         s for s in all_spans
         if s.get("parentSpanId") == root_id
@@ -284,7 +297,7 @@ def _build_subagents(
                 primary_model=_primary_model(child_spans),
                 claude_code_version=None,
                 turns=child_turns,
-                subagents=[],
+                subagents=_build_subagents(child, all_spans, source_path, warnings, _visited),
                 attachments=[],
                 raw_tool_result_files=[],
                 initial_context_tokens=0,

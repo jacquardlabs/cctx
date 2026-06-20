@@ -348,3 +348,48 @@ def test_autopsy_command_accepts_otel_file() -> None:
     )
     assert result.exit_code in (0, 1)
     assert "Traceback" not in (result.output or "")
+
+
+# ---------------------------------------------------------------------------
+# Deep nesting — grandchild AgentSpans (depth > 2) must be parsed (#118)
+# ---------------------------------------------------------------------------
+
+
+def test_deep_nesting_grandchild_present() -> None:
+    """root -> Classifier -> Resolver: the depth-2 grandchild must appear in the tree."""
+    from cctx.parsers.otel import parse_otel_file
+
+    root = parse_otel_file(FIXTURES / "otel_deep.jsonl")[0]
+    assert len(root.subagents) == 1                    # Classifier (depth 1)
+    classifier = root.subagents[0]
+    assert classifier.subagent_meta.get("agent_name") == "Classifier"
+    assert len(classifier.subagents) == 1              # Resolver (depth 2) — was dropped
+    resolver = classifier.subagents[0]
+    assert resolver.subagent_meta.get("agent_name") == "Resolver"
+
+
+def test_deep_nesting_grandchild_turns_and_usage() -> None:
+    """The depth-2 agent's turns and Usage must survive into the grandchild SessionTrace."""
+    from cctx.parsers.otel import parse_otel_file
+
+    root = parse_otel_file(FIXTURES / "otel_deep.jsonl")[0]
+    resolver = root.subagents[0].subagents[0]
+    assert len(resolver.turns) == 1
+    turn = resolver.turns[0]
+    assert turn.usage is not None
+    assert turn.usage.input_tokens == 9999   # distinctive token count from the fixture
+    assert turn.usage.output_tokens == 111
+    assert resolver.primary_model == "gpt-4o"
+
+
+def test_deep_nesting_grandchild_cost_attributed_at_depth_2() -> None:
+    """The recovered depth-2 agent's spend must reach subagent_costs / total_cost."""
+    from cctx import diagnostician
+    from cctx.parsers.otel import parse_otel_file
+    from cctx.tokenizer import tokenize_session
+
+    trace = tokenize_session(parse_otel_file(FIXTURES / "otel_deep.jsonl")[0])
+    diag = diagnostician.run(trace)
+    assert any(a.depth == 2 for a in diag.subagent_costs)  # grandchild attributed
+    # depth-2 turn alone is 9999*$2.50 + 111*$10.00 per M = ~$0.0261 of total
+    assert diag.total_cost_usd > 0.026
