@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from io import StringIO
 
+import pytest
+
+from cctx.models import KIND_LABEL, FindingKind
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -307,3 +311,90 @@ def test_harvest_error_still_renders():
     output = _render_harvest([result])
     # Should render some output without raising
     assert len(output) > 0
+
+
+# ---------------------------------------------------------------------------
+# render_diagnosis — verdict + kind_summary + finding-kind labels
+# ---------------------------------------------------------------------------
+
+
+def _make_finding(kind, *, summary="circling without progress"):
+    from cctx.models import Confidence, Finding, Severity
+
+    return Finding(
+        kind=kind,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=3,
+        last_turn=7,
+        evidence={},
+        cost_usd=0.12,
+        summary=summary,
+    )
+
+
+def _make_diagnosis(findings, *, waste_cost_usd=0.0, patches=None):
+    from datetime import datetime, timezone
+
+    from cctx.models import Diagnosis
+
+    return Diagnosis(
+        session_id="sess-01",
+        findings=findings,
+        inflection_turn=3 if findings else None,
+        patches=patches or [],
+        total_cost_usd=1.00,
+        waste_cost_usd=waste_cost_usd,
+        analysed_at=datetime(2026, 6, 20, 12, 0, tzinfo=timezone.utc),
+    )
+
+
+def _render_diagnosis(diagnosis):
+    from rich.console import Console
+
+    from cctx.renderers.terminal import render_diagnosis
+
+    buf = StringIO()
+    console = Console(file=buf, width=120, highlight=False, markup=False)
+    render_diagnosis(diagnosis, console=console)
+    return buf.getvalue()
+
+
+def test_render_diagnosis_clean_session_verdict():
+    output = _render_diagnosis(_make_diagnosis([]))
+    assert "Clean session" in output
+
+
+def test_render_diagnosis_verdict_is_count_based():
+    from cctx.models import FindingKind
+
+    diag = _make_diagnosis([_make_finding(FindingKind.RETRY_LOOP)], waste_cost_usd=0.42)
+    output = _render_diagnosis(diag)
+    assert "1 finding · $0.42 waste" in output
+
+
+def test_render_diagnosis_shows_kind_summary_secondary_line():
+    from cctx.models import FindingKind
+
+    diag = _make_diagnosis(
+        [_make_finding(FindingKind.RETRY_LOOP), _make_finding(FindingKind.SCOPE_CREEP)],
+        waste_cost_usd=0.50,
+    )
+    output = _render_diagnosis(diag)
+    assert "RETRY LOOP + SCOPE CREEP" in output
+
+
+@pytest.mark.parametrize("kind", list(FindingKind))
+def test_render_diagnosis_every_kind_uses_kind_label(kind):
+    """Every FindingKind must render its KIND_LABEL through render_diagnosis (#143)."""
+    diag = _make_diagnosis([_make_finding(kind)], waste_cost_usd=0.10)
+    output = _render_diagnosis(diag)
+    assert KIND_LABEL[kind] in output
+
+
+def test_harvest_panel_title_uses_kind_label():
+    """Patch panel title must use KIND_LABEL, not the raw finding_kind.value (#136)."""
+    result = _make_apply_result("applied", patch=_make_patch("retry_loop"))
+    output = _render_harvest([result])
+    assert "RETRY LOOP" in output
+    assert "retry_loop" not in output

@@ -664,7 +664,7 @@ def _make_finding_of_kind(kind, first_turn=5):
     )
 
 
-def _make_diag(findings):
+def _make_diag(findings, waste_cost_usd=0.0):
     from cctx.models import Diagnosis
     return Diagnosis(
         session_id="abc",
@@ -672,23 +672,50 @@ def _make_diag(findings):
         inflection_turn=None,
         patches=[],
         total_cost_usd=1.0,
-        waste_cost_usd=0.0,
+        waste_cost_usd=waste_cost_usd,
         analysed_at=_utcnow(),
     )
 
 
+# verdict — count-based headline, canonical across all surfaces (#139)
+
+
 def test_verdict_clean_session():
     d = _make_diag([])
-    assert d.verdict == "clean session"
+    assert d.verdict == "Clean session"
 
 
-def test_verdict_single_finding():
+def test_verdict_single_finding_is_count_based():
+    from cctx.models import FindingKind
+    d = _make_diag([_make_finding_of_kind(FindingKind.RETRY_LOOP)], waste_cost_usd=0.42)
+    assert d.verdict == "1 finding · $0.42 waste"
+
+
+def test_verdict_multiple_findings_is_count_based():
+    from cctx.models import FindingKind
+    findings = [
+        _make_finding_of_kind(FindingKind.SCOPE_CREEP),
+        _make_finding_of_kind(FindingKind.RETRY_LOOP),
+    ]
+    d = _make_diag(findings, waste_cost_usd=0.50)
+    assert d.verdict == "2 findings · $0.50 waste"
+
+
+# kind_summary — secondary kind-based row (#139)
+
+
+def test_kind_summary_clean_session_is_empty():
+    d = _make_diag([])
+    assert d.kind_summary == ""
+
+
+def test_kind_summary_single_finding():
     from cctx.models import FindingKind
     d = _make_diag([_make_finding_of_kind(FindingKind.RETRY_LOOP)])
-    assert d.verdict == "RETRY LOOP"
+    assert d.kind_summary == "RETRY LOOP"
 
 
-def test_verdict_multiple_kinds_deduped_in_order():
+def test_kind_summary_multiple_kinds_deduped_in_order():
     from cctx.models import FindingKind
     findings = [
         _make_finding_of_kind(FindingKind.SCOPE_CREEP),
@@ -696,4 +723,4 @@ def test_verdict_multiple_kinds_deduped_in_order():
         _make_finding_of_kind(FindingKind.SCOPE_CREEP),  # duplicate kind
     ]
     d = _make_diag(findings)
-    assert d.verdict == "SCOPE CREEP + RETRY LOOP"
+    assert d.kind_summary == "SCOPE CREEP + RETRY LOOP"

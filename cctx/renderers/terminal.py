@@ -89,6 +89,8 @@ def render_diagnosis(
     verdict = diagnosis.verdict
     verdict_style = "bold green" if not diagnosis.findings else "bold red"
     con.print(Text(f"Verdict: {verdict}", style=verdict_style))
+    if diagnosis.findings:
+        con.print(Text(diagnosis.kind_summary, style="dim"))
     subagent_sum = sum(a.total_cost_usd for a in diagnosis.subagent_costs if a.depth == 1)
     n_sub = len([a for a in diagnosis.subagent_costs if a.depth == 1])
     cost_line = f"Session cost: ~${diagnosis.total_cost_usd:.2f}"
@@ -345,7 +347,10 @@ def render_harvest_results(
             title_style = "red"
         else:
             title_style = "dim"
-        title = f"Patch {i} of {total} — {result.patch.finding_kind.value}"
+        kind_label = _KIND_LABEL.get(
+            result.patch.finding_kind, result.patch.finding_kind.value.upper()
+        )
+        title = f"Patch {i} of {total} — {kind_label}"
         syntax = Syntax(result.patch.unified_diff, "diff", theme="monokai", word_wrap=True)
         panel = Panel(
             syntax,

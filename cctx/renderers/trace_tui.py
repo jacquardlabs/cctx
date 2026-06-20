@@ -3,6 +3,8 @@
 Public API:
     affected_turns(finding, trace) -> frozenset[int]
     verdict(diagnosis) -> str
+    finding_modal_text(findings) -> str
+    flags_label(findings) -> str
     launch(trace, diagnosis) -> None
 
 Internal:
@@ -16,7 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cctx.models import FindingKind
+from cctx.models import KIND_LABEL, FindingKind
 
 if TYPE_CHECKING:
     from cctx.models import Diagnosis, Finding, SessionTrace, Turn
@@ -50,12 +52,28 @@ def affected_turns(finding: Finding, trace: SessionTrace) -> frozenset[int]:
 
 
 def verdict(diagnosis: Diagnosis) -> str:
-    """One-line human summary: 'Clean session' or '{n} finding(s) · ${waste:.2f} waste'."""
-    if not diagnosis.findings:
-        return "Clean session"
-    n = len(diagnosis.findings)
-    label = "finding" if n == 1 else "findings"
-    return f"{n} {label} · ${diagnosis.waste_cost_usd:.2f} waste"
+    """Canonical one-line headline. Delegates to Diagnosis.verdict (single source)."""
+    return diagnosis.verdict
+
+
+def finding_modal_text(findings: list[Finding]) -> str:
+    """Body text for the FindingModal — one block per finding, KIND_LABEL headed."""
+    lines: list[str] = []
+    for f in findings:
+        label = KIND_LABEL.get(f.kind, f.kind.value.upper())
+        lines.append(
+            f"[bold]{label}[/]  severity={f.severity.value}  confidence={f.confidence.value}"
+        )
+        lines.append(f"  {f.summary}")
+        if f.cost_usd is not None:
+            lines.append(f"  cost: ${f.cost_usd:.4f}")
+        lines.append("")
+    return "\n".join(lines).rstrip() or "No findings."
+
+
+def flags_label(findings: list[Finding]) -> str:
+    """Comma-joined KIND_LABELs for the trace table Flags column."""
+    return ", ".join(KIND_LABEL.get(f.kind, f.kind.value.upper()) for f in findings)
 
 
 def _build_flagged_index(findings: list[Finding], trace: SessionTrace) -> dict[int, list[Finding]]:
@@ -109,17 +127,7 @@ def launch(trace: SessionTrace, diagnosis: Diagnosis) -> None:  # noqa: C901
             self._findings = findings
 
         def compose(self) -> ComposeResult:
-            lines: list[str] = []
-            for f in self._findings:
-                lines.append(
-                    f"[bold]{f.kind.value}[/]  severity={f.severity.value}"
-                    f"  confidence={f.confidence.value}"
-                )
-                lines.append(f"  {f.summary}")
-                if f.cost_usd is not None:
-                    lines.append(f"  cost: ${f.cost_usd:.4f}")
-                lines.append("")
-            text = "\n".join(lines).rstrip() or "No findings."
+            text = finding_modal_text(self._findings)
             with ScrollableContainer():
                 yield Label(text, markup=True)
 
@@ -249,7 +257,7 @@ def launch(trace: SessionTrace, diagnosis: Diagnosis) -> None:  # noqa: C901
                 else:
                     tokens = ""
                 model = t.model or ""
-                flags = ", ".join(f.kind.value for f in findings)
+                flags = flags_label(findings)
 
                 if is_flagged:
                     cells = [

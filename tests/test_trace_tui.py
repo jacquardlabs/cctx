@@ -220,6 +220,58 @@ def test_verdict_zero_waste():
     assert "0.00" in result
 
 
+def test_verdict_delegates_to_diagnosis_verdict():
+    """trace_tui.verdict() must be the canonical Diagnosis.verdict (single source)."""
+    from cctx.renderers.trace_tui import verdict
+
+    f = _make_finding(1, last_turn=3, waste=0.42)
+    diag = _make_diagnosis([f], waste_cost_usd=0.42)
+    assert verdict(diag) == diag.verdict
+
+
+# ---------------------------------------------------------------------------
+# finding_modal_text / flags_label — KIND_LABEL, never the raw enum (#136)
+# ---------------------------------------------------------------------------
+
+
+def _finding_of_kind(kind):
+    from cctx.models import Confidence, Finding, Severity
+
+    return Finding(
+        kind=kind,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=1,
+        last_turn=2,
+        evidence={},
+        cost_usd=0.01,
+        summary="circling",
+    )
+
+
+def test_finding_modal_text_uses_kind_label():
+    from cctx.models import FindingKind
+    from cctx.renderers.trace_tui import finding_modal_text
+
+    text = finding_modal_text([_finding_of_kind(FindingKind.EXPLORATION_THRASH)])
+    assert "EXPLORATION THRASH" in text
+    assert "exploration_thrash" not in text
+
+
+def test_finding_modal_text_empty():
+    from cctx.renderers.trace_tui import finding_modal_text
+
+    assert finding_modal_text([]) == "No findings."
+
+
+def test_flags_label_uses_kind_label():
+    from cctx.models import FindingKind
+    from cctx.renderers.trace_tui import flags_label
+
+    label = flags_label([_finding_of_kind(FindingKind.FANOUT_WASTE)])
+    assert label == "FANOUT WASTE"
+
+
 # ---------------------------------------------------------------------------
 # _build_flagged_index
 # ---------------------------------------------------------------------------

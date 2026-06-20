@@ -4,6 +4,9 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
+import pytest
+
+from cctx.models import KIND_LABEL, FindingKind
 from tests.diagnostician.conftest import (
     make_assistant_turn,
     make_trace,
@@ -134,6 +137,46 @@ def test_finding_kind_badge_shown():
     diag = _make_diagnosis([_make_finding("retry_loop")])
     html = _render(diag)
     assert "RETRY LOOP" in html
+
+
+def _finding_of_kind(kind):
+    from cctx.models import Confidence, Finding, Severity
+
+    return Finding(
+        kind=kind,
+        severity=Severity.MEDIUM,
+        confidence=Confidence.MEDIUM,
+        first_turn=1,
+        last_turn=2,
+        evidence={},
+        cost_usd=0.01,
+        summary=f"{kind.value} finding",
+    )
+
+
+@pytest.mark.parametrize("kind", list(FindingKind))
+def test_every_finding_kind_has_styled_badge(kind):
+    """Every FindingKind must render its badge AND have a CSS rule to style it (#128).
+
+    Without the CSS rule the badge renders as invisible text on the dark report
+    background — the bug that shipped for 8 of 11 kinds.
+    """
+    html = _render(_make_diagnosis([_finding_of_kind(kind)]))
+    assert f"badge kind-{kind.value}" in html  # element rendered
+    assert f".badge.kind-{kind.value}" in html  # CSS rule present
+
+
+@pytest.mark.parametrize("kind", list(FindingKind))
+def test_every_finding_kind_renders_canonical_label(kind):
+    """Badge text is the canonical KIND_LABEL for every kind (#128)."""
+    html = _render(_make_diagnosis([_finding_of_kind(kind)]))
+    assert KIND_LABEL[kind] in html
+
+
+def test_verdict_is_count_based():
+    diag = _make_diagnosis([_make_finding("retry_loop")])
+    html = _render(diag)
+    assert "1 finding · $0.05 waste" in html
 
 
 def test_finding_summary_shown():

@@ -272,8 +272,18 @@ class Diagnosis:
 
     @property
     def verdict(self) -> str:
+        """Canonical count-based headline, identical across every surface (#139)."""
         if not self.findings:
-            return "clean session"
+            return "Clean session"
+        n = len(self.findings)
+        noun = "finding" if n == 1 else "findings"
+        return f"{n} {noun} · ${self.waste_cost_usd:.2f} waste"
+
+    @property
+    def kind_summary(self) -> str:
+        """Secondary kind-based row, e.g. 'RETRY LOOP + SCOPE CREEP'. Empty when clean."""
+        if not self.findings:
+            return ""
         seen = dict.fromkeys(f.kind for f in self.findings)
         return " + ".join(KIND_LABEL[k] for k in seen)
 

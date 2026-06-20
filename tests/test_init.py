@@ -320,4 +320,6 @@ def test_autopsy_quiet_with_findings_emits_verdict(runner, tmp_path, monkeypatch
     result = runner.invoke(cli, ["autopsy", str(session), "--quiet"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "finding" in result.output.lower()
-    assert "retry_loop" in result.output.lower()
+    # Canonical KIND_LABEL, never the raw enum value (#136)
+    assert "RETRY LOOP" in result.output
+    assert "retry_loop" not in result.output

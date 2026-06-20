@@ -39,24 +39,20 @@ Canonical display form is space-separated uppercase. Never use the raw enum valu
 | `exploration_thrash` | `EXPLORATION THRASH` |
 | `unused_context` | `UNUSED CONTEXT` |
 
-The `KIND_LABEL` dict in **`cctx/models.py`** is the single source of truth (`terminal.py` imports it as `_KIND_LABEL = KIND_LABEL`). Always import it and key by the `FindingKind` enum member.
-
-Two surfaces currently diverge from this and are tracked as bugs:
-- `renderers/github.py` defines a local 5-entry `_KIND_LABEL` keyed by `.value` string and falls back to the raw enum value for 6 kinds (tracked in #129).
-- The HTML template uses `.replace("_", " ").upper()` inline — equivalent for today's all-underscore kinds, but will diverge if a future kind uses a non-underscore separator, and lacks per-kind badge CSS for 8 kinds (tracked in #128).
+The `KIND_LABEL` dict in **`cctx/models.py`** is the single source of truth. Every user-facing surface imports it and keys by the `FindingKind` enum member: `terminal.py` (findings list + patch-panel title), `github.py`, `cli.py` (`--quiet`), and `trace_tui.py` (`finding_modal_text`/`flags_label`). As of M22 there are no local kind-label dicts in any renderer. The HTML template carries one explicit `.badge.kind-<value>` CSS rule per `FindingKind`; the badge *text* still uses the inline `.replace("_", " ").upper()` transform, which is equivalent to `KIND_LABEL` for today's all-underscore enum values.
 
 ## Verdict string
 
-Two formats are live, and the surfaces currently disagree:
+The canonical headline is **count-based** and comes from a single source — the
+`Diagnosis.verdict` property in `models.py`. Every surface renders it identically:
 
-| Format | Source | Surfaces |
-|---|---|---|
-| Kind-based: `"RETRY LOOP + SCOPE CREEP"` | `Diagnosis.verdict` (`models.py`) | Terminal |
-| Count-based: `"{n} finding(s) · ${waste:.2f} waste"` | `renderers/trace_tui.py:verdict()`, HTML template | TUI, HTML report |
+| State | `Diagnosis.verdict` |
+|---|---|
+| No findings | `"Clean session"` |
+| With findings | `"{n} finding(s) · ${waste:.2f} waste"` (e.g. `"2 findings · $0.34 waste"`) |
 
-The clean-session string also diverges: `Diagnosis.verdict` returns lowercase `"clean session"` (terminal inherits it), while the TUI and HTML hard-code `"Clean session"`. The capitalized form is canonical (tracked in #138).
-
-**Recommended canonical:** count-based headline (`"{n} finding(s) · ${waste:.2f} waste"`) with kind names rendered as a secondary badge row — it is more scannable and already used by two of three surfaces. Unifying the three surfaces on one format is tracked in #139. Until that lands, document the divergence here rather than pretend it is resolved.
+- `terminal.py`, the HTML template, and `trace_tui.verdict()` all delegate to `Diagnosis.verdict` — no surface recomputes the format.
+- Kind names render as a **secondary row** via the separate `Diagnosis.kind_summary` property (`"RETRY LOOP + SCOPE CREEP"`, deduped and ordered; empty when clean). The terminal prints it as a dim line under the verdict; per-finding badges carry the same information on the other surfaces.
 
 ## Evidence rendering
 
