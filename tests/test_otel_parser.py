@@ -1,7 +1,6 @@
 """Tests for cctx/parsers/otel.py."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -210,6 +209,7 @@ def test_malformed_json_line_does_not_crash(tmp_path: Path) -> None:
 
 def test_malformed_json_line_records_warning(tmp_path: Path) -> None:
     import json as _json
+
     from cctx.parsers.otel import parse_otel_file
 
     good_line = _json.dumps({
@@ -241,6 +241,7 @@ def test_malformed_json_line_records_warning(tmp_path: Path) -> None:
 
 def test_unknown_span_type_does_not_crash(tmp_path: Path) -> None:
     import json as _json
+
     from cctx.parsers.otel import parse_otel_file
 
     batch = {
@@ -296,6 +297,7 @@ def test_empty_file_returns_empty_list(tmp_path: Path) -> None:
 
 def test_detect_source_identifies_otel(tmp_path: Path) -> None:
     import json as _json
+
     from cctx.cli import _detect_source
 
     otel_line = _json.dumps({"resourceSpans": [{"resource": {"attributes": []}, "scopeSpans": []}]})
@@ -306,6 +308,7 @@ def test_detect_source_identifies_otel(tmp_path: Path) -> None:
 
 def test_detect_source_identifies_claude_code(tmp_path: Path) -> None:
     import json as _json
+
     from cctx.cli import _detect_source
 
     cc_line = _json.dumps({"type": "assistant", "uuid": "abc", "timestamp": "2026-01-01T00:00:00Z"})
@@ -322,6 +325,7 @@ def test_detect_source_uses_otel_fixture() -> None:
 
 def test_detect_source_unknown_raises_usage_error(tmp_path: Path) -> None:
     import click
+
     from cctx.cli import _detect_source
 
     p = tmp_path / "unknown.jsonl"
@@ -332,6 +336,7 @@ def test_detect_source_unknown_raises_usage_error(tmp_path: Path) -> None:
 
 def test_autopsy_command_accepts_otel_file() -> None:
     from click.testing import CliRunner
+
     from cctx.cli import cli
 
     runner = CliRunner()
