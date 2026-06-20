@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.12.1 (2026-06-20)
+
+### Bug Fixes
+
+- Bump max_subagent_depth 4→5 to match Claude Code v2.1.172
+  ([#117](https://github.com/jacquardlabs/cctx/pull/117),
+  [`e728ef8`](https://github.com/jacquardlabs/cctx/commit/e728ef8657f7798e3103cac2d9b206211d74d7db))
+
+
 ## v1.12.0 (2026-06-20)
 
 ### Bug Fixes
