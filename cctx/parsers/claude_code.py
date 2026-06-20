@@ -34,7 +34,7 @@ _BOOKKEEPING_TYPES = frozenset(
 def parse_session(
     session_path: Path,
     *,
-    max_subagent_depth: int = 4,
+    max_subagent_depth: int = 5,
     _depth: int = 0,
     _parent_session_id: str | None = None,
 ) -> SessionTrace:
