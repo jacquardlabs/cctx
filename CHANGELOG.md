@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.15.0 (2026-06-20)
+
+### Features
+
+- Compaction findings — surface compaction events and re-fetch waste (#93)
+  ([#123](https://github.com/jacquardlabs/cctx/pull/123),
+  [`cdab064`](https://github.com/jacquardlabs/cctx/commit/cdab0640b720e127549af63c22747555bd832b2c))
+
+
 ## v1.14.0 (2026-06-20)
 
 ### Features
