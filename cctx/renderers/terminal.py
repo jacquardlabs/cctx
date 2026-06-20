@@ -45,11 +45,35 @@ def _wide_console() -> Console:
     return Console(width=200)
 
 
+def compute_health_grade(diagnosis: Diagnosis) -> str:
+    """A–F grade based on waste fraction and finding severity."""
+    if not diagnosis.findings:
+        return "A"
+
+    has_high = any(f.severity == Severity.HIGH for f in diagnosis.findings)
+    waste_frac = (
+        diagnosis.waste_cost_usd / diagnosis.total_cost_usd
+        if diagnosis.total_cost_usd > 0
+        else 0.0
+    )
+
+    if has_high and waste_frac > 0.50:
+        return "F"
+    if has_high or waste_frac > 0.25:
+        return "D"
+    if waste_frac > 0.10:
+        return "C"
+    if diagnosis.findings:
+        return "B"
+    return "A"
+
+
 def render_diagnosis(
     diagnosis: Diagnosis,
     *,
     session_path: Path | None = None,
     console: Console | None = None,
+    show_health: bool = False,
 ) -> None:
     con = console or _default_console()
 
@@ -76,6 +100,15 @@ def render_diagnosis(
     con.print(Text(
         "~85–95% of actual billing; system framing not observable in JSONL", style="dim"
     ))
+
+    if show_health:
+        grade = compute_health_grade(diagnosis)
+        waste_frac = (
+            diagnosis.waste_cost_usd / diagnosis.total_cost_usd * 100
+            if diagnosis.total_cost_usd > 0
+            else 0.0
+        )
+        con.print(f"Health grade: {grade}  (waste {waste_frac:.0f}% of session cost)")
 
     if diagnosis.subagent_costs:
         show_depth = any(a.depth > 1 for a in diagnosis.subagent_costs)
@@ -107,6 +140,8 @@ def render_diagnosis(
         badge = Text(f" {label} ", style=style)
         conf_note = f"({finding.confidence.value} confidence)"
         con.print(badge, conf_note, "—", finding.summary)
+        if show_health and finding.cost_usd is not None:
+            con.print(f"  → savings if fixed: ~${finding.cost_usd:.2f}")
 
     # Patches
     if diagnosis.patches:
