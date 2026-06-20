@@ -95,3 +95,45 @@ def test_handoff_start_end_times_set() -> None:
     assert trace.start_time is not None
     assert trace.end_time is not None
     assert trace.end_time > trace.start_time
+
+
+def test_handoff_turn_has_one_tool_use() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    turn = result[0].turns[0]
+    assert len(turn.tool_uses) == 1
+    assert turn.tool_uses[0].tool_name == "check_priority"
+    assert turn.tool_uses[0].tool_use_id == "call_abc123"
+
+
+def test_handoff_turn_has_one_tool_result() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    turn = result[0].turns[0]
+    assert len(turn.tool_results) == 1
+    result_obj = turn.tool_results[0]
+    assert result_obj.tool_name == "check_priority"
+    assert result_obj.tool_use_id == "call_abc123"
+    assert result_obj.content == "high"
+    assert result_obj.is_error is False
+
+
+def test_tool_names_loaded_contains_tool() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_handoff.jsonl")
+    assert "check_priority" in result[0].tool_names_loaded
+
+
+def test_fanout_orchestrator_has_two_tool_uses() -> None:
+    from cctx.parsers.otel import parse_otel_file
+
+    result = parse_otel_file(FIXTURES / "otel_fanout.jsonl")
+    turn = result[0].turns[0]
+    assert len(turn.tool_uses) == 2
+    tool_names = {tu.tool_name for tu in turn.tool_uses}
+    assert tool_names == {"run_subagent"}
+    call_ids = {tu.tool_use_id for tu in turn.tool_uses}
+    assert call_ids == {"call_sub1", "call_sub2"}
