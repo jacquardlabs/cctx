@@ -17,6 +17,8 @@ The complete product pitch, example outputs, growth staircase, and positioning v
 
 Explicitly not used: web frameworks, databases, ORMs, async runtimes, cloud SDKs. cctx is a local CLI.
 
+**Multi-provider.** `parsers/otel.py` (shipped v1.12.0) parses OTLP `gen_ai.*` spans, so `cctx autopsy <trace>` also diagnoses OpenAI Agents SDK and LangGraph sessions exported via OTEL. `cli._detect_source()` sniffs the first lines of a trace file and routes to the Claude Code or OTEL parser. Both parsers return the same `SessionTrace`, so everything downstream is provider-agnostic. See `docs/quickstart-otel.md`.
+
 ## Architecture
 
 ```
@@ -28,7 +30,9 @@ Tokenizer        ← only place that imports anthropic; offline-mode safe for CI
   ↓
 Diagnostician    ← per-turn investigation: inflection detection + pattern
                    classifiers (retry loop, scope creep, stale context,
-                   tool thrash, dead end). Produces a Diagnosis.
+                   tool thrash, dead end, fan-out waste, cache hygiene,
+                   compaction, exploration thrash, unused context;
+                   project-specific runs cross-session). Produces a Diagnosis.
   ↓
 Recommender      ← turns Findings into Patches: copy-pasteable CLAUDE.md /
                    rule / skill diffs, evidence-backed when cross-session.
@@ -43,39 +47,58 @@ Exporters        ← jsonl, csv.
 
 ```
 cctx/
-├── cli.py              # click + rich-click; routes all subcommands
+├── cli.py              # click + rich-click; routes all 7 subcommands
+│                       # (ls, autopsy, harvest, watch, trace, export, init).
 ├── parsers/
-│   └── claude_code.py  # SHIPPED. Parse ~/.claude JSONL logs.
+│   ├── claude_code.py  # SHIPPED. Parse ~/.claude JSONL logs.
+│   └── otel.py         # SHIPPED (v1.12.0). Parse OTLP gen_ai.* spans —
+│                       # OpenAI Agents SDK, LangGraph. Same SessionTrace out.
 ├── tokenizer.py        # SHIPPED. anthropic.count_tokens wrapper; CCTX_OFFLINE heuristic.
+├── pricing.py          # SHIPPED. price_per_tok table; single source of truth for
+│                       # cost computation. Imported by diagnostician, renderers, etc.
 ├── models.py           # SHIPPED. Turn, ToolUse, ToolResult, Usage, Attachment,
 │                       # RawToolResultFile, SessionTrace, Finding, Patch, Diagnosis,
-│                       # KIND_LABEL, AggregateReport.
+│                       # SubagentAttribution, KIND_LABEL, MANAGED_HEADINGS,
+│                       # AggregateReport, CrossProjectDigest.
 ├── diagnostician/
-│   ├── __init__.py     # public: run(trace) -> Diagnosis
+│   ├── __init__.py     # public: run(trace) -> Diagnosis. Wires the 10 single-session
+│   │                   # classifiers + per-subagent cost attribution.
 │   ├── inflection.py   # detect the turn where the session diverged
 │   ├── patterns/
 │   │   ├── retry_loop.py
 │   │   ├── scope_creep.py
 │   │   ├── stale_context.py
 │   │   ├── tool_thrash.py
-│   │   └── dead_end.py
+│   │   ├── dead_end.py
+│   │   ├── fan_out.py            # subagent overlap + retry waste
+│   │   ├── cache_hygiene.py      # KV-cache hit rate + cause
+│   │   ├── compaction.py         # compaction events + re-fetch waste
+│   │   ├── exploration_thrash.py # read-heavy circling without progress
+│   │   ├── unused_context.py     # MCP servers loaded but never called
+│   │   └── project_specific.py   # cross-session only -> PROJECT_PATTERN
 │   └── aggregate.py    # cross-session pattern aggregator (--since mode)
 ├── recommender/
 │   ├── claude_md.py    # Finding -> Patch (CLAUDE.md diff proposals)
-│   └── evidence.py     # session-count + dollar evidence accumulation
+│   └── evidence.py     # session-count + dollar evidence accumulation; efficacy()
+│                       # before/after bucketing for harvest --efficacy.
 ├── harvest.py          # SHIPPED. apply_patch, preview_patches, apply_patches, check_claude_md —
 │                       # append-only, idempotent patching with fingerprint-based deduplication.
 │                       # v2: patches route to any .md target (rules/, skills/).
+│                       # Cross-agent emit (--emit/--sync) to AGENTS.md; managed_heading_dates.
+├── hook_installer.py   # SHIPPED (v1.11.0). cctx init — install/remove SessionEnd hook.
+├── agents.py           # SHIPPED (v1.5.0). live_sessions() via `claude agents --json`.
 ├── discovery.py        # SHIPPED. list_projects(), latest_session() — navigate ~/.claude/projects/
 ├── watcher.py          # SHIPPED. cctx watch — poll active session, surface findings live.
 ├── renderers/
-│   ├── terminal.py     # rich rendering of Diagnosis, AggregateReport, projects, sessions
+│   ├── terminal.py     # rich rendering of Diagnosis, AggregateReport, CrossProjectDigest,
+│   │                   # efficacy report, projects, sessions
 │   ├── github.py       # GitHub Actions job summary renderer (--github-summary)
 │   ├── report.py       # Jinja2 HTML report (cctx autopsy --html)
 │   └── trace_tui.py    # textual TUI with autopsy findings overlaid
 └── exporters/
     ├── jsonl.py
-    └── csv.py
+    ├── csv.py
+    └── json.py
 ```
 
 ## Layering rules (enforced by convention)
@@ -87,6 +110,7 @@ These keep the dependency graph clean so modules stay independently testable and
 - **Analyzers (diagnostician, recommender, aggregate) never import each other across boundary lines.** Inside the diagnostician package, helpers can compose freely. The recommender takes a Diagnosis and emits Patches without reaching back into the diagnostician's internals.
 - **Renderers never compute analysis.** They take an analyzer's output and render it. Swapping `terminal.py` for `report.py` should not change a single number or finding.
 - **Only `cli.py` imports `click` and `rich_click`.** Everything else uses plain `rich.Console` if it needs to output. Analyzers and parsers return data; the CLI decides how to display it.
+- **Source-format detection lives in `cli._detect_source()`.** When adding a parser (e.g. a third trace format), add a branch there. Each parser still returns a `SessionTrace`, so nothing downstream of the parser changes.
 
 ## Core design decisions
 
@@ -112,20 +136,43 @@ These came out of the brief, the parser brainstorming session, and the autopsy p
 6. **M5 — Harvest v1.** SHIPPED — CLAUDE.md target only; promote autopsy findings to durable CLAUDE.md diffs. (PR #56)
 7. **M6 — Release v0.1.0.** SHIPPED — README, version bump, PyPI publish, GitHub Action (composite), session discovery (`cctx ls`). (#31, #32, #62, #73)
 8. **M7 — v0.2.0.** SHIPPED — `cctx watch` live mode, `--github-summary`, `--fail-on-findings`, harvest v2 multi-target, `harvest --check`, tool-thrash + dead-end classifiers, `--since` string formats, interactive aggregate drill-down.
+9. **v1.x.** SHIPPED. Milestone numbers track issues, not release order, and several features shipped without a milestone tag. See `CHANGELOG.md` for the per-release detail. Highlights, in release order:
+   - **v1.1–v1.2 (M9, M12)** — verdict headline, `--top N`, `--turn N`, `--until DATE`, `--json` diagnosis, `--format json` on `export`.
+   - **v1.3 (M14)** — project-specific cross-session pattern detection.
+   - **v1.4 (M13)** — `harvest --check` depth (contradiction, redundancy, staleness) + `--check-severity`.
+   - **v1.5** — `agents.py` live sessions via `claude agents --json`; `cctx ls` live badges; watcher early idle exit.
+   - **v1.6 (M15)** — cross-agent emit: `harvest --emit agents [--sync]` to `AGENTS.md`; `MANAGED_HEADINGS` registry.
+   - **v1.7 + v1.8 (M16)** — per-subagent cost attribution + `SubagentAttribution`; fan-out waste classifier.
+   - **v1.9 (M17)** — `harvest --efficacy`: before/after patch efficacy measurement.
+   - **v1.10** — `autopsy --json` aggregate output for `--since` mode.
+   - **v1.11 (M19)** — `cctx init` SessionEnd hook installer; `autopsy --quiet`.
+   - **v1.12** — OTEL parser: OpenAI Agents SDK / LangGraph support via `parsers/otel.py` + `_detect_source()`.
+   - **v1.13** — KV-cache hygiene classifier; OTEL LangGraph quickstart.
+   - **v1.14** — savings framing + health grade behind `--health`.
+   - **v1.15 (M20)** — compaction findings classifier.
+   - **v1.16** — exploration thrash classifier.
+   - **v1.17 (M18)** — unused-context classifier (MCP loaded but never called).
+   - **v1.18 (M21)** — cross-project digest: `cctx autopsy --all --since`.
 
 Future, not yet milestoned:
-- **Cross-agent layer** — emit findings as `.cursorrules`, `AGENTS.md`, `.windsurfrules`, GitHub Copilot instructions.
-- **`--format json` on `export`** — deferred; no milestone.
+- **Cross-agent layer breadth** — emit to `.cursorrules`, `.windsurfrules`, GitHub Copilot instructions (`AGENTS.md` shipped v1.6.0).
+- **Subagent-aware diagnosis** — recursively classify per-subagent patterns, not just attribute cost + fan-out waste.
 
 ## Design docs
 
 Feature designs live in `docs/superpowers/specs/`, dated and committed before implementation begins. Each implementation plan in `docs/superpowers/plans/` references its spec. Don't start a feature without one.
 
-Current specs landed on main:
-- `docs/superpowers/specs/2026-05-12-claude-code-parser-design.md` — the Claude Code JSONL parser.
-
-In progress / pending:
-- `docs/superpowers/specs/<date>-autopsy-design.md` — autopsy v0 design (#40). The next spec to be brainstormed.
+Specs landed on main (see `docs/superpowers/specs/` for the full set):
+- `2026-05-12-claude-code-parser-design.md` — Claude Code JSONL parser.
+- `2026-05-14-autopsy-design.md` — autopsy v0 (single + cross-session).
+- `2026-05-14-harvest-design.md` — CLAUDE.md patcher.
+- `2026-05-14-trace-tui-design.md` — Textual trace TUI.
+- `2026-05-17-harvest-check-depth-design.md` — `harvest --check` contradiction/redundancy/staleness.
+- `2026-05-17-project-pattern-detection-design.md` — cross-session project-specific patterns.
+- `2026-05-19-claude-agents-live-integration-design.md` — `claude agents --json` live integration.
+- `2026-06-09-cross-agent-emit-design.md` — `harvest --emit` to AGENTS.md.
+- `2026-06-19-otel-parser-design.md` — OTLP / OpenAI Agents SDK parser.
+- `2026-06-20-cross-project-digest.md` — `autopsy --all --since`.
 
 ## GitHub issue structure
 
