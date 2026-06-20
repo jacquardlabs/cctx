@@ -62,6 +62,18 @@ def test_session_id_in_output():
     assert "deadbeef1234" in md
 
 
+def test_unknown_model_warning_in_summary():
+    """The CI surface flags an unrecognized model priced at default (#120)."""
+    import dataclasses
+
+    from cctx.renderers.github import render_github_summary
+
+    diag = dataclasses.replace(_make_diagnosis([]), unknown_models=["gpt-6-preview"])
+    md = render_github_summary(diag)
+    assert "gpt-6-preview" in md
+    assert "default" in md.lower()
+
+
 def test_findings_table_present():
     from cctx.renderers.github import render_github_summary
 

@@ -128,6 +128,18 @@ def test_export_diagnosis_has_required_fields() -> None:
     assert obj["finding_count"] == 1
     assert obj["turn_count"] == 0
     assert obj["model"] == "claude-sonnet-4-6"
+    assert obj["unknown_models"] == []  # present + empty for a known model
+
+
+def test_export_diagnosis_includes_unknown_models() -> None:
+    """unknown_models is emitted so CI/machine consumers can detect mispricing (#120)."""
+    import dataclasses
+
+    from cctx.exporters.jsonl import export_diagnosis
+
+    diagnosis = dataclasses.replace(_make_diagnosis(), unknown_models=["gpt-6-preview"])
+    obj = json.loads(export_diagnosis(diagnosis, _make_trace()))
+    assert obj["unknown_models"] == ["gpt-6-preview"]
 
 
 def test_export_diagnosis_analysed_at_is_iso_string() -> None:

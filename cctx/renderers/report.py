@@ -50,9 +50,12 @@ def render_html(diag: Diagnosis, trace: SessionTrace) -> str:
 
     env.filters["diff_highlight"] = _diff_highlight
 
+    from cctx.pricing import PRICING_LAST_VERIFIED
+
     tmpl = env.get_template("autopsy.html.j2")
     return tmpl.render(
         diag=diag,
         trace=trace,
         flagged=_flagged_index(diag.findings),
+        pricing_as_of=PRICING_LAST_VERIFIED,
     )

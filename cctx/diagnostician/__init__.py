@@ -27,6 +27,8 @@ from cctx.diagnostician.patterns import (
     unused_context,
 )
 from cctx.models import Diagnosis, Finding, FindingKind, SubagentAttribution
+from cctx.pricing import get_pricing as _get_pricing
+from cctx.pricing import is_known_model as _is_known_model
 from cctx.pricing import price_per_tok as _price_per_tok
 
 if TYPE_CHECKING:
@@ -110,21 +112,44 @@ def _patch_fanout_costs(
     return result
 
 
+def _collect_unknown_models(trace: SessionTrace) -> list[str]:
+    """Distinct non-None model ids priced at the default rate (unrecognized family).
+
+    Walks the trace and all subagents so a new model anywhere in the tree is
+    flagged — the "new model introduced" half of pricing freshness.
+    """
+    seen: dict[str, None] = {}
+
+    def _walk(t: SessionTrace) -> None:
+        m = t.primary_model
+        if m is not None and not _is_known_model(m):
+            seen.setdefault(m, None)
+        for sa in t.subagents:
+            _walk(sa)
+
+    _walk(trace)
+    return list(seen)
+
+
 def _compute_own_cost(trace: SessionTrace, model: str | None) -> float:
     """Parent-turns-only cost — does not recurse into subagents.
 
-    Billing rates relative to base input price:
-      cache_read:  ×0.10  (read from prompt cache)
-      cache_write: ×1.25  (write to prompt cache, both 5-min and 1-hr TTLs)
+    Prices input AND output tokens at the model's per-type rate (get_pricing),
+    plus prompt-cache reads/writes at the model's cache multipliers (5-min and
+    1-hr writes billed separately; all zero for non-Anthropic models).
     """
-    price = _price_per_tok(model)
+    p = _get_pricing(model)
+    in_tok = p.input_per_mtok / 1_000_000
+    out_tok = p.output_per_mtok / 1_000_000
     total = 0.0
     for turn in trace.turns:
-        if turn.usage is not None:
-            total += turn.usage.input_tokens * price
-            total += turn.usage.cache_read * price * 0.1
-            cache_writes = turn.usage.cache_creation_5m + turn.usage.cache_creation_1h
-            total += cache_writes * price * 1.25
+        u = turn.usage
+        if u is not None:
+            total += u.input_tokens * in_tok
+            total += u.output_tokens * out_tok
+            total += u.cache_read * in_tok * p.cache_read_mult
+            total += u.cache_creation_5m * in_tok * p.cache_write_5m_mult
+            total += u.cache_creation_1h * in_tok * p.cache_write_1h_mult
     return round(total, 4)
 
 
@@ -211,4 +236,5 @@ def run(trace: SessionTrace) -> Diagnosis:
         waste_cost_usd=round(waste_cost, 4),
         analysed_at=datetime.now(UTC),
         subagent_costs=subagent_costs,
+        unknown_models=_collect_unknown_models(trace),
     )

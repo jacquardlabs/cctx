@@ -23,6 +23,7 @@ from rich.table import Table
 from rich.text import Text
 
 from cctx.models import KIND_LABEL, FindingKind, Severity, compute_health_grade
+from cctx.pricing import PRICING_LAST_VERIFIED
 
 if TYPE_CHECKING:
     from cctx.discovery import ProjectInfo
@@ -80,8 +81,17 @@ def render_diagnosis(
         cost_line += f" | Attributed waste: ~${diagnosis.waste_cost_usd:.2f} ({pct:.0f}%)"
     con.print(cost_line)
     con.print(Text(
-        "~85–95% of actual billing; system framing not observable in JSONL", style="dim"
+        f"~85–95% of actual billing (reconstructed token counts; "
+        f"prices as of {PRICING_LAST_VERIFIED})",
+        style="dim",
     ))
+    if diagnosis.unknown_models:
+        models = ", ".join(diagnosis.unknown_models)
+        con.print(Text(
+            f"⚠ Unrecognized model(s) priced at default rate: {models} "
+            f"— add to pricing.py for accurate cost",
+            style="yellow",
+        ))
 
     if show_health:
         grade = compute_health_grade(diagnosis)

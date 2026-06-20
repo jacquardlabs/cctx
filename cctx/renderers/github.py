@@ -14,6 +14,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from cctx.models import KIND_LABEL
+from cctx.pricing import PRICING_LAST_VERIFIED
 
 if TYPE_CHECKING:
     from cctx.models import Diagnosis
@@ -31,8 +32,14 @@ def render_github_summary(diagnosis: Diagnosis) -> str:
     lines.append(f"## cctx autopsy — session `{diagnosis.session_id}`\n")
     lines.append(
         f"**Session cost:** ~${diagnosis.total_cost_usd:.2f} "
-        f"*(~85–95% of actual billing)*\n"
+        f"*(~85–95% of actual billing; prices as of {PRICING_LAST_VERIFIED})*\n"
     )
+    if diagnosis.unknown_models:
+        models = ", ".join(f"`{m}`" for m in diagnosis.unknown_models)
+        lines.append(
+            f"> ⚠️ Unrecognized model(s) priced at the default rate: {models} — "
+            f"add to `cctx/pricing.py` for accurate cost.\n"
+        )
 
     if not diagnosis.findings:
         lines.append("**Result:** ✅ Clean session — no findings.\n")

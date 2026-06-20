@@ -271,6 +271,9 @@ class Diagnosis:
     waste_cost_usd:  float
     analysed_at:     datetime
     subagent_costs:  list[SubagentAttribution] = field(default_factory=list)
+    # Non-None model ids that fell to the default price (unrecognized family);
+    # surfaced so a newly-released model doesn't get mispriced silently.
+    unknown_models:  list[str] = field(default_factory=list)
 
     @property
     def verdict(self) -> str:
