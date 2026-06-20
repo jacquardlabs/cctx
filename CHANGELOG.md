@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.18.0 (2026-06-20)
+
+### Bug Fixes
+
+- Ruff import sort and unused import in test_cross_project_digest
+  ([#126](https://github.com/jacquardlabs/cctx/pull/126),
+  [`cf0bc95`](https://github.com/jacquardlabs/cctx/commit/cf0bc95b7aa2b7e22403fcb1b94d33fb7f2297f1))
+
+### Features
+
+- Cross-project digest — cctx autopsy --all --since
+  ([#126](https://github.com/jacquardlabs/cctx/pull/126),
+  [`cf0bc95`](https://github.com/jacquardlabs/cctx/commit/cf0bc95b7aa2b7e22403fcb1b94d33fb7f2297f1))
+
+- Cross-project digest — cctx autopsy --all --since (#94)
+  ([#126](https://github.com/jacquardlabs/cctx/pull/126),
+  [`cf0bc95`](https://github.com/jacquardlabs/cctx/commit/cf0bc95b7aa2b7e22403fcb1b94d33fb7f2297f1))
+
+
 ## v1.17.0 (2026-06-20)
 
 ### Features
