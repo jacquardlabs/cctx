@@ -334,6 +334,31 @@ class EfficacyReport:
     newest_session: datetime | None  # max start_time across all analysed sessions
 
 
+@dataclass
+class ProjectDigestRow:
+    """One row in the per-project summary table of a CrossProjectDigest."""
+
+    display_name: str
+    sessions_analysed: int
+    sessions_with_findings: int
+    total_cost_usd: float
+    waste_cost_usd: float
+    top_pattern: str | None  # KIND_LABEL of most-frequent FindingKind, or None
+
+
+@dataclass
+class CrossProjectDigest:
+    """Result of cctx autopsy --all --since: per-project rows + rolled-up global evidence."""
+
+    period_label: str
+    projects: list[ProjectDigestRow]
+    total_cost_usd: float
+    total_waste_usd: float
+    global_patches: list[Patch]
+    global_by_kind: dict[FindingKind, KindEvidence]
+    global_project_counts: dict[FindingKind, int]  # distinct projects in which each kind appeared
+
+
 # ---------------------------------------------------------------------------
 # Renderer helper
 # ---------------------------------------------------------------------------
