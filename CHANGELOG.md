@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.19.1 (2026-06-20)
+
+### Bug Fixes
+
+- **otel**: Recurse into grandchild AgentSpans (depth > 2) (#118)
+  ([#155](https://github.com/jacquardlabs/cctx/pull/155),
+  [`80d6aae`](https://github.com/jacquardlabs/cctx/commit/80d6aaed7c50be36644b3f43bdb64ffc836be204))
+
+
 ## v1.19.0 (2026-06-20)
 
 ### Chores
