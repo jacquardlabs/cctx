@@ -25,7 +25,14 @@ from cctx.models import KIND_LABEL, FindingKind, Severity
 
 if TYPE_CHECKING:
     from cctx.discovery import ProjectInfo
-    from cctx.models import AggregateReport, Diagnosis, EfficacyReport, EfficacyRow, SessionTrace
+    from cctx.models import (
+        AggregateReport,
+        CrossProjectDigest,
+        Diagnosis,
+        EfficacyReport,
+        EfficacyRow,
+        SessionTrace,
+    )
 
 _SEVERITY_STYLE = {
     Severity.HIGH:   "bold red",
@@ -466,6 +473,64 @@ def _efficacy_signal(row: EfficacyRow) -> str:
     if rate_after < rate_before * 0.75:
         return f"↓ reduced{low}"
     return f"✗ persisting{low}"
+
+
+def render_cross_project_digest(
+    digest: CrossProjectDigest,
+    *,
+    console: Console | None = None,
+) -> None:
+    """Render a cross-project digest (cctx autopsy --all --since) to terminal."""
+    con = console or _default_console()
+
+    con.print(Rule(f"cctx autopsy — cross-project digest  ({digest.period_label})"))
+    con.print(
+        f"Projects: {len(digest.projects)} analysed  |  "
+        f"Total: ${digest.total_cost_usd:.2f}  |  "
+        f"Waste: ${digest.total_waste_usd:.2f}"
+    )
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Project")
+    table.add_column("Sessions", justify="right")
+    table.add_column("Cost", justify="right")
+    table.add_column("Waste", justify="right")
+    table.add_column("Top pattern")
+    for row in digest.projects:
+        table.add_row(
+            row.display_name,
+            str(row.sessions_analysed),
+            f"${row.total_cost_usd:.2f}",
+            f"${row.waste_cost_usd:.2f}",
+            row.top_pattern or "—",
+        )
+    con.print(table)
+
+    if not digest.global_by_kind:
+        con.print("\nNo cross-project patterns in this window.")
+        return
+
+    con.print(Rule("Global patterns (2+ projects)"))
+    gt = Table(show_header=True, header_style="bold")
+    gt.add_column("Pattern")
+    gt.add_column("Projects", justify="right")
+    gt.add_column("Sessions", justify="right")
+    gt.add_column("Waste", justify="right")
+    for kind, ev in digest.global_by_kind.items():
+        gt.add_row(
+            _KIND_LABEL.get(kind, kind.value),
+            str(digest.global_project_counts.get(kind, 0)),
+            str(ev.session_count),
+            f"${ev.total_waste_usd:.2f}",
+        )
+    con.print(gt)
+
+    if digest.global_patches:
+        con.print(Rule("Recommended ~/.claude/CLAUDE.md patches"))
+        for patch in digest.global_patches:
+            con.print(f"\n{patch.description}  [{patch.target_file}]")
+            syntax = Syntax(patch.unified_diff, "diff", theme="monokai", word_wrap=True)
+            con.print(syntax)
 
 
 def render_efficacy_report(

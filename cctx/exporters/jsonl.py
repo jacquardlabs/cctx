@@ -5,7 +5,7 @@ import json
 from typing import IO, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from cctx.models import AggregateReport, Diagnosis, SessionTrace
+    from cctx.models import AggregateReport, CrossProjectDigest, Diagnosis, SessionTrace
 
 
 def export_diagnosis(
@@ -104,6 +104,47 @@ def export_aggregate(report: AggregateReport) -> str:
         "by_kind": by_kind,
         "patches": patches,
         "project_patterns": project_patterns,
+    }
+    return json.dumps(obj)
+
+
+def export_cross_project_digest(digest: CrossProjectDigest) -> str:
+    """Serialize a CrossProjectDigest to a JSON string."""
+    projects = [
+        {
+            "display_name": r.display_name,
+            "sessions_analysed": r.sessions_analysed,
+            "sessions_with_findings": r.sessions_with_findings,
+            "total_cost_usd": r.total_cost_usd,
+            "waste_cost_usd": r.waste_cost_usd,
+            "top_pattern": r.top_pattern,
+        }
+        for r in digest.projects
+    ]
+    global_by_kind = {
+        k.value: {
+            "project_count": digest.global_project_counts.get(k, 0),
+            "session_count": ev.session_count,
+            "total_waste_usd": ev.total_waste_usd,
+        }
+        for k, ev in digest.global_by_kind.items()
+    }
+    global_patches = [
+        {
+            "target_file": p.target_file,
+            "finding_kind": p.finding_kind.value,
+            "description": p.description,
+            "evidence_summary": p.evidence_summary,
+        }
+        for p in digest.global_patches
+    ]
+    obj = {
+        "period_label": digest.period_label,
+        "total_cost_usd": digest.total_cost_usd,
+        "total_waste_usd": digest.total_waste_usd,
+        "projects": projects,
+        "global_by_kind": global_by_kind,
+        "global_patches": global_patches,
     }
     return json.dumps(obj)
 

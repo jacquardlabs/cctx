@@ -1,15 +1,16 @@
 """cctx CLI — click + rich-click entry point.
 
 Commands:
-  cctx ls [project]                List projects or sessions
-  cctx autopsy <session>           Single-session diagnosis
-  cctx autopsy <project> --since   Cross-session aggregation
-  cctx export <session>            Export session data as JSONL or CSV
-  cctx trace <session>             Interactive TUI trace viewer
-  cctx harvest <session>           Apply autopsy patches to CLAUDE.md
-  cctx harvest <project> --since   Cross-session harvest
-  cctx watch [project]             Live waste signals during an active session
-  cctx init                        Install opt-in SessionEnd hook for auto-diagnostics
+  cctx ls [project]                    List projects or sessions
+  cctx autopsy <session>               Single-session diagnosis
+  cctx autopsy <project> --since       Cross-session aggregation
+  cctx autopsy --all --since           Cross-project digest (all projects)
+  cctx export <session>                Export session data as JSONL or CSV
+  cctx trace <session>                 Interactive TUI trace viewer
+  cctx harvest <session>               Apply autopsy patches to CLAUDE.md
+  cctx harvest <project> --since       Cross-session harvest
+  cctx watch [project]                 Live waste signals during an active session
+  cctx init                            Install opt-in SessionEnd hook for auto-diagnostics
 """
 from __future__ import annotations
 
@@ -265,6 +266,99 @@ def ls(project: Path | None) -> None:
         render_sessions(info, live_statuses=live_statuses)
 
 
+def _run_all_projects(since: str, json_out: bool) -> None:
+    """Execute cctx autopsy --all --since: aggregate across all projects."""
+    import dataclasses as _dc
+    from collections import Counter
+
+    from cctx.discovery import list_projects as _list_projects
+    from cctx.models import CrossProjectDigest, KindEvidence, ProjectDigestRow
+
+    start, end, label = parse_since(since)
+    projects = _list_projects()
+
+    # Per-project lightweight aggregation: skip project_specific.detect and patch generation
+    per_project: list[tuple[str, int, int, float, float, dict]] = []
+    for proj in projects:
+        pairs = aggregate.run(proj.project_dir, start, end)
+        if not pairs:
+            continue
+        diagnoses_p = [d for d, _ in pairs]
+        ev_p = evidence_mod.accumulate(diagnoses_p)
+        per_project.append((
+            proj.display_name,
+            len(diagnoses_p),
+            sum(1 for d in diagnoses_p if d.findings),
+            sum(d.total_cost_usd for d in diagnoses_p),
+            sum(d.waste_cost_usd for d in diagnoses_p),
+            ev_p,
+        ))
+
+    if not per_project:
+        click.echo("No sessions found in this window across all projects.")
+        return
+
+    def _top_pattern(ev_p: dict) -> str | None:
+        if not ev_p:
+            return None
+        kind = max(
+            ev_p.items(),
+            key=lambda x: (x[1].session_count, x[1].total_waste_usd, x[0].value),
+        )[0]
+        return KIND_LABEL.get(kind)
+
+    rows = [
+        ProjectDigestRow(
+            display_name=name,
+            sessions_analysed=n,
+            sessions_with_findings=nf,
+            total_cost_usd=cost,
+            waste_cost_usd=waste,
+            top_pattern=_top_pattern(ev_p),
+        )
+        for name, n, nf, cost, waste, ev_p in per_project
+    ]
+
+    project_kind_counts: Counter = Counter(
+        kind
+        for _, _, _, _, _, ev_p in per_project
+        for kind in ev_p
+    )
+    global_kinds = {k for k, n in project_kind_counts.items() if n >= 2}
+
+    global_ev: dict = {}
+    for kind in global_kinds:
+        all_ev = [ev_p[kind] for _, _, _, _, _, ev_p in per_project if kind in ev_p]
+        global_ev[kind] = KindEvidence(
+            kind=kind,
+            session_count=sum(e.session_count for e in all_ev),
+            total_waste_usd=sum(e.total_waste_usd for e in all_ev),
+            example_summaries=[s for e in all_ev for s in e.example_summaries][:3],
+        )
+
+    global_patches_raw = claude_md.generate_from_evidence(global_ev)
+    global_patches = [_dc.replace(p, target_file="~/.claude/CLAUDE.md") for p in global_patches_raw]
+
+    digest = CrossProjectDigest(
+        period_label=label,
+        projects=rows,
+        total_cost_usd=sum(cost for _, _, _, cost, _, _ in per_project),
+        total_waste_usd=sum(waste for _, _, _, _, waste, _ in per_project),
+        global_patches=global_patches,
+        global_by_kind=global_ev,
+        global_project_counts=dict(project_kind_counts),
+    )
+
+    if json_out:
+        import json as _json2
+
+        from cctx.exporters.jsonl import export_cross_project_digest as _export_digest
+        click.echo(_json2.dumps(_json2.loads(_export_digest(digest)), indent=2))
+    else:
+        from cctx.renderers.terminal import render_cross_project_digest as _render_digest
+        _render_digest(digest)
+
+
 @cli.command()
 @click.argument(
     "target",
@@ -353,6 +447,13 @@ def ls(project: Path | None) -> None:
     default=False,
     help="Show health grade (A–F) and per-finding savings estimate.",
 )
+@click.option(
+    "--all",
+    "all_projects",
+    is_flag=True,
+    default=False,
+    help="Aggregate across all projects in ~/.claude/projects/ (requires --since).",
+)
 def autopsy(
     target: Path | None,
     since: str | None,
@@ -366,6 +467,7 @@ def autopsy(
     json_out: bool,
     quiet: bool,
     health: bool,
+    all_projects: bool,
 ) -> None:
     """Diagnose a session or project directory.
 
@@ -376,6 +478,29 @@ def autopsy(
     """
     from cctx.discovery import find_project_dir
     from cctx.discovery import latest_session as _latest_session
+
+    # --all path: validate, execute, return early — must precede the TARGET check below
+    if all_projects:
+        if since is None:
+            raise click.UsageError("--all requires --since.")
+        if latest:
+            raise click.UsageError("--all and --latest are mutually exclusive.")
+        if html_out is not None:
+            raise click.UsageError("--html is not supported with --all.")
+        if github_summary:
+            raise click.UsageError("--github-summary is not supported with --all.")
+        if fail_on_findings:
+            raise click.UsageError("--fail-on-findings is not supported with --all.")
+        if turn_num is not None:
+            raise click.UsageError("--turn is not supported with --all.")
+        if quiet:
+            raise click.UsageError("--quiet is not supported with --all.")
+        if health:
+            raise click.UsageError("--health is not supported with --all.")
+        if top_n is not None:
+            raise click.UsageError("--top is not supported with --all.")
+        _run_all_projects(since, json_out)
+        return
 
     if latest and since is not None:
         raise click.UsageError("--latest and --since are mutually exclusive.")
