@@ -2,6 +2,70 @@
 
 <!-- version list -->
 
+## v1.12.0 (2026-06-20)
+
+### Bug Fixes
+
+- Otel parser — per-trace warnings, multiple-root warning, full span list for subagent turns
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- Ruff F401 + I001 in test_otel_parser.py ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+### Documentation
+
+- OTEL parser design spec — OpenAI Agents SDK support via parsers/otel.py
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- OTEL parser implementation plan ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- Quickstart guide for OpenAI Agents SDK + cctx OTEL integration
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+### Features
+
+- _detect_source() — auto-detect Claude Code vs OTEL trace format
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- OpenAI Agents SDK support via OTEL parser ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- OTEL parser skeleton — span loading and session trace construction
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- Wire OTEL auto-detection into autopsy — cctx autopsy <otel.jsonl> just works
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+### Testing
+
+- Add OTLP JSONL fixtures for otel parser (handoff + fanout)
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- OTEL parser error handling — malformed JSON, unknown spans, empty file
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- Verify child AgentSpan → subagents mapping (handoff + fan-out)
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- Verify FunctionSpan → ToolUse + ToolResult mapping
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+- Verify GenerationSpan → Turn mapping for OTEL parser
+  ([#116](https://github.com/jacquardlabs/cctx/pull/116),
+  [`a6b56b6`](https://github.com/jacquardlabs/cctx/commit/a6b56b61ccff5493dd26f375a698eb59aff62272))
+
+
 ## v1.11.0 (2026-06-11)
 
 ### Bug Fixes
