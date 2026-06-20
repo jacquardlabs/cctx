@@ -346,6 +346,13 @@ def ls(project: Path | None) -> None:
     help="Print one verdict line only when findings exist; nothing if clean. "
          "Designed for SessionEnd hook use (cctx init).",
 )
+@click.option(
+    "--health",
+    "health",
+    is_flag=True,
+    default=False,
+    help="Show health grade (A–F) and per-finding savings estimate.",
+)
 def autopsy(
     target: Path | None,
     since: str | None,
@@ -358,6 +365,7 @@ def autopsy(
     turn_num: int | None,
     json_out: bool,
     quiet: bool,
+    health: bool,
 ) -> None:
     """Diagnose a session or project directory.
 
@@ -488,7 +496,7 @@ def autopsy(
             from cctx.renderers.github import write_github_summary
             write_github_summary(diagnosis)
         else:
-            render_diagnosis(diagnosis, session_path=target)
+            render_diagnosis(diagnosis, session_path=target, show_health=health)
         if fail_on_findings and diagnosis.findings:
             raise SystemExit(1)
 
