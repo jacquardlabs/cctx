@@ -24,6 +24,7 @@ from cctx.diagnostician.patterns import (
     scope_creep,
     stale_context,
     tool_thrash,
+    unused_context,
 )
 from cctx.models import Diagnosis, Finding, FindingKind, SubagentAttribution
 from cctx.pricing import price_per_tok as _price_per_tok
@@ -158,6 +159,7 @@ def run(trace: SessionTrace) -> Diagnosis:
         *cache_hygiene.classify(trace),
         *compaction.classify(trace),
         *exploration_thrash.classify(trace),
+        *unused_context.classify(trace),
     ]
     findings.sort(key=lambda f: f.first_turn)
 
