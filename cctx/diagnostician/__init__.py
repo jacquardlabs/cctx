@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from cctx.diagnostician import inflection
 from cctx.diagnostician.patterns import (
     cache_hygiene,
+    compaction,
     dead_end,
     fan_out,
     retry_loop,
@@ -154,6 +155,7 @@ def run(trace: SessionTrace) -> Diagnosis:
         *dead_end.classify(trace),
         *fan_out.classify(trace),
         *cache_hygiene.classify(trace),
+        *compaction.classify(trace),
     ]
     findings.sort(key=lambda f: f.first_turn)
 

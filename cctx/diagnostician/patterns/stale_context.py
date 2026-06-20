@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cctx.diagnostician.patterns.compaction import is_compaction_turn
 from cctx.models import Confidence, Finding, FindingKind, Severity
 
 if TYPE_CHECKING:
@@ -33,8 +34,9 @@ def _make_3grams(text: str) -> set[tuple[str, ...]]:
     return {tuple(words[i : i + 3]) for i in range(len(words) - 2)}
 
 
+# Backwards-compat alias — external callers that import _is_compaction keep working.
 def _is_compaction(turn: Turn) -> bool:
-    return turn.role == "system" and "compact" in turn.text.lower()
+    return is_compaction_turn(turn)
 
 
 def _classify_impl(trace: SessionTrace) -> list[Finding]:
@@ -60,7 +62,7 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
 
     # Find the turn number of any compaction events
     compaction_turns: set[int] = {
-        t.turn_number for t in trace.turns if _is_compaction(t)
+        t.turn_number for t in trace.turns if is_compaction_turn(t)
     }
 
     last_turn_number = max((t.turn_number for t in trace.turns), default=0)
