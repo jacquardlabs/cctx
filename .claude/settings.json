@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cctx autopsy --latest --quiet",
+            "async": true,
+            "description": "cctx SessionEnd hook (diagnostics on session exit)"
+          }
+        ]
+      }
+    ]
+  }
+}

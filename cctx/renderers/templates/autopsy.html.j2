@@ -45,9 +45,18 @@ dl.costs dd { font-variant-numeric: tabular-nums; }
   margin-right: .3rem;
   vertical-align: middle;
 }
-.badge.kind-retry_loop    { background: #f85149; color: #fff; }
-.badge.kind-scope_creep   { background: #d29922; color: #fff; }
-.badge.kind-stale_context { background: #388bfd; color: #fff; }
+/* One rule per FindingKind — a missing rule renders an invisible badge. */
+.badge.kind-retry_loop         { background: #f85149; color: #fff; }
+.badge.kind-scope_creep        { background: #d29922; color: #fff; }
+.badge.kind-stale_context      { background: #388bfd; color: #fff; }
+.badge.kind-tool_thrash        { background: #bc4b81; color: #fff; }
+.badge.kind-dead_end           { background: #8957e5; color: #fff; }
+.badge.kind-fanout_waste       { background: #2da44e; color: #fff; }
+.badge.kind-project_pattern    { background: #1f6feb; color: #fff; }
+.badge.kind-cache_hygiene      { background: #9e6a03; color: #fff; }
+.badge.kind-compaction         { background: #57606a; color: #fff; }
+.badge.kind-exploration_thrash { background: #bf3989; color: #fff; }
+.badge.kind-unused_context     { background: #6639ba; color: #fff; }
 .badge.sev-high   { background: #6e1507; color: #f85149; border: 1px solid #f85149; }
 .badge.sev-medium { background: #4d3500; color: #d29922; border: 1px solid #d29922; }
 .badge.sev-low    { background: #033a16; color: #3fb950; border: 1px solid #3fb950; }
@@ -167,9 +176,9 @@ footer {
     <h1>cctx autopsy</h1>
     <p><code>{{ diag.session_id }}</code></p>
     {% if diag.findings %}
-    <p class="verdict bad">{{ diag.findings|length }} {{ "finding" if diag.findings|length == 1 else "findings" }} &middot; ${{ "%.2f"|format(diag.waste_cost_usd) }} waste</p>
+    <p class="verdict bad">{{ diag.verdict }}</p>
     {% else %}
-    <p class="verdict clean">Clean session</p>
+    <p class="verdict clean">{{ diag.verdict }}</p>
     {% endif %}
     <dl class="costs">
       <dt>Total cost</dt><dd>~${{ "%.2f"|format(diag.total_cost_usd) }}</dd>

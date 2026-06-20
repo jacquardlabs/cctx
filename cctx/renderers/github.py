@@ -13,16 +13,10 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
+from cctx.models import KIND_LABEL
+
 if TYPE_CHECKING:
     from cctx.models import Diagnosis
-
-_KIND_LABEL = {
-    "retry_loop":    "Retry Loop",
-    "scope_creep":   "Scope Creep",
-    "stale_context": "Stale Context",
-    "tool_thrash":   "Tool Thrash",
-    "dead_end":      "Dead End",
-}
 
 _SEVERITY_EMOJI = {
     "high":   "🔴",
@@ -59,7 +53,7 @@ def render_github_summary(diagnosis: Diagnosis) -> str:
     lines.append("|---|---|---|")
     for f in diagnosis.findings:
         sev_icon = _SEVERITY_EMOJI.get(f.severity.value, "")
-        kind_label = _KIND_LABEL.get(f.kind.value, f.kind.value)
+        kind_label = KIND_LABEL.get(f.kind, f.kind.value.upper())
         summary = f.summary.replace("|", "\\|")
         lines.append(f"| {sev_icon} {f.severity.value} | {kind_label} | {summary} |")
 

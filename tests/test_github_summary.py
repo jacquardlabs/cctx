@@ -9,10 +9,12 @@ def _make_finding(kind_str: str = "retry_loop", cost: float | None = None):
     from cctx.models import Confidence, Finding, FindingKind, Severity
 
     kind_map = {
-        "retry_loop":    FindingKind.RETRY_LOOP,
-        "stale_context": FindingKind.STALE_CONTEXT,
-        "tool_thrash":   FindingKind.TOOL_THRASH,
-        "dead_end":      FindingKind.DEAD_END,
+        "retry_loop":     FindingKind.RETRY_LOOP,
+        "stale_context":  FindingKind.STALE_CONTEXT,
+        "tool_thrash":    FindingKind.TOOL_THRASH,
+        "dead_end":       FindingKind.DEAD_END,
+        "fanout_waste":   FindingKind.FANOUT_WASTE,
+        "unused_context": FindingKind.UNUSED_CONTEXT,
     }
     return Finding(
         kind=kind_map[kind_str],
@@ -65,7 +67,16 @@ def test_findings_table_present():
 
     md = render_github_summary(_make_diagnosis([_make_finding("retry_loop")]))
     assert "| Severity |" in md
-    assert "Retry Loop" in md
+    assert "RETRY LOOP" in md  # canonical KIND_LABEL, not Title Case
+
+
+def test_newer_kind_uses_kind_label_not_raw_enum():
+    """Newer kinds must render via KIND_LABEL, never the raw enum value (#129)."""
+    from cctx.renderers.github import render_github_summary
+
+    md = render_github_summary(_make_diagnosis([_make_finding("fanout_waste")]))
+    assert "| FANOUT WASTE |" in md  # Pattern column shows the canonical label
+    assert "| fanout_waste |" not in md  # never the raw enum in the Pattern column
 
 
 def test_finding_severity_emoji():
