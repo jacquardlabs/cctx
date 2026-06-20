@@ -17,12 +17,15 @@ It is forensic-first. You reach for it after a session — when something felt o
 
 This persona is already the target; everything shipped to date serves them directly.
 
+## Secondary persona
+
+**The multi-framework agent developer** who builds on the OpenAI Agents SDK or LangGraph and exports OTEL traces. Since v1.12.0, `cctx autopsy <trace>` parses OTLP `gen_ai.*` spans and runs the same forensic loop — they get the same findings, costs, and patches without a `~/.claude/projects/` path. This persona arrived with the OTEL parser; the core product surface is still Claude Code.
+
 ## What cctx is NOT for
 
 - Teams or organizations (no shared reports, no access control, no multi-user state)
 - Ambient monitoring (no daemons, no persistent watcher state, no alerting — `cctx watch` is a foreground command you start and stop)
 - General cost dashboards (CodeBurn covers that; cctx is forensic)
-- Multi-provider support (Claude Code only in v0/v1)
 - Users who do not read session transcripts or maintain CLAUDE.md
 
 ## Product principles
@@ -43,9 +46,9 @@ No network calls in the core analysis path (tokenizer may call the API for token
 Pattern classifiers are heuristics, not LLM calls. The same session file produces the same output every time. Testable on fixtures. Predictable cost to run.
 
 **6. Small surface, deep on each command.**
-Six commands (`ls`, `autopsy`, `harvest`, `watch`, `trace`, `export`). No command is shallow. Users should be able to learn the product in an afternoon and trust what it tells them.
+Seven commands (`ls`, `autopsy`, `harvest`, `watch`, `trace`, `export`, `init`). No command is shallow. `init` is a one-shot installer for the opt-in SessionEnd hook — it does not make cctx ambient (the hook is async, opt-in, and silent on clean sessions). Users should be able to learn the product in an afternoon and trust what it tells them.
 
-## Feature map (v1.4.0)
+## Feature map (v1.18.0)
 
 ### Shipped
 
@@ -53,32 +56,34 @@ Six commands (`ls`, `autopsy`, `harvest`, `watch`, `trace`, `export`). No comman
 |---|---|---|
 | Single-session diagnosis | `cctx autopsy <session>` | M2 |
 | Cross-session pattern detection | `cctx autopsy <project> --since N` | M2 |
+| Cross-project digest | `cctx autopsy --all --since N` | v1.18.0 |
 | `--since` string formats | `--since 7d`, `2w`, `2026-05-01`, date ranges | M6+ |
+| `--until DATE` on cross-session mode | `autopsy --since ... --until` | v1.2.0 (M12) |
 | Interactive aggregate drill-down | select pattern → per-session detail | M6+ |
 | HTML report | `cctx autopsy <session> --html FILE` | M2 |
 | GitHub Actions job summary | `cctx autopsy --github-summary` | M6+ |
 | CI fail gate | `cctx autopsy --fail-on-findings` | M6+ |
 | GitHub Action (composite) | `jacquardlabs/cctx@v1` in workflow | M6+ |
 | Session trace TUI | `cctx trace <session>` | M3 |
-| JSONL export | `cctx export <session> --format jsonl` | M4 |
-| CSV export | `cctx export <session> --format csv` | M4 |
+| JSONL / CSV / JSON export | `cctx export <session> --format jsonl\|csv\|json` | M4, JSON v1.2.0 |
+| Machine-readable diagnosis | `cctx autopsy <session> --json` (single + `--since` aggregate) | v1.2.0 / v1.10.0 |
 | Harvest (CLAUDE.md patcher) | `cctx harvest <session>` | M5 |
 | Harvest v2 (multi-target) | patches to `.claude/rules/`, `.claude/skills/` | M6+ |
-| Harvest --check | `cctx harvest <dir> --check` — audit for dead refs | M6+ |
+| Harvest --check depth | `cctx harvest <dir> --check` + `--check-severity` — dead refs, contradiction, redundancy, staleness | v1.4.0 (M13) |
 | Cross-session harvest | `cctx harvest <project> --since N` | M5 |
+| Cross-agent emit | `cctx harvest --emit agents [--sync]` — mirror CLAUDE.md sections to AGENTS.md | v1.6.0 (M15) |
+| Patch efficacy | `cctx harvest --efficacy` — before/after recurrence measurement | v1.9.0 (M17) |
 | Session discovery | `cctx ls` / `cctx autopsy --latest` | M6+ |
-| Live waste signals | `cctx watch <project>` | M6+ |
+| Live session badges | `cctx ls` | v1.5.0 |
+| Live waste signals + early idle exit | `cctx watch <project>` | M6+, idle exit v1.5.0 |
 | Verdict headline + `--top N` + `--turn N` | `autopsy` | v1.1.0 (M9) |
-| `--until DATE` on cross-session mode | `autopsy --since ... --until` | v1.2.0 (M12) |
-| Machine-readable diagnosis | `cctx autopsy <session> --json` | v1.2.0 (M12) |
-| JSON export | `cctx export <session> --format json` | v1.2.0 (M12) |
 | Project-specific pattern detection | `autopsy`/`harvest` `--since` | v1.3.0 (M14) |
-| Memory-hygiene depth | `harvest --check` + `--check-severity` | v1.4.0 (M13) |
-| Live session badges | `cctx ls` | unreleased |
-| Live session detection, early idle exit | `cctx watch` | unreleased |
-| Cross-agent emit | `cctx harvest --emit agents [--sync]` | M15; mirror CLAUDE.md sections to AGENTS.md — unreleased |
+| Per-subagent cost attribution | `cctx autopsy <session>` (subagent cost table) | v1.7.0 (M16) |
+| Health grade + savings framing | `cctx autopsy --health` | v1.14.0 |
+| SessionEnd hook installer + quiet mode | `cctx init` / `cctx autopsy --quiet` | v1.11.0 |
+| OTEL / multi-framework parsing | `cctx autopsy <otel.jsonl>` — OpenAI Agents SDK, LangGraph | v1.12.0 |
 
-### Pattern classifiers (v1.4.0)
+### Pattern classifiers (v1.18.0)
 
 | Pattern | Status |
 |---|---|
@@ -88,23 +93,30 @@ Six commands (`ls`, `autopsy`, `harvest`, `watch`, `trace`, `export`). No comman
 | Dead-end exploration | Shipped (v0.2.0) |
 | Tool thrashing | Shipped (v0.2.0) |
 | Project-specific patterns (cross-session) | Shipped (v1.3.0) |
+| Fan-out waste (subagent overlap + retry) | Shipped (v1.8.0) |
+| KV-cache hygiene (hit rate + cause) | Shipped (v1.13.0) |
+| Compaction (events + re-fetch waste) | Shipped (v1.15.0) |
+| Exploration thrash (read-heavy circling) | Shipped (v1.16.0) |
+| Unused context (MCP loaded but never called) | Shipped (v1.17.0) |
 
 ## What we are NOT building
 
 - A SaaS or cloud product
 - An agent (cctx reads logs; it does not call the Anthropic API except optionally for token counting)
-- Multi-provider support (Claude Code only in v0/v1)
+- Provider-specific integrations beyond trace parsing — cctx reads OTEL traces from any framework that exports them (OpenAI Agents SDK, LangGraph), but it does not hook into vendor APIs or dashboards
 - A fork-and-replay debugger
 - A general eval or testing framework
 
-## Known problems (as of 2026-06-09)
+## Known problems (as of 2026-06-20)
 
 **Active gaps:**
 
 1. **`cctx watch` polling is simple.** Early idle exit via `claude agents --json` has landed, but the watcher still polls at 1s without `fsevents`/`inotify` debouncing.
 
-2. **Subagent traces are parsed but never diagnosed.** The parser models subagent sessions recursively and the tokenizer counts their tokens, but no classifier or cost attribution reads `trace.subagents`. Autopsy is blind to spend inside agent fan-outs. (M16)
+2. **Subagent diagnosis is shallow.** Per-subagent cost attribution (v1.7.0, M16) and the fan-out waste classifier (v1.8.0) read `trace.subagents`, so autopsy is no longer blind to fan-out spend. What remains: cctx does not yet run the full per-turn classifier suite recursively inside each subagent — it attributes their cost and flags fan-out overlap/retry, but does not diagnose retry loops or stale context *within* a child session.
 
-3. **Cross-agent layer not started.** Tracked as M15 / #82 — the final step of the original growth staircase.
+**Resolved since the prior review:**
 
-4. **Harvest has no feedback loop.** Nothing measures whether an applied patch reduced the recurrence of the pattern it targeted, even though patches carry fingerprints and sessions carry dates. (M17)
+- **Subagent cost attribution** — shipped v1.7.0 (#88); fan-out waste classifier v1.8.0 (#89).
+- **Cross-agent layer** — `harvest --emit agents [--sync]` to AGENTS.md shipped v1.6.0 (M15 / #82). Breadth (`.cursorrules`, `.windsurfrules`, Copilot) remains future work.
+- **Harvest feedback loop** — `harvest --efficacy` before/after recurrence measurement shipped v1.9.0 (M17 / #90).
