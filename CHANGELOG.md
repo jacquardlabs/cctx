@@ -2,6 +2,44 @@
 
 <!-- version list -->
 
+## v1.19.0 (2026-06-20)
+
+### Chores
+
+- Scaffold jaqal review workflow ([#149](https://github.com/jacquardlabs/cctx/pull/149),
+  [`d5f70d5`](https://github.com/jacquardlabs/cctx/commit/d5f70d55ac9252086a461bab5055bd7a7e4b30f2))
+
+- Scaffold jaqal review workflow + commit 2026-06-20 reviews
+  ([#149](https://github.com/jacquardlabs/cctx/pull/149),
+  [`d5f70d5`](https://github.com/jacquardlabs/cctx/commit/d5f70d55ac9252086a461bab5055bd7a7e4b30f2))
+
+### Documentation
+
+- Commit 2026-06-20 deep-review reports ([#149](https://github.com/jacquardlabs/cctx/pull/149),
+  [`d5f70d5`](https://github.com/jacquardlabs/cctx/commit/d5f70d55ac9252086a461bab5055bd7a7e4b30f2))
+
+- Restructure README journey-first ([#148](https://github.com/jacquardlabs/cctx/pull/148),
+  [`e2c881d`](https://github.com/jacquardlabs/cctx/commit/e2c881d1d890f8ed85e65336abf26cef1ff9997e))
+
+- Sync CLAUDE.md, PRODUCT.md, DESIGN.md to v1.18.0
+  ([#148](https://github.com/jacquardlabs/cctx/pull/148),
+  [`e2c881d`](https://github.com/jacquardlabs/cctx/commit/e2c881d1d890f8ed85e65336abf26cef1ff9997e))
+
+- Sync CLAUDE.md, PRODUCT.md, DESIGN.md to v1.18.0
+  ([#147](https://github.com/jacquardlabs/cctx/pull/147),
+  [`197f730`](https://github.com/jacquardlabs/cctx/commit/197f7300e9a685ea1e3f3b9b6a1c4ad08dff361d))
+
+- Update README for all features shipped through M21
+  ([#127](https://github.com/jacquardlabs/cctx/pull/127),
+  [`a99e0bf`](https://github.com/jacquardlabs/cctx/commit/a99e0bf82122ede8627b3fd51bc2852be4a18c39))
+
+### Features
+
+- **pricing**: Multi-provider input+output pricing + freshness signals (#120)
+  ([#154](https://github.com/jacquardlabs/cctx/pull/154),
+  [`c50e3b2`](https://github.com/jacquardlabs/cctx/commit/c50e3b2f31b71da81f9ff95a234ef5b342e1932b))
+
+
 ## v1.18.0 (2026-06-20)
 
 ### Bug Fixes
