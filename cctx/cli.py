@@ -13,6 +13,7 @@ Commands:
 """
 from __future__ import annotations
 
+import json as _json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO
@@ -177,6 +178,48 @@ def _render_check_findings(findings: list, target_dir: Path) -> None:
         badge = _SEV_BADGE.get(f.severity, "      ")
         label = _ISSUE_LABEL.get(f.issue, f.issue.value)
         con.print(f"  {badge:<6}  {f.heading}  {label}: {f.detail}")
+
+
+_CLAUDE_CODE_LINE_TYPES = frozenset({
+    "user", "assistant", "system", "attachment",
+    "last-prompt", "permission-mode", "ai-title", "custom-title",
+    "queue-operation", "file-history-snapshot", "pr-link",
+})
+
+
+def _detect_source(path: Path) -> str:
+    """Sniff first non-empty lines to detect trace format.
+
+    Returns "claude_code" or "otel".
+    Raises click.UsageError if the format cannot be determined.
+    """
+    try:
+        with path.open(encoding="utf-8", errors="replace") as f:
+            for _ in range(5):
+                line = f.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                if "resourceSpans" in obj:
+                    return "otel"
+                if "traceId" in obj and "spanId" in obj:
+                    return "otel"
+                line_type = obj.get("type")
+                if isinstance(line_type, str) and line_type in _CLAUDE_CODE_LINE_TYPES:
+                    return "claude_code"
+    except OSError as exc:
+        raise click.UsageError(f"Cannot read file: {path}: {exc}") from exc
+
+    raise click.UsageError(
+        f"Cannot determine trace format for {path}.\n"
+        "Expected a Claude Code JSONL session file or an OTLP JSON trace export."
+    )
 
 
 @click.group()
@@ -415,7 +458,15 @@ def autopsy(
                 "TARGET is a directory. Use --since N for cross-session mode, "
                 "or pass a .jsonl file directly."
             )
-        trace = tokenize_session(parse_session(target))
+        source = _detect_source(target)
+        if source == "otel":
+            from cctx.parsers.otel import parse_otel_file as _parse_otel_file
+            otel_traces = _parse_otel_file(target)
+            if not otel_traces:
+                raise click.UsageError(f"No traces found in {target}")
+            trace = tokenize_session(otel_traces[0])
+        else:
+            trace = tokenize_session(parse_session(target))
         diagnosis = diagnostician.run(trace)
         diagnosis = claude_md.generate(diagnosis)
         if quiet:
