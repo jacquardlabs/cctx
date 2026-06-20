@@ -7,6 +7,11 @@ is flagged. One finding per unused server.
 Signal A (schema fetched via ToolSearch but not called) is excluded: schema
 text is not stored in the JSONL so there is no honest cost basis for it,
 and ToolSearch fetches are model-driven — not user-configurable.
+
+Evidence (Finding.evidence, kind=UNUSED_CONTEXT):
+    mcp_server
+    tools_available
+    tools_called
 """
 from __future__ import annotations
 

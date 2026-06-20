@@ -15,7 +15,7 @@ dependencies = [
     "click>=8.0",
     "rich-click>=1.8",
     "rich>=13.0",
-    "anthropic>=0.25",
+    "anthropic>=0.111",
     "textual>=0.59",
     "jinja2>=3.0",
 ]

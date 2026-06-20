@@ -3,6 +3,10 @@
 Detects repeated identical-failing tool calls with no intervening successful
 fix. One Finding per session — all loops bundled into a single Finding with
 all occurrences in evidence.
+
+Evidence (Finding.evidence, kind=RETRY_LOOP):
+    occurrences
+    loop_length
 """
 from __future__ import annotations
 

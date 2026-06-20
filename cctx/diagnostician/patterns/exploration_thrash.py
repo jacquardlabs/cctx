@@ -10,6 +10,10 @@ Signals:
      of tool calls are read-only and no Write/Edit appears.
   2. Any (tool_name, key) read-only pair called ≥ REPEAT_THRESHOLD times
      across the full session.
+
+Evidence (Finding.evidence, kind=EXPLORATION_THRASH):
+    thrash_windows
+    repeated_reads
 """
 from __future__ import annotations
 

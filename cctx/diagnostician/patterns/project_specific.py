@@ -5,6 +5,11 @@ detect(pairs) -> list[ProjectPattern]
 Finds (tool_name, failure_key, fix_key) triples that recur in 3+ sessions.
 Bash normalization uses first 3 tokens for cross-session fuzzy matching
 (intentionally looser than retry_loop). No LLM calls.
+
+Unlike the single-session classifiers, this is cross-session and emits
+ProjectPattern objects (not Finding objects), so it populates no
+Finding.evidence dict. The recommender turns each ProjectPattern directly
+into a PROJECT_PATTERN Patch (see recommender/claude_md.py).
 """
 from __future__ import annotations
 
