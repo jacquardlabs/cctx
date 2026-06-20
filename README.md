@@ -15,153 +15,78 @@ Diagnose your Claude Code sessions and OpenTelemetry agent traces — find out w
 pipx install cctx-cli
 ```
 
-Or with pip:
+Or with pip: `pip install cctx-cli`. `pipx` is recommended: it isolates cctx's dependencies from your projects.
 
-```bash
-pip install cctx-cli
+No API key required. cctx reads the JSONL logs Claude Code already writes to `~/.claude/projects/` and uses the token counts recorded there.
+
+## See it
+
+Point cctx at your most recent session:
+
+```console
+$ cctx autopsy --latest
+
+Verdict: RETRY LOOP + SCOPE CREEP + STALE CONTEXT
+Session cost: ~$1.42   (~85–95% of actual billing)
+Inflection turn: 14
+
+ RETRY LOOP  (high confidence) — Edit→Bash(npm test) repeated across turns
+ 14–22 with no intervening Read; the same test failed identically each time.
+
+ SCOPE CREEP  (medium confidence) — the prompt was "fix auth bug"; refactoring
+ of the user model began at turn 25 with no request observed.
+
+ STALE CONTEXT  (medium confidence) — a 4.8K-token directory listing from
+ turn 9 stayed in context 14 turns after its last reference.
+
+──────────────────────────────── CLAUDE.md patches ────────────────────────────
+
+When tests fail  [CLAUDE.md]
++ ## When tests fail
++ If a test fails twice with the same error, stop and re-read the source
++ file before attempting another fix.
+
+Scope  [CLAUDE.md]
++ ## Scope
++ Stick to the task in the prompt. If you spot adjacent issues, name them
++ and ask before fixing.
+
+cctx trace --latest   to step through this session interactively
 ```
 
-`pipx` is recommended — it installs cctx in an isolated environment so its dependencies don't conflict with your projects.
+Every finding ties to specific turns; every patch is a copy-pasteable `CLAUDE.md` diff. Add `--health` for an A–F grade plus per-finding savings.
 
-## Quick start
+## The loop
 
-```bash
-cctx ls                          # find your sessions
-cctx autopsy --latest            # diagnose the most recent one
-cctx autopsy --all --since 7d    # weekly digest across all projects
-cctx watch                       # live signals during an active session
-```
+cctx is forensic: you reach for it *after* a session that felt off, cost more than expected, or on a weekly review. The payoff comes from running the loop, not a single command:
 
-cctx is primarily a forensic tool. You reach for it after a session — when something felt off, when the cost was higher than expected, or on a weekly review pass. `cctx watch` runs during a session and surfaces patterns as they happen. It reads the JSONL logs Claude Code writes to `~/.claude/projects/` and produces findings with attributed cost and copy-pasteable `CLAUDE.md` patches.
-
-cctx also diagnoses OTEL traces from the OpenAI Agents SDK, LangGraph, and any framework that emits `gen_ai.*` semantic convention spans — auto-detected, no flags needed. See [Diagnosing other agent frameworks](docs/quickstart-otel.md).
-
-## Commands
-
-### `cctx ls` — list projects and sessions
+**1. Diagnose** — autopsy the session you just finished.
 
 ```bash
-cctx ls                    # list all Claude Code projects
-cctx ls ~/Projects/myapp   # list sessions for a specific project
+cctx autopsy --latest        # the most recent session in this project
+cctx init                    # or: run it automatically at every session end
 ```
 
-### `cctx autopsy` — diagnose a session
+**2. Fix** — turn the findings into durable `CLAUDE.md` rules. Harvest previews the diffs, then applies on confirm. It's idempotent: running it twice never duplicates an entry.
 
 ```bash
-# Most recent session in the current directory
-cctx autopsy --latest
-
-# Specific session file
-cctx autopsy ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl
-
-# All sessions from the last 7 days in one project
-cctx autopsy ~/Projects/myapp --since 7
-
-# Weekly digest across all projects (cross-project mode)
-cctx autopsy --all --since 7d
-
-# Health grade (A–F) with per-finding savings estimate
-cctx autopsy --latest --health
-
-# Turn-level detail for a specific turn
-cctx autopsy --latest --turn 12
-
-# Write a self-contained HTML report
-cctx autopsy ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --html report.html
-
-# OTEL trace from OpenAI Agents SDK, LangGraph, or any gen_ai.*-instrumented framework
-cctx autopsy agent_trace.jsonl
+cctx harvest . --since 7d    # patches from the last week of sessions
 ```
 
-Runs 10 pattern classifiers and prints findings with attributed cost. `--since N` aggregates patterns across sessions in a single project. `--all --since N` iterates every project under `~/.claude/projects/` and surfaces `FindingKind`s that recur in 2+ projects, with patches targeting `~/.claude/CLAUDE.md`.
-
-OTEL traces are auto-detected — cctx sniffs the file format and routes to the right parser. See [docs/quickstart-otel.md](docs/quickstart-otel.md) for how to wire the OTEL exporter in each framework.
-
-### `cctx harvest` — apply patches to CLAUDE.md
+**3. Verify** — after the rules have had time to bite, check whether they actually changed behavior.
 
 ```bash
-# Interactive: preview then confirm
-cctx harvest ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl
-
-# Preview only — don't write anything
-cctx harvest ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --dry-run
-
-# Apply without confirmation
-cctx harvest ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --apply
-
-# Cross-session: patches from the last 7 days of sessions
-cctx harvest ~/Projects/myapp --since 7
-
-# Also write patches to AGENTS.md (Codex / OpenAI Agents)
-cctx harvest --since 7 ~/Projects/myapp --emit agents
-
-# Mirror already-harvested cctx sections from CLAUDE.md into AGENTS.md
-cctx harvest --since 7 ~/Projects/myapp --emit agents --sync
-
-# Measure whether applied patches reduced their target patterns
-cctx harvest ~/Projects/myapp --efficacy
+cctx harvest . --efficacy    # finding rates before vs. after each patch
 ```
 
-Turns autopsy findings into copy-pasteable `CLAUDE.md` additions. Patches are idempotent — running harvest twice on the same session won't duplicate entries. Use `--target-dir DIR` to specify which directory's `CLAUDE.md` to patch (default: current working directory).
-
-`--emit agents` clones applicable `CLAUDE.md` patches to `AGENTS.md` in the same directory. `--sync` also mirrors any cctx-managed sections that were previously harvested but aren't in the current session's findings. `--efficacy` compares finding rates before and after each managed heading was applied — useful for measuring whether a patch actually changed behavior.
+Two more entry points around the loop:
 
 ```bash
-# Audit existing CLAUDE.md for dead file references and empty sections
-cctx harvest . --check
-
-# Only fail on HIGH-severity issues
-cctx harvest . --check --check-severity high
+cctx autopsy --all --since 7d   # weekly digest across every project
+cctx watch                      # live waste signals during an active session
 ```
 
-`--check` reads the target `CLAUDE.md` without writing anything. Exits 1 if issues meet or exceed the severity threshold (default: `medium`). Useful as a CI step when `CLAUDE.md` is committed to the repo.
-
-### `cctx export` — export session data
-
-```bash
-# CSV to file
-cctx export ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --format csv --out session.csv
-
-# JSONL to stdout
-cctx export ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --format jsonl
-
-# Omit patch text and finding summaries (smaller output for scripted use)
-cctx export ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl --format jsonl --no-content
-```
-
-Dumps session analysis as JSONL (one object per session) or CSV (one row per turn) for use in external tools.
-
-### `cctx watch` — live waste signals
-
-```bash
-cctx watch                    # watch the active session in cwd's project
-cctx watch ~/Projects/myapp   # watch a specific project
-```
-
-Tails the active session as it progresses and prints a single-line alert each time a new waste pattern is detected. Exits after 30s of session inactivity or Ctrl+C.
-
-### `cctx init` — automatic post-session diagnostics
-
-```bash
-# Install hook for the current project (.claude/settings.json)
-cctx init
-
-# Install hook globally (~/.claude/settings.json — all projects)
-cctx init --global
-
-# Remove the hook
-cctx init --remove
-```
-
-Installs a `SessionEnd` hook that runs `cctx autopsy --latest --quiet` automatically when a Claude Code session ends. Output appears only when findings exist — silent when the session is clean. Running `cctx init` twice does not duplicate the hook.
-
-### `cctx trace` — interactive TUI
-
-```bash
-cctx trace ~/.claude/projects/-Users-you-Projects-myapp/abc123.jsonl
-```
-
-Steps through a session turn by turn in a terminal UI with autopsy findings overlaid. Press `q` to quit.
+cctx also diagnoses OTEL traces from the OpenAI Agents SDK, LangGraph, and any `gen_ai.*`-instrumented framework (auto-detected, no flags). See [Other agent frameworks](#other-agent-frameworks).
 
 ## What cctx detects
 
@@ -178,39 +103,93 @@ Steps through a session turn by turn in a terminal UI with autopsy findings over
 | **Exploration thrash** | High read/search volume with no writes — circling without progress | Token cost of reads that don't advance the task |
 | **Unused context** | MCP server loaded at session start but never called | Token overhead on every API request for tools that go unused |
 
-## Cost attribution
+## Commands
 
-cctx estimates session cost using Anthropic's published billing rates:
+Common invocations below. Run `cctx <command> --help` for the full flag set.
 
-- Input tokens: standard rate
-- Cache reads: 10% of the input rate
-- Cache writes: 125% of the input rate
+### `cctx ls` — find your sessions
 
-Stale-context waste is attributed turn by turn: every turn a large result stays in context after its last reference counts against waste.
+```bash
+cctx ls                      # all Claude Code projects
+cctx ls ~/Projects/myapp     # sessions in one project
+```
+
+Handles the encoded `~/.claude/projects/` layout for you: no need to navigate it by hand.
+
+### `cctx autopsy` — diagnose a session
+
+```bash
+cctx autopsy --latest                # most recent session in this project
+cctx autopsy session.jsonl           # a specific session file
+cctx autopsy ~/Projects/myapp --since 7d   # aggregate one project's recent sessions
+cctx autopsy --all --since 7d        # cross-project weekly digest
+```
+
+Runs 10 pattern classifiers and prints findings with attributed cost. Notable flags: `--health` (A–F grade + savings), `--turn N` (turn-level detail), `--html report.html` (self-contained report), `--json` (machine-readable). `--since` accepts `7`, `7d`, `2w`, `2026-05-01`, or `2026-05-01..2026-05-15`.
+
+### `cctx harvest` — write fixes into CLAUDE.md
+
+```bash
+cctx harvest session.jsonl           # preview, then confirm
+cctx harvest . --since 7d            # patches from the last week
+cctx harvest . --since 7d --apply    # apply without prompting
+cctx harvest . --check               # audit CLAUDE.md for dead refs / empty sections
+```
+
+Turns autopsy findings into copy-pasteable `CLAUDE.md` additions, deduplicated by fingerprint. `--target-dir DIR` picks which directory's `CLAUDE.md` to patch. `--emit agents` also writes applicable patches to `AGENTS.md` (add `--sync` to mirror existing cctx-managed sections). `--efficacy` measures whether applied patches reduced their target patterns. `--check` exits 1 when issues meet the severity threshold (useful as a CI gate on a committed `CLAUDE.md`).
+
+### `cctx watch` — live waste signals
+
+```bash
+cctx watch                   # the active session in this project
+cctx watch ~/Projects/myapp  # a specific project
+```
+
+Tails the active session and prints a one-line alert each time a new waste pattern appears. Exits after 30s of inactivity or Ctrl+C.
+
+### `cctx init` — automatic post-session diagnostics
+
+```bash
+cctx init            # install the hook for this project
+cctx init --global   # install for all projects (~/.claude/settings.json)
+cctx init --remove   # uninstall
+```
+
+Installs a `SessionEnd` hook that runs `cctx autopsy --latest --quiet` when a session ends. Output appears only when findings exist; idempotent.
+
+### `cctx trace` — interactive TUI
+
+```bash
+cctx trace --latest          # step through the most recent session
+cctx trace session.jsonl     # a specific session
+```
+
+Walks a session turn by turn with autopsy findings overlaid. Press `q` to quit.
+
+### `cctx export` — machine-readable data
+
+```bash
+cctx export session.jsonl --format csv --out session.csv   # one row per turn
+cctx export session.jsonl --format jsonl                   # one object per session, to stdout
+```
+
+Dumps session analysis as `jsonl`/`csv`/`json` for external tools. Add `--no-content` to omit patch text and finding summaries.
+
+## Going further
+
+### Other agent frameworks
+
+cctx diagnoses OTEL traces from the OpenAI Agents SDK, LangGraph, and any framework that emits `gen_ai.*` semantic-convention spans. It sniffs the file format and routes to the right parser: `cctx autopsy agent_trace.jsonl` works with no flags. See [docs/quickstart-otel.md](docs/quickstart-otel.md) for wiring the exporter in each framework.
+
+### Cost attribution
+
+cctx estimates cost from Anthropic's published billing rates: input tokens at the standard rate, cache reads at 10%, cache writes at 125%. Stale-context waste is attributed turn by turn: every turn a large result lingers after its last reference counts against waste.
 
 These are **approximations** (~85–95% of actual API billing). The gap is internal prompt framing that isn't observable in the JSONL logs. cctx shows estimated costs, not billing-exact figures.
 
-## Requirements
+### In CI
 
-- Python 3.10+
-- Claude Code session logs at `~/.claude/projects/` (written automatically by Claude Code)
-- No API key required for analysis
-
-An `ANTHROPIC_API_KEY` is optional. When set, cctx can call the Anthropic API for exact token counts. Without it, cctx uses the token counts already recorded in the JSONL logs (the default and recommended mode for most users).
-
-## Session log location
-
-Claude Code writes logs to `~/.claude/projects/<encoded-path>/<session-id>.jsonl`. The project path is URL-encoded with `-` replacing `/`, so `/Users/you/Projects/myapp` becomes `-Users-you-Projects-myapp`.
-
-`cctx ls` handles discovery automatically — you don't need to navigate the encoded directory structure by hand.
-
-## Using cctx in CI
-
-cctx is primarily a local forensic tool — it reads session logs from `~/.claude/projects/` on your machine. Those logs are personal conversation history and should not be committed to git or uploaded as build artifacts.
-
-**The one case where cctx belongs in CI:** when Claude Code itself runs inside a GitHub Actions job (agentic PR workflows, automated coding steps). In that case the JSONL logs are written on the runner during the job and cctx can analyse them as a post-step.
-
-### GitHub Action (recommended)
+cctx is a local forensic tool: session logs are personal history and shouldn't be committed to git. The one exception: **when Claude Code runs inside a GitHub Actions job** (agentic PR workflows), the logs are written on the runner and cctx can analyze them as a post-step.
 
 ```yaml
 - uses: anthropics/claude-code-action@v1
@@ -223,26 +202,13 @@ cctx is primarily a local forensic tool — it reads session logs from `~/.claud
     github_summary: true      # write findings to the job summary UI
 ```
 
-The action auto-discovers the most recent Claude Code session written on the runner. It does not accept arbitrary file paths — that pattern would require committing session logs to the repo, which you should not do.
+The action auto-discovers the most recent session on the runner. For a manual step, `pipx run cctx-cli autopsy --latest . --github-summary` appends findings to the job summary; add `--fail-on-findings` to exit 1 on detection.
 
-### Manual step
+### Requirements
 
-```yaml
-- uses: anthropics/claude-code-action@v1
-  with:
-    # ... your agentic workflow config
-
-- name: Analyse session
-  run: pipx run cctx-cli autopsy --latest . --github-summary
-```
-
-`--github-summary` appends a markdown findings report to the GitHub Actions job summary UI. Add `--fail-on-findings` to exit 1 when waste patterns are detected.
-
-Commands that make sense as CI steps:
-- `cctx autopsy` — diagnose the session that just ran
-- `cctx export` — archive structured findings as a build artifact
-
-`cctx harvest` requires session logs AND writes to `CLAUDE.md` — neither step maps cleanly to CI. Run it locally after a session.
+- Python 3.10+
+- Claude Code session logs at `~/.claude/projects/` (written automatically)
+- No API key for analysis. An optional `ANTHROPIC_API_KEY` enables exact token counts via the Anthropic API; without it, cctx uses the counts already in the logs (the default and recommended mode).
 
 ## License
 
