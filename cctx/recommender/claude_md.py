@@ -85,16 +85,28 @@ _COMPACTION_DIFF = """\
 +tool outputs once you've extracted what you need, so compaction doesn't erase
 +work-in-progress state."""
 
+_EXPLORATION_THRASH_DIFF = """\
++## Exploration thrash
++
++Before opening another file or running another search, state the specific
++question this call must answer and how the answer changes the next step. If
++you have read 6+ files without writing anything, stop and synthesise what
++you know. Never call the same read or grep more than twice with identical
++arguments — if the first two didn't help, a third won't either."""
+
 _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     # kind → (description, diff_body, target_file)
-    FindingKind.RETRY_LOOP:    ("Add retry discipline rule", _RETRY_LOOP_DIFF, "CLAUDE.md"),
-    FindingKind.SCOPE_CREEP:   ("Add scope discipline rule", _SCOPE_CREEP_DIFF, "CLAUDE.md"),
+    FindingKind.RETRY_LOOP: ("Add retry discipline rule", _RETRY_LOOP_DIFF, "CLAUDE.md"),
+    FindingKind.SCOPE_CREEP: ("Add scope discipline rule", _SCOPE_CREEP_DIFF, "CLAUDE.md"),
     FindingKind.STALE_CONTEXT: ("Add context hygiene rule", _STALE_CONTEXT_DIFF, "CLAUDE.md"),
-    FindingKind.TOOL_THRASH:   ("Add tool-call discipline rule", _TOOL_THRASH_DIFF, "CLAUDE.md"),
-    FindingKind.DEAD_END:      ("Add exploration discipline rule", _DEAD_END_DIFF, "CLAUDE.md"),
-    FindingKind.FANOUT_WASTE:  ("Add fan-out discipline rule", _FANOUT_WASTE_DIFF, "CLAUDE.md"),
+    FindingKind.TOOL_THRASH: ("Add tool-call discipline rule", _TOOL_THRASH_DIFF, "CLAUDE.md"),
+    FindingKind.DEAD_END: ("Add exploration discipline rule", _DEAD_END_DIFF, "CLAUDE.md"),
+    FindingKind.FANOUT_WASTE: ("Add fan-out discipline rule", _FANOUT_WASTE_DIFF, "CLAUDE.md"),
     FindingKind.CACHE_HYGIENE: ("Add cache hygiene rule", _CACHE_HYGIENE_DIFF, "CLAUDE.md"),
-    FindingKind.COMPACTION:    ("Add compaction hygiene rule", _COMPACTION_DIFF, "CLAUDE.md"),
+    FindingKind.COMPACTION: ("Add compaction hygiene rule", _COMPACTION_DIFF, "CLAUDE.md"),
+    FindingKind.EXPLORATION_THRASH: (
+        "Add exploration thrash rule", _EXPLORATION_THRASH_DIFF, "CLAUDE.md"
+    ),
 }
 
 

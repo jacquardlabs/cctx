@@ -167,27 +167,29 @@ class SessionTrace:
 
 
 class FindingKind(str, Enum):
-    RETRY_LOOP    = "retry_loop"
-    SCOPE_CREEP   = "scope_creep"
-    STALE_CONTEXT = "stale_context"
-    TOOL_THRASH   = "tool_thrash"
-    DEAD_END      = "dead_end"
-    FANOUT_WASTE  = "fanout_waste"
-    PROJECT_PATTERN = "project_pattern"
-    CACHE_HYGIENE = "cache_hygiene"
-    COMPACTION    = "compaction"
+    RETRY_LOOP         = "retry_loop"
+    SCOPE_CREEP        = "scope_creep"
+    STALE_CONTEXT      = "stale_context"
+    TOOL_THRASH        = "tool_thrash"
+    DEAD_END           = "dead_end"
+    FANOUT_WASTE       = "fanout_waste"
+    PROJECT_PATTERN    = "project_pattern"
+    CACHE_HYGIENE      = "cache_hygiene"
+    COMPACTION         = "compaction"
+    EXPLORATION_THRASH = "exploration_thrash"
 
 
 KIND_LABEL: dict[FindingKind, str] = {
-    FindingKind.RETRY_LOOP:    "RETRY LOOP",
-    FindingKind.SCOPE_CREEP:   "SCOPE CREEP",
-    FindingKind.STALE_CONTEXT: "STALE CONTEXT",
-    FindingKind.TOOL_THRASH:   "TOOL THRASH",
-    FindingKind.DEAD_END:      "DEAD END",
-    FindingKind.FANOUT_WASTE:  "FANOUT WASTE",
-    FindingKind.PROJECT_PATTERN: "PROJECT PATTERN",
-    FindingKind.CACHE_HYGIENE: "CACHE HYGIENE",
-    FindingKind.COMPACTION:    "COMPACTION",
+    FindingKind.RETRY_LOOP:         "RETRY LOOP",
+    FindingKind.SCOPE_CREEP:        "SCOPE CREEP",
+    FindingKind.STALE_CONTEXT:      "STALE CONTEXT",
+    FindingKind.TOOL_THRASH:        "TOOL THRASH",
+    FindingKind.DEAD_END:           "DEAD END",
+    FindingKind.FANOUT_WASTE:       "FANOUT WASTE",
+    FindingKind.PROJECT_PATTERN:    "PROJECT PATTERN",
+    FindingKind.CACHE_HYGIENE:      "CACHE HYGIENE",
+    FindingKind.COMPACTION:         "COMPACTION",
+    FindingKind.EXPLORATION_THRASH: "EXPLORATION THRASH",
 }
 
 # Maps FindingKind to the exact ## heading emitted by its recommender patch
@@ -195,14 +197,15 @@ KIND_LABEL: dict[FindingKind, str] = {
 # harvest.py imports this (never reaches into recommender/) so emit/sync can
 # identify cctx-managed sections without depending on the patch generator.
 MANAGED_HEADINGS: dict[FindingKind, str] = {
-    FindingKind.RETRY_LOOP:    "## Retry discipline",
-    FindingKind.SCOPE_CREEP:   "## Scope discipline",
-    FindingKind.STALE_CONTEXT: "## Context hygiene",
-    FindingKind.TOOL_THRASH:   "## Tool-call discipline",
-    FindingKind.DEAD_END:      "## Exploration discipline",
-    FindingKind.FANOUT_WASTE:  "## Fan-out discipline",
-    FindingKind.CACHE_HYGIENE: "## Cache hygiene",
-    FindingKind.COMPACTION:    "## Compaction hygiene",
+    FindingKind.RETRY_LOOP:         "## Retry discipline",
+    FindingKind.SCOPE_CREEP:        "## Scope discipline",
+    FindingKind.STALE_CONTEXT:      "## Context hygiene",
+    FindingKind.TOOL_THRASH:        "## Tool-call discipline",
+    FindingKind.DEAD_END:           "## Exploration discipline",
+    FindingKind.FANOUT_WASTE:       "## Fan-out discipline",
+    FindingKind.CACHE_HYGIENE:      "## Cache hygiene",
+    FindingKind.COMPACTION:         "## Compaction hygiene",
+    FindingKind.EXPLORATION_THRASH: "## Exploration thrash",
 }
 
 # Project-specific patterns use a heading that embeds tool+key, so the managed
