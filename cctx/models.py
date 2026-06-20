@@ -177,6 +177,7 @@ class FindingKind(str, Enum):
     CACHE_HYGIENE      = "cache_hygiene"
     COMPACTION         = "compaction"
     EXPLORATION_THRASH = "exploration_thrash"
+    UNUSED_CONTEXT     = "unused_context"
 
 
 KIND_LABEL: dict[FindingKind, str] = {
@@ -190,6 +191,7 @@ KIND_LABEL: dict[FindingKind, str] = {
     FindingKind.CACHE_HYGIENE:      "CACHE HYGIENE",
     FindingKind.COMPACTION:         "COMPACTION",
     FindingKind.EXPLORATION_THRASH: "EXPLORATION THRASH",
+    FindingKind.UNUSED_CONTEXT:     "UNUSED CONTEXT",
 }
 
 # Maps FindingKind to the exact ## heading emitted by its recommender patch
@@ -206,6 +208,7 @@ MANAGED_HEADINGS: dict[FindingKind, str] = {
     FindingKind.CACHE_HYGIENE:      "## Cache hygiene",
     FindingKind.COMPACTION:         "## Compaction hygiene",
     FindingKind.EXPLORATION_THRASH: "## Exploration thrash",
+    FindingKind.UNUSED_CONTEXT:     "## Context overhead",
 }
 
 # Project-specific patterns use a heading that embeds tool+key, so the managed

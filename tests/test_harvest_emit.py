@@ -14,6 +14,7 @@ def test_managed_headings_cover_the_diagnostic_kinds():
         FindingKind.CACHE_HYGIENE:      "## Cache hygiene",
         FindingKind.COMPACTION:         "## Compaction hygiene",
         FindingKind.EXPLORATION_THRASH: "## Exploration thrash",
+        FindingKind.UNUSED_CONTEXT:     "## Context overhead",
     }
 
 

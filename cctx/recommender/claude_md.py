@@ -94,6 +94,13 @@ _EXPLORATION_THRASH_DIFF = """\
 +you know. Never call the same read or grep more than twice with identical
 +arguments — if the first two didn't help, a third won't either."""
 
+_UNUSED_CONTEXT_DIFF = """\
++## Context overhead
++
++Review your MCP server list in `.claude/settings.json`. Servers loaded in
++every session but never called add token overhead to each request. Disable
++servers you don't actively use in this project."""
+
 _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     # kind → (description, diff_body, target_file)
     FindingKind.RETRY_LOOP: ("Add retry discipline rule", _RETRY_LOOP_DIFF, "CLAUDE.md"),
@@ -106,6 +113,9 @@ _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     FindingKind.COMPACTION: ("Add compaction hygiene rule", _COMPACTION_DIFF, "CLAUDE.md"),
     FindingKind.EXPLORATION_THRASH: (
         "Add exploration thrash rule", _EXPLORATION_THRASH_DIFF, "CLAUDE.md"
+    ),
+    FindingKind.UNUSED_CONTEXT: (
+        "Add context overhead note", _UNUSED_CONTEXT_DIFF, "CLAUDE.md"
     ),
 }
 
