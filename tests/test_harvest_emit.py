@@ -12,6 +12,7 @@ def test_managed_headings_cover_the_diagnostic_kinds():
         FindingKind.DEAD_END:      "## Exploration discipline",
         FindingKind.FANOUT_WASTE:  "## Fan-out discipline",
         FindingKind.CACHE_HYGIENE: "## Cache hygiene",
+        FindingKind.COMPACTION:    "## Compaction hygiene",
     }
 
 

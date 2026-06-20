@@ -76,6 +76,15 @@ _CACHE_HYGIENE_DIFF = """\
 +with a stable, cacheable preamble. A 10× cost difference separates a warm
 +cache hit from a cold input read."""
 
+_COMPACTION_DIFF = """\
++## Compaction hygiene
++
++If context-window compaction occurs mid-session, assume all previously read files
++are gone from context. Re-read only files you actively need for the next step —
++don't reflexively reload everything. Better: compact earlier by summarizing large
++tool outputs once you've extracted what you need, so compaction doesn't erase
++work-in-progress state."""
+
 _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     # kind → (description, diff_body, target_file)
     FindingKind.RETRY_LOOP:    ("Add retry discipline rule", _RETRY_LOOP_DIFF, "CLAUDE.md"),
@@ -85,6 +94,7 @@ _TEMPLATES: dict[FindingKind, tuple[str, str, str]] = {
     FindingKind.DEAD_END:      ("Add exploration discipline rule", _DEAD_END_DIFF, "CLAUDE.md"),
     FindingKind.FANOUT_WASTE:  ("Add fan-out discipline rule", _FANOUT_WASTE_DIFF, "CLAUDE.md"),
     FindingKind.CACHE_HYGIENE: ("Add cache hygiene rule", _CACHE_HYGIENE_DIFF, "CLAUDE.md"),
+    FindingKind.COMPACTION:    ("Add compaction hygiene rule", _COMPACTION_DIFF, "CLAUDE.md"),
 }
 
 

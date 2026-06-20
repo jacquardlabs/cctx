@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from cctx.diagnostician.patterns.compaction import is_compaction_turn
 from cctx.models import Confidence, Finding, FindingKind, Severity
 
 if TYPE_CHECKING:
@@ -65,7 +66,7 @@ def _classify_impl(trace: SessionTrace) -> list[Finding]:
 
     for turn in trace.turns:
         # Compaction resets state
-        if turn.text.startswith("<context_window"):
+        if is_compaction_turn(turn):
             run_tool = run_key = None
             run_count = 0
             continue
