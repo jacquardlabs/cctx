@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.17.0 (2026-06-20)
+
+### Features
+
+- Unused-context classifier — MCP servers loaded but never called (#91)
+  ([#125](https://github.com/jacquardlabs/cctx/pull/125),
+  [`08df1a2`](https://github.com/jacquardlabs/cctx/commit/08df1a29de94bb0d946e25f12fd7c6adc5fa4e6c))
+
+
 ## v1.16.0 (2026-06-20)
 
 ### Features
