@@ -1,3 +1,3 @@
 """cctx: profile, debug, and optimize Claude Code and Agent SDK sessions."""
 
-__version__ = "1.13.0"
+__version__ = "1.14.0"

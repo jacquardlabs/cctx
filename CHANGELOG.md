@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.14.0 (2026-06-20)
+
+### Features
+
+- Savings framing + health grade behind --health flag (#101)
+  ([#122](https://github.com/jacquardlabs/cctx/pull/122),
+  [`ee4bc28`](https://github.com/jacquardlabs/cctx/commit/ee4bc2833d7260275e95666ba45a5952aa174aee))
+
+
 ## v1.13.0 (2026-06-20)
 
 ### Documentation
