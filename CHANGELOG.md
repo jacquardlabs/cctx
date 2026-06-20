@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.16.0 (2026-06-20)
+
+### Features
+
+- Exploration thrash classifier — detect read-heavy circling without progress (#99)
+  ([#124](https://github.com/jacquardlabs/cctx/pull/124),
+  [`21f3374`](https://github.com/jacquardlabs/cctx/commit/21f3374bb0e2c60db0411213773ad9dffca7ec1f))
+
+
 ## v1.15.0 (2026-06-20)
 
 ### Features
