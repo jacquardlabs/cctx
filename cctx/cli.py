@@ -13,6 +13,7 @@ Commands:
 """
 from __future__ import annotations
 
+import json as _json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO
@@ -177,6 +178,48 @@ def _render_check_findings(findings: list, target_dir: Path) -> None:
         badge = _SEV_BADGE.get(f.severity, "      ")
         label = _ISSUE_LABEL.get(f.issue, f.issue.value)
         con.print(f"  {badge:<6}  {f.heading}  {label}: {f.detail}")
+
+
+_CLAUDE_CODE_LINE_TYPES = frozenset({
+    "user", "assistant", "system", "attachment",
+    "last-prompt", "permission-mode", "ai-title", "custom-title",
+    "queue-operation", "file-history-snapshot", "pr-link",
+})
+
+
+def _detect_source(path: Path) -> str:
+    """Sniff first non-empty lines to detect trace format.
+
+    Returns "claude_code" or "otel".
+    Raises click.UsageError if the format cannot be determined.
+    """
+    try:
+        with path.open(encoding="utf-8", errors="replace") as f:
+            for _ in range(5):
+                line = f.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                if "resourceSpans" in obj:
+                    return "otel"
+                if "traceId" in obj and "spanId" in obj:
+                    return "otel"
+                line_type = obj.get("type")
+                if isinstance(line_type, str) and line_type in _CLAUDE_CODE_LINE_TYPES:
+                    return "claude_code"
+    except OSError as exc:
+        raise click.UsageError(f"Cannot read file: {path}: {exc}") from exc
+
+    raise click.UsageError(
+        f"Cannot determine trace format for {path}.\n"
+        "Expected a Claude Code JSONL session file or an OTLP JSON trace export."
+    )
 
 
 @click.group()

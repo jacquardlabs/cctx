@@ -292,3 +292,39 @@ def test_empty_file_returns_empty_list(tmp_path: Path) -> None:
     empty.write_text("")
     result = parse_otel_file(empty)
     assert result == []
+
+
+def test_detect_source_identifies_otel(tmp_path: Path) -> None:
+    import json as _json
+    from cctx.cli import _detect_source
+
+    otel_line = _json.dumps({"resourceSpans": [{"resource": {"attributes": []}, "scopeSpans": []}]})
+    p = tmp_path / "trace.jsonl"
+    p.write_text(otel_line + "\n")
+    assert _detect_source(p) == "otel"
+
+
+def test_detect_source_identifies_claude_code(tmp_path: Path) -> None:
+    import json as _json
+    from cctx.cli import _detect_source
+
+    cc_line = _json.dumps({"type": "assistant", "uuid": "abc", "timestamp": "2026-01-01T00:00:00Z"})
+    p = tmp_path / "session.jsonl"
+    p.write_text(cc_line + "\n")
+    assert _detect_source(p) == "claude_code"
+
+
+def test_detect_source_uses_otel_fixture() -> None:
+    from cctx.cli import _detect_source
+
+    assert _detect_source(FIXTURES / "otel_handoff.jsonl") == "otel"
+
+
+def test_detect_source_unknown_raises_usage_error(tmp_path: Path) -> None:
+    import click
+    from cctx.cli import _detect_source
+
+    p = tmp_path / "unknown.jsonl"
+    p.write_text('{"foo": "bar"}\n')
+    with pytest.raises(click.UsageError):
+        _detect_source(p)
