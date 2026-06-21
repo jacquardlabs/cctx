@@ -452,3 +452,23 @@ def test_finding_modal_opens_on_flagged_turn():
             assert type(app.screen).__name__ == "FindingModal"
 
     asyncio.run(scenario())
+
+
+def test_finding_modal_text_tags_subagent_finding():
+    import dataclasses
+
+    from cctx.models import FindingKind
+    from cctx.renderers.trace_tui import finding_modal_text
+
+    f = dataclasses.replace(_finding_of_kind(FindingKind.RETRY_LOOP), session_id="sub-1")
+    text = finding_modal_text([f], sub_labels={"sub-1": "Resolver"})
+    assert "[Resolver]" in text
+    assert "RETRY LOOP" in text
+
+
+def test_finding_modal_text_root_finding_has_no_tag():
+    from cctx.models import FindingKind
+    from cctx.renderers.trace_tui import finding_modal_text
+
+    text = finding_modal_text([_finding_of_kind(FindingKind.RETRY_LOOP)])
+    assert "[bold]RETRY LOOP" in text  # kind label directly after bold, no [tag] inserted

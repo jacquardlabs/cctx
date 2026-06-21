@@ -57,11 +57,18 @@ def verdict(diagnosis: Diagnosis) -> str:
     return diagnosis.verdict
 
 
-def finding_modal_text(findings: list[Finding]) -> str:
-    """Body text for the FindingModal — one block per finding, KIND_LABEL headed."""
+def finding_modal_text(
+    findings: list[Finding], sub_labels: dict[str, str] | None = None
+) -> str:
+    """Body text for the FindingModal — one block per finding, KIND_LABEL headed.
+    Subagent findings (session_id set) are prefixed with their [label]."""
+    sub_labels = sub_labels or {}
     lines: list[str] = []
     for f in findings:
         label = KIND_LABEL.get(f.kind, f.kind.value.upper())
+        if f.session_id is not None:
+            tag = sub_labels.get(f.session_id, f.session_id[:8])
+            label = f"[{tag}] {label}"
         lines.append(
             f"[bold]{label}[/]  severity={f.severity.value}  confidence={f.confidence.value}"
         )
@@ -105,6 +112,7 @@ def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
 
     flagged = _build_flagged_index(diagnosis.findings, trace)
     session_verdict = verdict(diagnosis)
+    sub_labels = {a.session_id: a.label for a in diagnosis.subagent_costs}
 
     class FindingModal(ModalScreen):  # type: ignore[type-arg]
         """Finding details for the selected turn."""
@@ -132,7 +140,7 @@ def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
             self._findings = findings
 
         def compose(self) -> ComposeResult:
-            text = finding_modal_text(self._findings)
+            text = finding_modal_text(self._findings, sub_labels)
             with ScrollableContainer():
                 yield Label(text, markup=True)
 
