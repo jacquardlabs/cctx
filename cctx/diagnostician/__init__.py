@@ -62,6 +62,24 @@ def _safe_classify(classify, trace: SessionTrace) -> list[Finding]:
         return []
 
 
+def _classify_subagents(
+    trace: SessionTrace, parent_map: dict[str, str | None]
+) -> list[Finding]:
+    """Classify every subagent recursively; stamp findings with the subagent's
+    session_id and price each at the subagent's own model. Populates parent_map
+    (child session_id -> parent session_id) for the waste-accounting ancestry walk."""
+    out: list[Finding] = []
+    for sub in trace.subagents:
+        parent_map[sub.session_id] = trace.session_id
+        sub_findings: list[Finding] = []
+        for module in _CLASSIFIER_MODULES:
+            sub_findings.extend(_safe_classify(module.classify, sub))
+        sub_findings = _patch_costs(sub_findings, sub.primary_model)  # subagent's own model
+        out.extend(dataclasses.replace(f, session_id=sub.session_id) for f in sub_findings)
+        out.extend(_classify_subagents(sub, parent_map))  # recurse into grandchildren
+    return out
+
+
 def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
     price = _price_per_tok(model)
     result = []
@@ -199,13 +217,19 @@ def _collect_attributions(
 
 def run(trace: SessionTrace) -> Diagnosis:
     """Diagnose a single SessionTrace. Returns Diagnosis with patches=[]."""
-    findings: list[Finding] = []
+    root_findings: list[Finding] = []
     for module in _CLASSIFIER_MODULES:
-        findings.extend(_safe_classify(module.classify, trace))
-    findings.sort(key=lambda f: f.first_turn)
+        root_findings.extend(_safe_classify(module.classify, trace))
+    root_findings.sort(key=lambda f: f.first_turn)
 
-    inflection_turn = inflection.detect(findings)
-    findings = _patch_costs(findings, trace.primary_model)
+    inflection_turn = inflection.detect(root_findings)          # root-only
+    root_findings = _patch_costs(root_findings, trace.primary_model)
+
+    # Recurse into subagents; each priced at its own model, stamped with its id.
+    parent_map: dict[str, str | None] = {}
+    subagent_findings = _classify_subagents(trace, parent_map)
+
+    findings = root_findings + subagent_findings               # root first, then tree order
 
     # Fan-out cost patching requires attributions first.
     subagent_costs = _collect_attributions(trace)

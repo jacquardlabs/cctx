@@ -273,3 +273,36 @@ def test_retry_and_scope_both_detected():
     assert FindingKind.RETRY_LOOP in kinds
     assert FindingKind.SCOPE_CREEP in kinds
     assert diagnosis.inflection_turn == min(f.first_turn for f in diagnosis.findings)
+
+
+def _retry_subagent(session_id: str):
+    """A subagent trace whose turns trigger retry_loop, with a distinct session_id."""
+    import dataclasses
+    sub = _retry_trace()
+    return dataclasses.replace(sub, session_id=session_id, parent_session_id="root")
+
+
+def test_run_classifies_subagent_findings_with_session_id():
+    import dataclasses
+    from cctx import diagnostician
+    from cctx.models import FindingKind
+
+    parent = make_trace([make_user_turn(1), make_assistant_turn(2, text="ok")])
+    parent = dataclasses.replace(parent, session_id="root",
+                                 subagents=[_retry_subagent("sub-1")])
+    diag = diagnostician.run(parent)
+
+    sub_findings = [f for f in diag.findings if f.session_id == "sub-1"]
+    assert any(f.kind is FindingKind.RETRY_LOOP for f in sub_findings)
+    assert all(f.session_id is None or f.session_id == "sub-1" for f in diag.findings)
+
+
+def test_run_inflection_ignores_subagent_findings():
+    import dataclasses
+    from cctx import diagnostician
+
+    parent = make_trace([make_user_turn(1), make_assistant_turn(2, text="done")])
+    parent = dataclasses.replace(parent, session_id="root",
+                                 subagents=[_retry_subagent("sub-1")])
+    diag = diagnostician.run(parent)
+    assert diag.inflection_turn is None  # subagent findings must not move it
