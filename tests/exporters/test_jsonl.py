@@ -298,3 +298,16 @@ def test_write_each_line_is_valid_json() -> None:
     for line in buf.getvalue().splitlines():
         obj = json.loads(line)
         assert isinstance(obj, dict)
+
+
+def test_export_finding_includes_session_id() -> None:
+    import dataclasses
+    import json
+
+    from cctx.exporters.jsonl import export_diagnosis
+
+    diag = _make_diagnosis()
+    tagged = dataclasses.replace(diag.findings[0], session_id="sub-1")
+    diag = dataclasses.replace(diag, findings=[tagged])
+    obj = json.loads(export_diagnosis(diag, _make_trace()))
+    assert obj["findings"][0]["session_id"] == "sub-1"
