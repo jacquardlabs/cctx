@@ -284,6 +284,7 @@ def _retry_subagent(session_id: str):
 
 def test_run_classifies_subagent_findings_with_session_id():
     import dataclasses
+
     from cctx import diagnostician
     from cctx.models import FindingKind
 
@@ -299,6 +300,7 @@ def test_run_classifies_subagent_findings_with_session_id():
 
 def test_run_inflection_ignores_subagent_findings():
     import dataclasses
+
     from cctx import diagnostician
 
     parent = make_trace([make_user_turn(1), make_assistant_turn(2, text="done")])
