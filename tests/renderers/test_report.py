@@ -347,3 +347,19 @@ def test_autopsy_html_with_since_errors(tmp_path):
     )
     assert result.exit_code != 0
     assert "--html" in result.output or "not supported" in result.output
+
+
+def test_html_tags_subagent_finding():
+    import dataclasses
+
+    from cctx.models import SubagentAttribution
+
+    diag = _make_diagnosis([_make_finding("retry_loop")])
+    f = dataclasses.replace(diag.findings[0], session_id="sub-1")
+    diag = dataclasses.replace(diag, findings=[f], subagent_costs=[
+        SubagentAttribution(session_id="sub-1", label="Resolver",
+                            total_cost_usd=0.2, depth=1, model="gpt-4o"),
+    ])
+    html = _render(diag)
+    # the finding itself carries a sub-label badge (not just the subagent cost table)
+    assert 'class="badge sub-label">Resolver' in html

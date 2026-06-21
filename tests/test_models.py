@@ -623,3 +623,27 @@ def test_kind_summary_multiple_kinds_deduped_in_order():
     ]
     d = _make_diag(findings)
     assert d.kind_summary == "SCOPE CREEP + RETRY LOOP"
+
+
+# ---------------------------------------------------------------------------
+# Finding.session_id — subagent attribution
+# ---------------------------------------------------------------------------
+
+
+def test_finding_session_id_defaults_to_none():
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+    f = Finding(
+        kind=FindingKind.RETRY_LOOP, severity=Severity.HIGH, confidence=Confidence.HIGH,
+        first_turn=1, last_turn=2, evidence={}, cost_usd=None, summary="x",
+    )
+    assert f.session_id is None
+
+
+def test_finding_session_id_can_be_set():
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+    f = Finding(
+        kind=FindingKind.RETRY_LOOP, severity=Severity.HIGH, confidence=Confidence.HIGH,
+        first_turn=1, last_turn=2, evidence={}, cost_usd=None, summary="x",
+        session_id="sub-1",
+    )
+    assert f.session_id == "sub-1"

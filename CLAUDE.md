@@ -63,8 +63,9 @@ cctx/
 │                       # SubagentAttribution, KIND_LABEL, MANAGED_HEADINGS,
 │                       # AggregateReport, CrossProjectDigest.
 ├── diagnostician/
-│   ├── __init__.py     # public: run(trace) -> Diagnosis. Wires the 10 single-session
-│   │                   # classifiers + per-subagent cost attribution.
+│   ├── __init__.py     # public: run(trace) -> Diagnosis. Wires the classifiers,
+│   │                   # runs the 9 per-turn ones recursively inside each subagent
+│   │                   # (priced per-model), + per-subagent cost attribution.
 │   ├── inflection.py   # detect the turn where the session diverged
 │   └── patterns/
 │   │   ├── retry_loop.py

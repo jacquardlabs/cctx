@@ -126,12 +126,17 @@ def render_diagnosis(
     con.print()
 
     # Findings
+    sub_labels = {a.session_id: a.label for a in diagnosis.subagent_costs}
     for finding in diagnosis.findings:
         style = _SEVERITY_STYLE.get(finding.severity, "")
         label = _KIND_LABEL.get(finding.kind, finding.kind.value.upper())
         badge = Text(f" {label} ", style=style)
         conf_note = f"({finding.confidence.value} confidence)"
-        con.print(badge, conf_note, "—", finding.summary)
+        if finding.session_id is not None:
+            tag = sub_labels.get(finding.session_id, finding.session_id[:8])
+            con.print(Text(f"[{tag}]", style="cyan"), badge, conf_note, "—", finding.summary)
+        else:
+            con.print(badge, conf_note, "—", finding.summary)
         if show_health and finding.cost_usd is not None:
             con.print(f"  → savings if fixed: ~${finding.cost_usd:.2f}")
 

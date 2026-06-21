@@ -465,3 +465,19 @@ def test_render_check_results_shows_finding_details():
     assert "dead file reference" in output
     assert "references missing.py" in output
     assert "HIGH" in output
+
+
+def test_render_diagnosis_tags_subagent_finding_with_label():
+    import dataclasses
+
+    from cctx.models import FindingKind, SubagentAttribution
+
+    f = dataclasses.replace(_make_finding(FindingKind.RETRY_LOOP), session_id="sub-1")
+    diag = _make_diagnosis([f], waste_cost_usd=0.10)
+    diag = dataclasses.replace(diag, subagent_costs=[
+        SubagentAttribution(session_id="sub-1", label="Resolver",
+                            total_cost_usd=0.2, depth=1, model="gpt-4o"),
+    ])
+    output = _render_diagnosis(diag)
+    assert "[Resolver]" in output
+    assert "RETRY LOOP" in output

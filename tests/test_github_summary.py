@@ -196,3 +196,19 @@ def test_autopsy_github_summary_since_incompatible(tmp_path):
     out = result.output.lower()
     err = str(result.exception or "")
     assert "not supported" in out or "mutually exclusive" in out or "not supported" in err
+
+
+def test_github_summary_tags_subagent_finding():
+    import dataclasses
+
+    from cctx.models import SubagentAttribution
+    from cctx.renderers.github import render_github_summary
+
+    diag = _make_diagnosis([_make_finding("retry_loop")])
+    f = dataclasses.replace(diag.findings[0], session_id="sub-1")
+    diag = dataclasses.replace(diag, findings=[f], subagent_costs=[
+        SubagentAttribution(session_id="sub-1", label="Resolver",
+                            total_cost_usd=0.2, depth=1, model="gpt-4o"),
+    ])
+    md = render_github_summary(diag)
+    assert "Resolver" in md

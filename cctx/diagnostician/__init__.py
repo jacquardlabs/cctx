@@ -53,6 +53,11 @@ _CLASSIFIER_MODULES = (
     unused_context,
 )
 
+# Recursed into subagents (the 9 per-turn classifiers). fan_out is excluded: it
+# analyzes the *set* of a trace's subagents (overlap/retry), not interior turns,
+# and is computed once at the root via _patch_fanout_costs / the waste block.
+_PER_TURN_CLASSIFIER_MODULES = tuple(m for m in _CLASSIFIER_MODULES if m is not fan_out)
+
 
 def _safe_classify(classify, trace: SessionTrace) -> list[Finding]:
     """Run one classifier, isolating failures so the diagnosis still completes."""
@@ -60,6 +65,51 @@ def _safe_classify(classify, trace: SessionTrace) -> list[Finding]:
         return classify(trace)
     except Exception:
         return []
+
+
+def _classify_subagents(
+    trace: SessionTrace, parent_map: dict[str, str | None]
+) -> list[Finding]:
+    """Classify every subagent recursively; stamp findings with the subagent's
+    session_id and price each at the subagent's own model. Populates parent_map
+    (child session_id -> parent session_id) for the waste-accounting ancestry walk."""
+    out: list[Finding] = []
+    for sub in trace.subagents:
+        parent_map[sub.session_id] = trace.session_id
+        sub_findings: list[Finding] = []
+        for module in _PER_TURN_CLASSIFIER_MODULES:
+            sub_findings.extend(_safe_classify(module.classify, sub))
+        sub_findings = _patch_costs(sub_findings, sub.primary_model)  # subagent's own model
+        out.extend(dataclasses.replace(f, session_id=sub.session_id) for f in sub_findings)
+        out.extend(_classify_subagents(sub, parent_map))  # recurse into grandchildren
+    return out
+
+
+def _has_flagged_ancestor(
+    session_id: str | None, parent_map: dict[str, str | None], wasted_sids: set[str]
+) -> bool:
+    """True if session_id or any ancestor subagent is fan-out-flagged."""
+    seen: set[str] = set()
+    cur = session_id
+    while cur is not None and cur not in seen:
+        if cur in wasted_sids:
+            return True
+        seen.add(cur)
+        cur = parent_map.get(cur)
+    return False
+
+
+def _interior_waste(
+    findings: list[Finding], parent_map: dict[str, str | None], wasted_sids: set[str]
+) -> float:
+    """Sum subagent-finding cost, excluding any whose subagent (or ancestor) is
+    already counted wholesale via fan-out waste — so no cost is double-counted."""
+    return sum(
+        f.cost_usd for f in findings
+        if f.session_id is not None
+        and f.cost_usd is not None
+        and not _has_flagged_ancestor(f.session_id, parent_map, wasted_sids)
+    )
 
 
 def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
@@ -199,13 +249,19 @@ def _collect_attributions(
 
 def run(trace: SessionTrace) -> Diagnosis:
     """Diagnose a single SessionTrace. Returns Diagnosis with patches=[]."""
-    findings: list[Finding] = []
+    root_findings: list[Finding] = []
     for module in _CLASSIFIER_MODULES:
-        findings.extend(_safe_classify(module.classify, trace))
-    findings.sort(key=lambda f: f.first_turn)
+        root_findings.extend(_safe_classify(module.classify, trace))
+    root_findings.sort(key=lambda f: f.first_turn)
 
-    inflection_turn = inflection.detect(findings)
-    findings = _patch_costs(findings, trace.primary_model)
+    inflection_turn = inflection.detect(root_findings)          # root-only
+    root_findings = _patch_costs(root_findings, trace.primary_model)
+
+    # Recurse into subagents; each priced at its own model, stamped with its id.
+    parent_map: dict[str, str | None] = {}
+    subagent_findings = _classify_subagents(trace, parent_map)
+
+    findings = root_findings + subagent_findings               # root first, then tree order
 
     # Fan-out cost patching requires attributions first.
     subagent_costs = _collect_attributions(trace)
@@ -223,9 +279,12 @@ def run(trace: SessionTrace) -> Diagnosis:
     fanout_waste = sum(cost_map.get(sid, 0.0) for sid in wasted_sids)
     other_waste = sum(
         f.cost_usd for f in findings
-        if f.cost_usd is not None and f.kind is not FindingKind.FANOUT_WASTE
+        if f.session_id is None
+        and f.cost_usd is not None
+        and f.kind is not FindingKind.FANOUT_WASTE
     )
-    waste_cost = min(other_waste + fanout_waste, total_cost)
+    interior_waste = _interior_waste(findings, parent_map, wasted_sids)
+    waste_cost = min(other_waste + fanout_waste + interior_waste, total_cost)
 
     return Diagnosis(
         session_id=trace.session_id,

@@ -239,6 +239,7 @@ class Finding:
     evidence:   dict[str, Any]
     cost_usd:   float | None
     summary:    str
+    session_id: str | None = None   # subagent id; None = root trace
 
 
 @dataclass

@@ -23,6 +23,7 @@ def export_diagnosis(
             "first_turn": f.first_turn,
             "last_turn": f.last_turn,
             "cost_usd": f.cost_usd,
+            "session_id": f.session_id,
         }
         if include_content:
             d["summary"] = f.summary

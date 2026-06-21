@@ -298,3 +298,89 @@ def test_render_diagnosis_no_subagents_no_table():
     render_diagnosis(diag, console=con)
     out = buf.getvalue()
     assert "subagent" not in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# Full-accounting interior waste + fan-out ancestry dedup (#156, Task 3)
+# ---------------------------------------------------------------------------
+
+
+def test_interior_finding_in_unflagged_subagent_raises_waste():
+    """A subagent NOT fan-out-flagged but with an interior finding adds to waste.
+
+    Asserts the _interior_waste accounting helper directly (run() integration is
+    covered end-to-end in the final task)."""
+    from cctx.diagnostician import _interior_waste
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+
+    sub_finding = Finding(
+        kind=FindingKind.STALE_CONTEXT, severity=Severity.MEDIUM, confidence=Confidence.MEDIUM,
+        first_turn=1, last_turn=2, evidence={}, cost_usd=0.05, summary="stale", session_id="sub-1",
+    )
+    parent_map = {"sub-1": "root"}
+    wasted_sids: set[str] = set()  # sub-1 NOT flagged
+    assert _interior_waste([sub_finding], parent_map, wasted_sids) == 0.05
+
+
+def test_interior_finding_in_flagged_subagent_is_not_double_counted():
+    """If the subagent is fan-out-flagged, its interior finding cost is NOT re-charged."""
+    from cctx.diagnostician import _interior_waste
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+
+    sub_finding = Finding(
+        kind=FindingKind.RETRY_LOOP, severity=Severity.HIGH, confidence=Confidence.HIGH,
+        first_turn=1, last_turn=2, evidence={}, cost_usd=0.05, summary="retry", session_id="sub-1",
+    )
+    parent_map = {"sub-1": "root"}
+    wasted_sids = {"sub-1"}  # flagged -> whole cost already in fanout_waste
+    assert _interior_waste([sub_finding], parent_map, wasted_sids) == 0.0
+
+
+def test_interior_finding_in_flagged_ancestor_is_not_double_counted():
+    """A grandchild finding is excluded when its parent subagent is flagged."""
+    from cctx.diagnostician import _interior_waste
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+
+    grand_finding = Finding(
+        kind=FindingKind.RETRY_LOOP, severity=Severity.HIGH, confidence=Confidence.HIGH,
+        first_turn=1, last_turn=2, evidence={}, cost_usd=0.05, summary="retry",
+        session_id="grand-1",
+    )
+    parent_map = {"grand-1": "sub-1", "sub-1": "root"}
+    wasted_sids = {"sub-1"}  # parent flagged -> grandchild already counted inclusively
+    assert _interior_waste([grand_finding], parent_map, wasted_sids) == 0.0
+
+
+def test_end_to_end_subagent_retry_loop_surfaces_and_is_attributed():
+    """A subagent with a retry-loop pattern surfaces tagged; waste stays bounded."""
+    import dataclasses
+
+    from cctx.diagnostician import run
+    from cctx.models import FindingKind
+    from tests.diagnostician.conftest import (
+        make_assistant_turn,
+        make_tool_result,
+        make_tool_result_turn,
+        make_tool_use,
+        make_trace,
+        make_user_turn,
+    )
+
+    err = "Error: file not found"
+    fp = "src/foo.py"
+    retry_turns = [
+        make_user_turn(1),
+        make_assistant_turn(2, tool_uses=[make_tool_use("t1", "Edit", {"file_path": fp})]),
+        make_tool_result_turn(3, tool_results=[make_tool_result("t1", "Edit", err, is_error=True)]),
+        make_assistant_turn(4, tool_uses=[make_tool_use("t2", "Edit", {"file_path": fp})]),
+        make_tool_result_turn(5, tool_results=[make_tool_result("t2", "Edit", err, is_error=True)]),
+    ]
+    sub = dataclasses.replace(make_trace(retry_turns), session_id="sub-1", parent_session_id="root")
+    parent = dataclasses.replace(
+        make_trace([make_user_turn(1), make_assistant_turn(2, text="ok")]),
+        session_id="root", subagents=[sub],
+    )
+    diag = run(parent)
+    tagged = [f for f in diag.findings if f.session_id == "sub-1"]
+    assert any(f.kind is FindingKind.RETRY_LOOP for f in tagged)
+    assert diag.waste_cost_usd <= diag.total_cost_usd
