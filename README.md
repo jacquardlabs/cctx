@@ -26,7 +26,8 @@ Point cctx at your most recent session:
 ```console
 $ cctx autopsy --latest
 
-Verdict: RETRY LOOP + SCOPE CREEP + STALE CONTEXT
+Verdict: 3 findings · $0.98 waste
+RETRY LOOP + SCOPE CREEP + STALE CONTEXT
 Session cost: ~$1.42   (~85–95% of actual billing)
 Inflection turn: 14
 
@@ -102,6 +103,8 @@ cctx also diagnoses OTEL traces from the OpenAI Agents SDK, LangGraph, and any `
 | **Compaction** | Context-window compaction mid-session | Compaction re-reads context from scratch; reduces effective context window |
 | **Exploration thrash** | High read/search volume with no writes — circling without progress | Token cost of reads that don't advance the task |
 | **Unused context** | MCP server loaded at session start but never called | Token overhead on every API request for tools that go unused |
+
+Every per-turn pattern above is also detected **inside subagents** — a retry loop or stale-context buildup within a child session (at any nesting depth) is surfaced, tagged with that subagent, and priced at the subagent's own model.
 
 ## Commands
 
@@ -183,9 +186,11 @@ cctx diagnoses OTEL traces from the OpenAI Agents SDK, LangGraph, and any framew
 
 ### Cost attribution
 
-cctx estimates cost from Anthropic's published billing rates: input tokens at the standard rate, cache reads at 10%, cache writes at 125%. Stale-context waste is attributed turn by turn: every turn a large result lingers after its last reference counts against waste.
+cctx prices both input and output tokens from a built-in table covering Anthropic (Claude) and OpenAI models, so OTEL traces are costed at the right provider's rates — not just Claude sessions. Prompt-cache reads bill at 10% of input, 5-minute cache writes at 125%, 1-hour writes at 200%. Stale-context waste is attributed turn by turn: every turn a large result lingers after its last reference counts against waste.
 
-These are **approximations** (~85–95% of actual API billing). The gap is internal prompt framing that isn't observable in the JSONL logs. cctx shows estimated costs, not billing-exact figures.
+The price table is stamped with a verification date (shown as "prices as of …" in output) and a CI tripwire flags it when stale; an unrecognized model family is flagged and priced at a default rate rather than silently mis-costed.
+
+These are **approximations** (~85–95% of actual API billing). The gap is internal prompt framing that isn't observable in the logs. cctx shows estimated costs, not billing-exact figures.
 
 ### In CI
 
@@ -196,7 +201,7 @@ cctx is a local forensic tool: session logs are personal history and shouldn't b
   with:
     # ... your agentic workflow config
 
-- uses: jacquardlabs/cctx@v0
+- uses: jacquardlabs/cctx@v1.20.0
   with:
     fail_on_findings: false   # set true to gate the job on waste findings
     github_summary: true      # write findings to the job summary UI
