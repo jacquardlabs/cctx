@@ -298,3 +298,53 @@ def test_render_diagnosis_no_subagents_no_table():
     render_diagnosis(diag, console=con)
     out = buf.getvalue()
     assert "subagent" not in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# Full-accounting interior waste + fan-out ancestry dedup (#156, Task 3)
+# ---------------------------------------------------------------------------
+
+
+def test_interior_finding_in_unflagged_subagent_raises_waste():
+    """A subagent NOT fan-out-flagged but with an interior finding adds to waste.
+
+    Asserts the _interior_waste accounting helper directly (run() integration is
+    covered end-to-end in the final task)."""
+    from cctx.diagnostician import _interior_waste
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+
+    sub_finding = Finding(
+        kind=FindingKind.STALE_CONTEXT, severity=Severity.MEDIUM, confidence=Confidence.MEDIUM,
+        first_turn=1, last_turn=2, evidence={}, cost_usd=0.05, summary="stale", session_id="sub-1",
+    )
+    parent_map = {"sub-1": "root"}
+    wasted_sids: set[str] = set()  # sub-1 NOT flagged
+    assert _interior_waste([sub_finding], parent_map, wasted_sids) == 0.05
+
+
+def test_interior_finding_in_flagged_subagent_is_not_double_counted():
+    """If the subagent is fan-out-flagged, its interior finding cost is NOT re-charged."""
+    from cctx.diagnostician import _interior_waste
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+
+    sub_finding = Finding(
+        kind=FindingKind.RETRY_LOOP, severity=Severity.HIGH, confidence=Confidence.HIGH,
+        first_turn=1, last_turn=2, evidence={}, cost_usd=0.05, summary="retry", session_id="sub-1",
+    )
+    parent_map = {"sub-1": "root"}
+    wasted_sids = {"sub-1"}  # flagged -> whole cost already in fanout_waste
+    assert _interior_waste([sub_finding], parent_map, wasted_sids) == 0.0
+
+
+def test_interior_finding_in_flagged_ancestor_is_not_double_counted():
+    """A grandchild finding is excluded when its parent subagent is flagged."""
+    from cctx.diagnostician import _interior_waste
+    from cctx.models import Confidence, Finding, FindingKind, Severity
+
+    grand_finding = Finding(
+        kind=FindingKind.RETRY_LOOP, severity=Severity.HIGH, confidence=Confidence.HIGH,
+        first_turn=1, last_turn=2, evidence={}, cost_usd=0.05, summary="retry", session_id="grand-1",
+    )
+    parent_map = {"grand-1": "sub-1", "sub-1": "root"}
+    wasted_sids = {"sub-1"}  # parent flagged -> grandchild already counted inclusively
+    assert _interior_waste([grand_finding], parent_map, wasted_sids) == 0.0

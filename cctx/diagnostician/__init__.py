@@ -80,6 +80,33 @@ def _classify_subagents(
     return out
 
 
+def _has_flagged_ancestor(
+    session_id: str | None, parent_map: dict[str, str | None], wasted_sids: set[str]
+) -> bool:
+    """True if session_id or any ancestor subagent is fan-out-flagged."""
+    seen: set[str] = set()
+    cur = session_id
+    while cur is not None and cur not in seen:
+        if cur in wasted_sids:
+            return True
+        seen.add(cur)
+        cur = parent_map.get(cur)
+    return False
+
+
+def _interior_waste(
+    findings: list[Finding], parent_map: dict[str, str | None], wasted_sids: set[str]
+) -> float:
+    """Sum subagent-finding cost, excluding any whose subagent (or ancestor) is
+    already counted wholesale via fan-out waste — so no cost is double-counted."""
+    return sum(
+        f.cost_usd for f in findings
+        if f.session_id is not None
+        and f.cost_usd is not None
+        and not _has_flagged_ancestor(f.session_id, parent_map, wasted_sids)
+    )
+
+
 def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
     price = _price_per_tok(model)
     result = []
@@ -247,9 +274,12 @@ def run(trace: SessionTrace) -> Diagnosis:
     fanout_waste = sum(cost_map.get(sid, 0.0) for sid in wasted_sids)
     other_waste = sum(
         f.cost_usd for f in findings
-        if f.cost_usd is not None and f.kind is not FindingKind.FANOUT_WASTE
+        if f.session_id is None
+        and f.cost_usd is not None
+        and f.kind is not FindingKind.FANOUT_WASTE
     )
-    waste_cost = min(other_waste + fanout_waste, total_cost)
+    interior_waste = _interior_waste(findings, parent_map, wasted_sids)
+    waste_cost = min(other_waste + fanout_waste + interior_waste, total_cost)
 
     return Diagnosis(
         session_id=trace.session_id,
