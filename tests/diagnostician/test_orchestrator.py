@@ -308,3 +308,11 @@ def test_run_inflection_ignores_subagent_findings():
                                  subagents=[_retry_subagent("sub-1")])
     diag = diagnostician.run(parent)
     assert diag.inflection_turn is None  # subagent findings must not move it
+
+
+def test_fanout_classifier_is_not_recursed_into_subagents():
+    """Spec: fan_out stays parent-level (analyzes the subagent set, not interiors)."""
+    from cctx.diagnostician import _PER_TURN_CLASSIFIER_MODULES
+    from cctx.diagnostician.patterns import fan_out
+    assert fan_out not in _PER_TURN_CLASSIFIER_MODULES
+    assert len(_PER_TURN_CLASSIFIER_MODULES) == 9  # the 9 per-turn classifiers

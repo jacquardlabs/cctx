@@ -53,6 +53,11 @@ _CLASSIFIER_MODULES = (
     unused_context,
 )
 
+# Recursed into subagents (the 9 per-turn classifiers). fan_out is excluded: it
+# analyzes the *set* of a trace's subagents (overlap/retry), not interior turns,
+# and is computed once at the root via _patch_fanout_costs / the waste block.
+_PER_TURN_CLASSIFIER_MODULES = tuple(m for m in _CLASSIFIER_MODULES if m is not fan_out)
+
 
 def _safe_classify(classify, trace: SessionTrace) -> list[Finding]:
     """Run one classifier, isolating failures so the diagnosis still completes."""
@@ -72,7 +77,7 @@ def _classify_subagents(
     for sub in trace.subagents:
         parent_map[sub.session_id] = trace.session_id
         sub_findings: list[Finding] = []
-        for module in _CLASSIFIER_MODULES:
+        for module in _PER_TURN_CLASSIFIER_MODULES:
             sub_findings.extend(_safe_classify(module.classify, sub))
         sub_findings = _patch_costs(sub_findings, sub.primary_model)  # subagent's own model
         out.extend(dataclasses.replace(f, session_id=sub.session_id) for f in sub_findings)
