@@ -60,6 +60,7 @@ dl.costs dd { font-variant-numeric: tabular-nums; }
 .badge.sev-high   { background: #6e1507; color: #f85149; border: 1px solid #f85149; }
 .badge.sev-medium { background: #4d3500; color: #d29922; border: 1px solid #d29922; }
 .badge.sev-low    { background: #033a16; color: #3fb950; border: 1px solid #3fb950; }
+.badge.sub-label  { background: #30363d; color: #adbac7; }
 
 /* --- Findings / patches --- */
 details {
@@ -211,6 +212,7 @@ footer {
     {% for f in diag.findings %}
     <details class="finding">
       <summary>
+        {% if f.session_id %}<span class="badge sub-label">{{ sub_labels.get(f.session_id, f.session_id[:8]) }}</span>{% endif %}
         <span class="badge kind-{{ f.kind.value }}">{{ f.kind.value.replace("_", " ").upper() }}</span>
         <span class="badge sev-{{ f.severity.value }}">{{ f.severity.value.upper() }}</span>
         <span class="summary-text">{{ f.summary }}</span>

@@ -52,10 +52,13 @@ def render_html(diag: Diagnosis, trace: SessionTrace) -> str:
 
     from cctx.pricing import PRICING_LAST_VERIFIED
 
+    sub_labels = {a.session_id: a.label for a in diag.subagent_costs}
+
     tmpl = env.get_template("autopsy.html.j2")
     return tmpl.render(
         diag=diag,
         trace=trace,
         flagged=_flagged_index(diag.findings),
         pricing_as_of=PRICING_LAST_VERIFIED,
+        sub_labels=sub_labels,
     )

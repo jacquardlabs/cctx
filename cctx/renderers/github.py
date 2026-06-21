@@ -56,11 +56,15 @@ def render_github_summary(diagnosis: Diagnosis) -> str:
     )
 
     # Findings table
+    sub_labels = {a.session_id: a.label for a in diagnosis.subagent_costs}
     lines.append("| Severity | Pattern | Summary |")
     lines.append("|---|---|---|")
     for f in diagnosis.findings:
         sev_icon = _SEVERITY_EMOJI.get(f.severity.value, "")
         kind_label = KIND_LABEL.get(f.kind, f.kind.value.upper())
+        if f.session_id is not None:
+            tag = sub_labels.get(f.session_id, f.session_id[:8])
+            kind_label = f"[{tag}] {kind_label}"
         summary = f.summary.replace("|", "\\|")
         lines.append(f"| {sev_icon} {f.severity.value} | {kind_label} | {summary} |")
 
