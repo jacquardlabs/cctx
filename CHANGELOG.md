@@ -2,6 +2,60 @@
 
 <!-- version list -->
 
+## v1.20.0 (2026-06-21)
+
+### Bug Fixes
+
+- **diagnostician**: Exclude fan_out from subagent recursion (spec compliance)
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+### Documentation
+
+- **spec**: Recursive subagent classification design
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+### Features
+
+- Recursive subagent classification (#156) ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+- **diagnostician**: Classify subagents recursively, priced per-model
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+- **diagnostician**: Full-accounting interior waste with fan-out ancestry dedup
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+- **exporter**: Include session_id on exported findings
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+- **models**: Add Finding.session_id for subagent attribution
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+- **renderer**: Tag subagent findings in GitHub summary + HTML
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+- **renderer**: Tag subagent findings in terminal output
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+- **tui**: Tag subagent findings in the FindingModal
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+### Testing
+
+- End-to-end recursive subagent classification + lint
+  ([#157](https://github.com/jacquardlabs/cctx/pull/157),
+  [`d2051cc`](https://github.com/jacquardlabs/cctx/commit/d2051ccc9cac74aa9dcd02b8238e2557ceb6a712))
+
+
 ## v1.19.1 (2026-06-20)
 
 ### Bug Fixes
