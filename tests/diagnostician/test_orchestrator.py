@@ -316,3 +316,45 @@ def test_fanout_classifier_is_not_recursed_into_subagents():
     from cctx.diagnostician.patterns import fan_out
     assert fan_out not in _PER_TURN_CLASSIFIER_MODULES
     assert len(_PER_TURN_CLASSIFIER_MODULES) == 9  # the 9 per-turn classifiers
+
+
+def test_subagent_finding_priced_at_subagent_model():
+    """A stale_context finding in an Opus subagent is priced at Opus, not the
+    parent's Sonnet rate (#156 — per-subagent cost patching)."""
+    import dataclasses
+
+    from cctx import diagnostician
+    from cctx.models import FindingKind
+    from cctx.pricing import price_per_tok
+    from tests.diagnostician.test_stale_context import _stale_trace
+
+    sub = dataclasses.replace(_stale_trace(), session_id="sub-1",
+                              parent_session_id="root", primary_model="claude-opus-4-8")
+    parent = dataclasses.replace(
+        make_trace([make_user_turn(1), make_assistant_turn(2, text="ok")],
+                   model="claude-sonnet-4-6"),
+        session_id="root", subagents=[sub],
+    )
+    diag = diagnostician.run(parent)
+    stale = [f for f in diag.findings
+             if f.session_id == "sub-1" and f.kind is FindingKind.STALE_CONTEXT]
+    assert stale, "expected a stale_context finding in the subagent"
+    f = stale[0]
+    expected = round(f.evidence["total_token_turns"] * price_per_tok("claude-opus-4-8"), 4)
+    assert f.cost_usd == expected  # opus rate, not the parent's sonnet rate
+
+
+def test_verdict_and_kind_summary_include_subagent_findings():
+    """A clean root with a retry-loop subagent still produces a non-clean verdict (#156)."""
+    import dataclasses
+
+    from cctx import diagnostician
+
+    parent = dataclasses.replace(
+        make_trace([make_user_turn(1), make_assistant_turn(2, text="done")]),
+        session_id="root", subagents=[_retry_subagent("sub-1")],
+    )
+    diag = diagnostician.run(parent)
+    assert len(diag.findings) >= 1
+    assert "RETRY LOOP" in diag.kind_summary
+    assert diag.verdict != "Clean session"

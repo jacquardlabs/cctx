@@ -79,6 +79,7 @@ Seven commands (`ls`, `autopsy`, `harvest`, `watch`, `trace`, `export`, `init`).
 | Verdict headline + `--top N` + `--turn N` | `autopsy` | v1.1.0 (M9) |
 | Project-specific pattern detection | `autopsy`/`harvest` `--since` | v1.3.0 (M14) |
 | Per-subagent cost attribution | `cctx autopsy <session>` (subagent cost table) | v1.7.0 (M16) |
+| Recursive subagent diagnosis | per-turn classifiers run inside each subagent; findings tagged + attributed | M29 (#156) |
 | Health grade + savings framing | `cctx autopsy --health` | v1.14.0 |
 | SessionEnd hook installer + quiet mode | `cctx init` / `cctx autopsy --quiet` | v1.11.0 |
 | OTEL / multi-framework parsing | `cctx autopsy <otel.jsonl>` — OpenAI Agents SDK, LangGraph | v1.12.0 |
@@ -107,16 +108,14 @@ Seven commands (`ls`, `autopsy`, `harvest`, `watch`, `trace`, `export`, `init`).
 - A fork-and-replay debugger
 - A general eval or testing framework
 
-## Known problems (as of 2026-06-20)
+## Known problems (as of 2026-06-21)
 
 **Active gaps:**
 
 1. **`cctx watch` polling is simple.** Early idle exit via `claude agents --json` has landed, but the watcher still polls at 1s without `fsevents`/`inotify` debouncing.
 
-2. **Subagent diagnosis is shallow.** Per-subagent cost attribution (v1.7.0, M16) and the fan-out waste classifier (v1.8.0) read `trace.subagents`, so autopsy is no longer blind to fan-out spend. What remains: cctx does not yet run the full per-turn classifier suite recursively inside each subagent — it attributes their cost and flags fan-out overlap/retry, but does not diagnose retry loops or stale context *within* a child session.
-
 **Resolved since the prior review:**
 
-- **Subagent cost attribution** — shipped v1.7.0 (#88); fan-out waste classifier v1.8.0 (#89).
+- **Subagent diagnosis depth** — the 9 per-turn classifiers now run recursively inside every subagent (grandchildren included), priced at each subagent's own model, with full-accounting waste that dedups against fan-out cost. A retry loop or stale-context buildup *within* a child session is now surfaced and attributed (M29 / #156). Per-subagent cost attribution (v1.7.0, #88) and the fan-out waste classifier (v1.8.0, #89) preceded it.
 - **Cross-agent layer** — `harvest --emit agents [--sync]` to AGENTS.md shipped v1.6.0 (M15 / #82). Breadth (`.cursorrules`, `.windsurfrules`, Copilot) remains future work.
 - **Harvest feedback loop** — `harvest --efficacy` before/after recurrence measurement shipped v1.9.0 (M17 / #90).
