@@ -34,3 +34,6 @@ coverage.xml
 
 # Local Claude Code settings (machine-specific permissions)
 .claude/settings.local.json
+
+# Agent tool state (never commit local session state)
+.gg/
