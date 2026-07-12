@@ -7,7 +7,7 @@ Diagnose your Claude Code sessions and OpenTelemetry agent traces — find out w
 [![Python](https://img.shields.io/badge/python-3.10_%7C_3.11_%7C_3.12_%7C_3.13-blue)](https://pypi.org/project/cctx-cli/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-![demo](demo.gif)
+![cctx ls and cctx autopsy --latest running in a terminal](demo.gif)
 
 ## Install
 
@@ -215,6 +215,18 @@ The action auto-discovers the most recent session on the runner. For a manual st
 - Claude Code session logs at `~/.claude/projects/` (written automatically)
 - No API key for analysis. An optional `ANTHROPIC_API_KEY` enables exact token counts via the Anthropic API; without it, cctx uses the counts already in the logs (the default and recommended mode).
 
+## Contributing
+
+Issues and PRs welcome.
+
+```bash
+pip install -e ".[dev]"
+ruff check cctx tests
+CCTX_OFFLINE=1 pytest -v
+```
+
 ## License
 
 MIT
+
+> TODO: no `LICENSE` file exists at the repo root, though `pyproject.toml` declares `license = "MIT"` and GitHub's API reports no detected license for this repo. The License badge at the top of this page also links to `LICENSE`, which doesn't exist yet. Add a `LICENSE` file so both are accurate.
