@@ -2,6 +2,54 @@
 
 <!-- version list -->
 
+## v1.21.0 (2026-07-16)
+
+### Chores
+
+- Remove committed gg tool state ([#172](https://github.com/jacquardlabs/cctx/pull/172),
+  [`85182c5`](https://github.com/jacquardlabs/cctx/commit/85182c515e631415f50b3fedb779f1fbb49b1fbb))
+
+### Documentation
+
+- Fix comment alignment and document subagent_costs export schema
+  ([#196](https://github.com/jacquardlabs/cctx/pull/196),
+  [`40884d0`](https://github.com/jacquardlabs/cctx/commit/40884d057501c0e2bd9839fa7f02d9e2f73f44df))
+
+- Implementation plan for subagent dispatch join key spike
+  ([#196](https://github.com/jacquardlabs/cctx/pull/196),
+  [`40884d0`](https://github.com/jacquardlabs/cctx/commit/40884d057501c0e2bd9839fa7f02d9e2f73f44df))
+
+- Refresh README for v1.20.0 ([#158](https://github.com/jacquardlabs/cctx/pull/158),
+  [`ad0fbb6`](https://github.com/jacquardlabs/cctx/commit/ad0fbb6a7900bf34ed217397f68544554e6e6890))
+
+- Restyle README with dustjacket ([#192](https://github.com/jacquardlabs/cctx/pull/192),
+  [`a5ffdaf`](https://github.com/jacquardlabs/cctx/commit/a5ffdafdcfef7566e93cf9bf994e9fa477593165))
+
+### Features
+
+- Add dispatching_tool_use_id to SubagentAttribution (#193 follow-up)
+  ([#196](https://github.com/jacquardlabs/cctx/pull/196),
+  [`40884d0`](https://github.com/jacquardlabs/cctx/commit/40884d057501c0e2bd9839fa7f02d9e2f73f44df))
+
+- Emit dispatching_tool_use_id in JSON/JSONL export (#193 follow-up)
+  ([#196](https://github.com/jacquardlabs/cctx/pull/196),
+  [`40884d0`](https://github.com/jacquardlabs/cctx/commit/40884d057501c0e2bd9839fa7f02d9e2f73f44df))
+
+- Expose subagent dispatch join key in JSON/JSONL export
+  ([#196](https://github.com/jacquardlabs/cctx/pull/196),
+  [`40884d0`](https://github.com/jacquardlabs/cctx/commit/40884d057501c0e2bd9839fa7f02d9e2f73f44df))
+
+### Testing
+
+- Pin CSV export's absent subagent dispatch join key
+  ([#196](https://github.com/jacquardlabs/cctx/pull/196),
+  [`40884d0`](https://github.com/jacquardlabs/cctx/commit/40884d057501c0e2bd9839fa7f02d9e2f73f44df))
+
+- Pin JSON/JSONL export's absent subagent dispatch join key
+  ([#196](https://github.com/jacquardlabs/cctx/pull/196),
+  [`40884d0`](https://github.com/jacquardlabs/cctx/commit/40884d057501c0e2bd9839fa7f02d9e2f73f44df))
+
+
 ## v1.20.0 (2026-06-21)
 
 ### Bug Fixes
