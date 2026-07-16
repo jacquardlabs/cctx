@@ -313,12 +313,10 @@ def test_export_finding_includes_session_id() -> None:
     assert obj["findings"][0]["session_id"] == "sub-1"
 
 
-def test_jsonl_subagent_costs_has_no_dispatch_join_key() -> None:
-    """Characterizes #193's finding: subagent_costs entries carry the
-    subagent's own session_id/label/cost/depth/model, but never the parent
-    tool_use_id that dispatched it — so JSON/JSONL export gives subagent-level
-    totals, not a per-dispatch join key.
-    """
+def test_jsonl_subagent_costs_has_dispatch_join_key() -> None:
+    """subagent_costs entries carry dispatching_tool_use_id — the parent
+    turn's Agent/Task tool_use_id that dispatched this subagent — closing
+    the gap characterized by #193."""
     import dataclasses
 
     from cctx.exporters.jsonl import export_diagnosis
@@ -333,11 +331,10 @@ def test_jsonl_subagent_costs_has_no_dispatch_join_key() -> None:
             total_cost_usd=0.020,
             depth=1,
             model="claude-sonnet-4",
+            dispatching_tool_use_id="tu_abc123",
         )
     ])
     data = json.loads(export_diagnosis(diag, trace))
     entry = data["subagent_costs"][0]
 
-    assert set(entry.keys()) == {"session_id", "label", "cost_usd", "depth", "model"}
-    assert "tool_use_id" not in entry
-    assert "dispatching_tool_use_id" not in entry
+    assert entry["dispatching_tool_use_id"] == "tu_abc123"
