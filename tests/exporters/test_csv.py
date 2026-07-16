@@ -331,3 +331,47 @@ def test_csv_cost_includes_cache_read() -> None:
     cost = float(assistant_row["cost_usd"])
     # 1000 × 3e-6 + 10000 × 3e-6 × 0.10 = 3e-3 + 3e-3 = 6e-3 = 0.006
     assert abs(cost - 0.006) < 1e-6, f"Expected ~0.006 but got {cost}"
+
+
+def test_csv_export_has_no_subagent_dispatch_join_key() -> None:
+    """Characterizes #193's finding: CSV rows carry no field linking a parent
+    turn's Task/Agent tool_use_id to the subagent session it dispatched, and
+    subagent turns are never exported as rows at all — export_turn_rows only
+    iterates trace.turns (the root session), never trace.subagents.
+    """
+    import dataclasses
+
+    from cctx.exporters.csv import COLUMNS, write
+    from cctx.models import ToolUse
+
+    child_turn = _make_turn(1)
+    child_trace = _make_trace(session_id="child-session", turns=[child_turn])
+
+    dispatch_tool_use = ToolUse(
+        tool_name="Task",
+        tool_use_id="tu-dispatch",
+        tool_input={"description": "child task"},
+        subagent_session_id="child-session",
+    )
+    dispatch_turn = dataclasses.replace(
+        _make_turn(1, tool_names=[]),
+        tool_uses=[dispatch_tool_use],
+    )
+    trace = dataclasses.replace(
+        _make_trace(turns=[dispatch_turn]),
+        subagents=[child_trace],
+    )
+    diagnosis = _make_diagnosis(findings=[])
+
+    buf = io.StringIO()
+    write([(diagnosis, trace)], buf)
+
+    # No column exposes the dispatch join key.
+    assert "tool_use_id" not in COLUMNS
+    assert "subagent_session_id" not in COLUMNS
+
+    # The child session's own turn never appears as a row — only the
+    # parent's dispatch_turn does.
+    _, rows = _read_csv(buf.getvalue())
+    assert len(rows) == 1
+    assert rows[0]["session_id"] == "sess-xyz"
