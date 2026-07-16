@@ -260,8 +260,7 @@ class SubagentAttribution:
     total_cost_usd: float      # inclusive: this subagent + its own children
     depth:          int        # 1 = direct child, 2 = grandchild, …
     model:          str | None
-    dispatching_tool_use_id: str | None = None  # parent's Agent/Task tool_use_id;
-    # None when no matching ToolUse was found (orphaned/unlinked subagent).
+    dispatching_tool_use_id: str | None = None  # parent's Agent/Task tool_use_id; None if orphaned
 
 
 @dataclass
