@@ -311,3 +311,30 @@ def test_export_finding_includes_session_id() -> None:
     diag = dataclasses.replace(diag, findings=[tagged])
     obj = json.loads(export_diagnosis(diag, _make_trace()))
     assert obj["findings"][0]["session_id"] == "sub-1"
+
+
+def test_jsonl_subagent_costs_has_dispatch_join_key() -> None:
+    """subagent_costs entries carry dispatching_tool_use_id — the parent
+    turn's Agent/Task tool_use_id that dispatched this subagent — closing
+    the gap characterized by #193."""
+    import dataclasses
+
+    from cctx.exporters.jsonl import export_diagnosis
+    from cctx.models import SubagentAttribution
+
+    diag = _make_diagnosis()
+    trace = _make_trace()
+    diag = dataclasses.replace(diag, subagent_costs=[
+        SubagentAttribution(
+            session_id="child-1",
+            label="My task",
+            total_cost_usd=0.020,
+            depth=1,
+            model="claude-sonnet-4",
+            dispatching_tool_use_id="tu_abc123",
+        )
+    ])
+    data = json.loads(export_diagnosis(diag, trace))
+    entry = data["subagent_costs"][0]
+
+    assert entry["dispatching_tool_use_id"] == "tu_abc123"

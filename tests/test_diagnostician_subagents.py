@@ -384,3 +384,25 @@ def test_end_to_end_subagent_retry_loop_surfaces_and_is_attributed():
     tagged = [f for f in diag.findings if f.session_id == "sub-1"]
     assert any(f.kind is FindingKind.RETRY_LOOP for f in tagged)
     assert diag.waste_cost_usd <= diag.total_cost_usd
+
+
+def test_attribution_records_dispatching_tool_use_id():
+    """SubagentAttribution.dispatching_tool_use_id is the parent's Agent/Task
+    tool_use_id that dispatched this subagent — the join key jig/studious use
+    to correlate a dispatch-time routing decision with its actual cost (#193
+    follow-up)."""
+    from cctx.diagnostician import run
+    child = _make_trace("child-1", input_tokens=1_000)
+    tu = _agent_tu("child-1", description="Explore the codebase")
+    parent = _make_trace("parent", input_tokens=1_000, subagents=[child], tool_uses=[tu])
+    diag = run(parent)
+    assert diag.subagent_costs[0].dispatching_tool_use_id == "tu_child-1"
+
+
+def test_attribution_dispatching_tool_use_id_none_when_orphaned():
+    """Unlinked subagent (no matching ToolUse) gets dispatching_tool_use_id=None."""
+    from cctx.diagnostician import run
+    child = _make_trace("child-unlinked-session", input_tokens=1_000)
+    parent = _make_trace("parent", input_tokens=1_000, subagents=[child])
+    diag = run(parent)
+    assert diag.subagent_costs[0].dispatching_tool_use_id is None

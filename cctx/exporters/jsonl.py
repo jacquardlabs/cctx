@@ -54,11 +54,12 @@ def export_diagnosis(
         "unknown_models": diagnosis.unknown_models,
         "subagent_costs": [
             {
-                "session_id": a.session_id,
-                "label":      a.label,
-                "cost_usd":   a.total_cost_usd,
-                "depth":      a.depth,
-                "model":      a.model,
+                "session_id":              a.session_id,
+                "label":                   a.label,
+                "cost_usd":                a.total_cost_usd,
+                "depth":                   a.depth,
+                "model":                   a.model,
+                "dispatching_tool_use_id": a.dispatching_tool_use_id,
             }
             for a in diagnosis.subagent_costs
         ],
