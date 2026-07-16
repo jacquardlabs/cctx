@@ -209,32 +209,36 @@ def _compute_inclusive_cost(trace: SessionTrace) -> float:
     return own + sum(_compute_inclusive_cost(sa) for sa in trace.subagents)
 
 
-def _build_label_map(trace: SessionTrace) -> dict[str, str]:
-    """Map child session_id → display label from the parent's Agent ToolUse inputs."""
-    label_map: dict[str, str] = {}
+def _build_dispatch_map(trace: SessionTrace) -> dict[str, tuple[str, str]]:
+    """Map child session_id → (display label, dispatching tool_use_id) from
+    the parent's Agent ToolUse inputs."""
+    dispatch_map: dict[str, tuple[str, str]] = {}
     for turn in trace.turns:
         for tu in turn.tool_uses:
             if tu.subagent_session_id:
                 ti = tu.tool_input
-                label_map[tu.subagent_session_id] = (
+                label = (
                     ti.get("description")
                     or (ti.get("prompt") or "")[:80]
                     or tu.subagent_session_id[:12]
                 )
-    return label_map
+                dispatch_map[tu.subagent_session_id] = (label, tu.tool_use_id)
+    return dispatch_map
 
 
 def _collect_attributions(
     trace: SessionTrace,
     depth: int = 1,
-    label_map: dict[str, str] | None = None,
+    dispatch_map: dict[str, tuple[str, str]] | None = None,
 ) -> list[SubagentAttribution]:
     """Flat DFS list of SubagentAttribution, one per subagent at every depth."""
-    if label_map is None:
-        label_map = _build_label_map(trace)
+    if dispatch_map is None:
+        dispatch_map = _build_dispatch_map(trace)
     result: list[SubagentAttribution] = []
     for child in trace.subagents:
-        label = label_map.get(child.session_id, child.session_id[:12])
+        label, dispatching_tool_use_id = dispatch_map.get(
+            child.session_id, (child.session_id[:12], None)
+        )
         cost = _compute_inclusive_cost(child)
         result.append(SubagentAttribution(
             session_id=child.session_id,
@@ -242,6 +246,7 @@ def _collect_attributions(
             total_cost_usd=round(cost, 4),
             depth=depth,
             model=child.primary_model,
+            dispatching_tool_use_id=dispatching_tool_use_id,
         ))
         result.extend(_collect_attributions(child, depth + 1, None))
     return result
