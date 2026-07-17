@@ -5,8 +5,8 @@ per-million-token USD; cache multipliers are relative to base input price and
 apply to Anthropic prompt caching only (OpenAI Usage cache fields are zeroed by
 the OTEL parser, and these models carry 0.0 multipliers as belt-and-suspenders).
 
-PRICES VERIFIED 2026-06-20 against:
-  - Anthropic: https://platform.claude.com/docs/en/docs/about-claude/pricing
+PRICES VERIFIED 2026-07-17 against:
+  - Anthropic: https://platform.claude.com/docs/en/about-claude/models/overview
   - OpenAI:    current published API rates (gpt-4o/4.1/5, o3, o4-mini)
 
 WHEN TO UPDATE: the test_pricing_table_freshness tripwire fails CI once
@@ -21,7 +21,7 @@ from __future__ import annotations
 import dataclasses
 from datetime import date
 
-PRICING_LAST_VERIFIED = date(2026, 6, 20)
+PRICING_LAST_VERIFIED = date(2026, 7, 17)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -43,10 +43,12 @@ _NC = {"cache_write_5m_mult": 0.0, "cache_write_1h_mult": 0.0, "cache_read_mult"
 _PRICING: dict[str, ModelPricing] = {
     # --- Anthropic: current ---
     "claude-fable-5":   ModelPricing(10.0, 50.0, **_AC),
+    "claude-mythos":    ModelPricing(10.0, 50.0, **_AC),  # mythos-5 + mythos-preview share Fable 5 rates
     "claude-opus-4-8":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-7":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-6":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-5":  ModelPricing(5.0, 25.0, **_AC),
+    "claude-sonnet-5":  ModelPricing(3.0, 15.0, **_AC),  # sticker rate; intro $2/$10 through 2026-08-31
     "claude-sonnet-4":  ModelPricing(3.0, 15.0, **_AC),  # 4, 4.5, 4.6 share rates
     "claude-haiku-4-5": ModelPricing(1.0, 5.0, **_AC),
     # --- Anthropic: deprecated/retired, still present in historical logs ---

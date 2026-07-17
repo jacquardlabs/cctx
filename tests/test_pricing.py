@@ -10,14 +10,17 @@ from cctx.pricing import PRICING_LAST_VERIFIED, ModelPricing, get_pricing, price
 M = 1_000_000
 
 
-# --- prices verified 2026-06-20 (see pricing.py header) ---------------------
+# --- prices verified 2026-07-17 (see pricing.py header) ---------------------
 
 
 @pytest.mark.parametrize("model, inp, out", [
     # Anthropic — current
     ("claude-fable-5",          10.0, 50.0),
+    ("claude-mythos-5",         10.0, 50.0),
+    ("claude-mythos-preview",   10.0, 50.0),
     ("claude-opus-4-8",          5.0, 25.0),
     ("claude-opus-4-6",          5.0, 25.0),
+    ("claude-sonnet-5",          3.0, 15.0),
     ("claude-sonnet-4-6",        3.0, 15.0),
     ("claude-sonnet-4",          3.0, 15.0),
     ("claude-haiku-4-5",         1.0,  5.0),
@@ -97,6 +100,11 @@ def test_is_known_model_flags_unrecognized():
     from cctx.pricing import is_known_model
 
     assert is_known_model("claude-opus-4-8") is True
+    # claude-sonnet-5 prices the same as _DEFAULT, so only is_known_model
+    # distinguishes "listed" from "fell through to the default".
+    assert is_known_model("claude-sonnet-5") is True
+    assert is_known_model("claude-fable-5") is True
+    assert is_known_model("claude-mythos-5") is True
     assert is_known_model("gpt-4o") is True
     assert is_known_model("gpt-4o-2026-01-01") is True   # dated suffix still matches
     assert is_known_model("gpt-6-preview") is False      # future model -> default
