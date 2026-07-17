@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.21.2 (2026-07-17)
+
+### Bug Fixes
+
+- Shorten pricing.py comments to pass ruff E501 line-length check
+  ([`5b038b3`](https://github.com/jacquardlabs/cctx/commit/5b038b34276c650cd49445664945371d068f648e))
+
+
 ## v1.21.1 (2026-07-17)
 
 ### Bug Fixes
