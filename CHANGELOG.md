@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.21.1 (2026-07-17)
+
+### Bug Fixes
+
+- Add Sonnet 5 and Mythos 5 to pricing table ([#198](https://github.com/jacquardlabs/cctx/pull/198),
+  [`9cbb9fe`](https://github.com/jacquardlabs/cctx/commit/9cbb9fe57fba21b564bfe6ade937ba9f6897a368))
+
+
 ## v1.21.0 (2026-07-16)
 
 ### Chores
