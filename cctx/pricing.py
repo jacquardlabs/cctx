@@ -43,12 +43,12 @@ _NC = {"cache_write_5m_mult": 0.0, "cache_write_1h_mult": 0.0, "cache_read_mult"
 _PRICING: dict[str, ModelPricing] = {
     # --- Anthropic: current ---
     "claude-fable-5":   ModelPricing(10.0, 50.0, **_AC),
-    "claude-mythos":    ModelPricing(10.0, 50.0, **_AC),  # mythos-5 + mythos-preview share Fable 5 rates
+    "claude-mythos":    ModelPricing(10.0, 50.0, **_AC),  # mythos-5/preview → Fable 5 rates
     "claude-opus-4-8":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-7":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-6":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-5":  ModelPricing(5.0, 25.0, **_AC),
-    "claude-sonnet-5":  ModelPricing(3.0, 15.0, **_AC),  # sticker rate; intro $2/$10 through 2026-08-31
+    "claude-sonnet-5":  ModelPricing(3.0, 15.0, **_AC),  # sticker; intro $2/$10 until 2026-08-31
     "claude-sonnet-4":  ModelPricing(3.0, 15.0, **_AC),  # 4, 4.5, 4.6 share rates
     "claude-haiku-4-5": ModelPricing(1.0, 5.0, **_AC),
     # --- Anthropic: deprecated/retired, still present in historical logs ---

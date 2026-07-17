@@ -37,3 +37,6 @@ coverage.xml
 
 # Agent tool state (never commit local session state)
 .gg/
+
+# Studious local gate ledger (do not commit)
+.studious/
