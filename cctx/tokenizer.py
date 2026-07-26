@@ -16,53 +16,89 @@ import os
 
 from cctx.models import SessionTrace, Turn
 
+# Tokenization is model-specific: Claude Opus 4.7 and later use a newer tokenizer that
+# produces ~30% more tokens for the same text than Sonnet 4.6 and earlier. Each trace is
+# counted against the model that actually ran it (subagents included), so token-turns
+# attribution and its dollar cost stay consistent with what was billed. The default
+# covers sessions that record no model, and non-Anthropic models from OTEL traces — for
+# those, a Claude tokenizer is an approximation, but a much closer one than the heuristic.
+DEFAULT_COUNT_MODEL = "claude-sonnet-5"
+
 
 def tokenize_session(trace: SessionTrace) -> SessionTrace:
     """Walk a SessionTrace and populate token_count fields in place. Returns the same trace."""
-    counter = _build_counter()
-    _tokenize_trace_recursively(trace, counter)
+    counter_for = _build_counter_factory()
+    _tokenize_trace_recursively(trace, counter_for)
     return trace
 
 
-def _build_counter():
-    """Return a callable str -> int. Heuristic in offline mode; live API otherwise."""
+def _build_counter_factory():
+    """Return a callable model -> (str -> int). Heuristic offline; live API otherwise."""
     if os.environ.get("CCTX_OFFLINE") == "1":
-        return _heuristic_token_count
-    return _make_live_counter()
+        return lambda model: _heuristic_token_count
+    return _make_live_counter_factory()
 
 
 def _heuristic_token_count(text: str) -> int:
     return len(text) // 4
 
 
-def _make_live_counter():
+def count_model_for(model: str | None) -> str:
+    """API-callable Anthropic model id for count_tokens.
+
+    Strips Claude Code's `[1m]`-style context-window suffix, which appears in session
+    logs but is not a model id the API accepts. Non-Anthropic models (OTEL traces carry
+    ids like `gpt-4o`) fall back to the default — count_tokens would reject them.
+    """
+    if not model or not model.startswith("claude-"):
+        return DEFAULT_COUNT_MODEL
+    return model.split("[", 1)[0] or DEFAULT_COUNT_MODEL
+
+
+def _make_live_counter_factory():
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return _heuristic_token_count
+        return lambda model: _heuristic_token_count
     import anthropic  # lazy: offline mode never loads the SDK
 
     client = anthropic.Anthropic(api_key=api_key)
-    cache: dict[str, int] = {}
+    cache: dict[tuple[str, str], int] = {}
+    uncountable: set[str] = set()
 
-    def count(text: str) -> int:
-        if text in cache:
-            return cache[text]
-        result = client.messages.count_tokens(
-            model="claude-sonnet-4-5",
-            messages=[{"role": "user", "content": text or " "}],
-        )
-        n = result.input_tokens
-        cache[text] = n
-        return n
+    def counter_for(model: str | None):
+        count_model = count_model_for(model)
 
-    return count
+        def count(text: str) -> int:
+            key = (count_model, text)
+            if key in cache:
+                return cache[key]
+            if count_model in uncountable:
+                return _heuristic_token_count(text)
+            try:
+                result = client.messages.count_tokens(
+                    model=count_model,
+                    messages=[{"role": "user", "content": text or " "}],
+                )
+            except Exception:
+                # Retired model id, or the API is unreachable — degrade this model to the
+                # heuristic rather than aborting the autopsy.
+                uncountable.add(count_model)
+                return _heuristic_token_count(text)
+            n = result.input_tokens
+            cache[key] = n
+            return n
+
+        return count
+
+    return counter_for
 
 
-def _tokenize_trace_recursively(trace: SessionTrace, counter) -> None:
+def _tokenize_trace_recursively(trace: SessionTrace, counter_for) -> None:
+    counter = counter_for(trace.primary_model)
     for turn in trace.turns:
         _tokenize_turn(turn, counter)
     for child in trace.subagents:
-        _tokenize_trace_recursively(child, counter)
+        _tokenize_trace_recursively(child, counter_for)
 
 
 def _tokenize_turn(turn: Turn, counter) -> None:
