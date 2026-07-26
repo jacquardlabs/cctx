@@ -14,6 +14,11 @@ Signals:
 Evidence (Finding.evidence, kind=EXPLORATION_THRASH):
     thrash_windows
     repeated_reads
+    total_waste_tokens  — content tokens of repeat reads (all but the first
+                          occurrence per key; errored reads excluded — those
+                          are retry_loop's domain). thrash_windows carries no
+                          cost basis: a read-heavy window isn't unambiguous
+                          waste the way an identical repeat call is.
 """
 from __future__ import annotations
 
@@ -21,10 +26,11 @@ import json
 from collections import Counter
 from typing import TYPE_CHECKING
 
+from cctx.diagnostician.patterns.stale_context import _estimate_tokens
 from cctx.models import Confidence, Finding, FindingKind, Severity
 
 if TYPE_CHECKING:
-    from cctx.models import SessionTrace
+    from cctx.models import SessionTrace, ToolResult
 
 WINDOW_SIZE = 6
 READ_RATIO_THRESHOLD = 0.80
@@ -121,9 +127,14 @@ def classify(trace: SessionTrace) -> list[Finding]:
                 "total_calls": len(all_calls),
             })
 
+    result_map: dict[str, ToolResult] = {}
+    for turn in trace.turns:
+        for tr in turn.tool_results:
+            result_map[tr.tool_use_id] = tr
+
     # Repeated identical reads
     read_call_counts: Counter[str] = Counter()
-    read_call_turns: dict[str, list[int]] = {}
+    read_call_records: dict[str, list[tuple[int, str]]] = {}  # key -> [(turn, tool_use_id)]
     for turn in trace.turns:
         if turn.role != "assistant":
             continue
@@ -131,17 +142,28 @@ def classify(trace: SessionTrace) -> list[Finding]:
             if _is_read_only(tu.tool_name, tu.tool_input):
                 key = f"{tu.tool_name}:{_tool_key(tu.tool_name, tu.tool_input)}"
                 read_call_counts[key] += 1
-                read_call_turns.setdefault(key, []).append(turn.turn_number)
+                read_call_records.setdefault(key, []).append((turn.turn_number, tu.tool_use_id))
 
     repeated_reads: list[dict] = []
     for key, count in read_call_counts.items():
         if count >= REPEAT_THRESHOLD:
             tool_name, _, call_key = key.partition(":")
+            records = read_call_records[key]
+            waste_tokens = 0
+            for _, tool_use_id in records[1:]:  # first read is legitimate
+                result = result_map.get(tool_use_id)
+                if result is None or result.is_error:
+                    continue
+                waste_tokens += (
+                    result.token_count if result.token_count > 0
+                    else _estimate_tokens(result.content)
+                )
             repeated_reads.append({
                 "tool_name": tool_name,
                 "key": call_key[:60],
                 "count": count,
-                "turns": read_call_turns[key],
+                "turns": [t for t, _ in records],
+                "waste_tokens": waste_tokens,
             })
 
     if not thrash_windows and not repeated_reads:
@@ -183,6 +205,7 @@ def classify(trace: SessionTrace) -> list[Finding]:
         evidence={
             "thrash_windows": thrash_windows,
             "repeated_reads": repeated_reads,
+            "total_waste_tokens": sum(r["waste_tokens"] for r in repeated_reads),
         },
         cost_usd=None,
         summary=summary,

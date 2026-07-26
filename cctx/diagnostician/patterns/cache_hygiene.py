@@ -5,9 +5,16 @@ of the miss. A cache miss costs ~10× more than a cache hit on Sonnet
 ($3/MTok vs $0.30/MTok), making this one of the highest-value findings.
 
 Thresholds:
-  MIN_TOTAL_TOKENS    = 5_000   — skip tiny sessions
-  HIT_RATE_THRESHOLD  = 0.50   — below this → fire finding
-  HALF_DROP_THRESHOLD = 0.20   — early_rate - late_rate drop to flag as degrading
+  MIN_TOTAL_TOKENS         = 5_000  — skip tiny sessions
+  HIT_RATE_THRESHOLD       = 0.50   — below this → fire finding
+  HALF_DROP_THRESHOLD      = 0.20   — early_rate - late_rate drop to flag as degrading
+  WASTE_BASELINE_HIT_RATE  = 0.50   — economic baseline for cost estimation, kept
+                                      separate from HIT_RATE_THRESHOLD so retuning
+                                      detection sensitivity doesn't silently move
+                                      dollar output (diagnostician/__init__.py).
+                                      Note: this waste is counterfactual (tokens
+                                      that would have been cache hits at a healthy
+                                      rate), not observed like other findings' cost.
 
 Evidence (Finding.evidence, kind=CACHE_HYGIENE):
     overall_hit_rate
@@ -28,6 +35,7 @@ if TYPE_CHECKING:
 MIN_TOTAL_TOKENS = 5_000
 HIT_RATE_THRESHOLD = 0.50
 HALF_DROP_THRESHOLD = 0.20
+WASTE_BASELINE_HIT_RATE = 0.50
 
 
 def _hit_rate(turns: list[Turn]) -> float:

@@ -29,7 +29,6 @@ from cctx.diagnostician.patterns import (
 from cctx.models import Diagnosis, Finding, FindingKind, SubagentAttribution
 from cctx.pricing import get_pricing as _get_pricing
 from cctx.pricing import is_known_model as _is_known_model
-from cctx.pricing import price_per_tok as _price_per_tok
 
 if TYPE_CHECKING:
     from cctx.models import SessionTrace
@@ -79,9 +78,7 @@ def _classify_subagents(
         sub_findings: list[Finding] = []
         for module in _PER_TURN_CLASSIFIER_MODULES:
             sub_findings.extend(_safe_classify(module.classify, sub))
-        sub_findings = _patch_costs(  # subagent's own model, run date, and speed
-            sub_findings, sub.primary_model, _billing_date(sub.start_time), sub.primary_speed
-        )
+        sub_findings = _patch_costs(sub_findings, sub)  # priced at subagent's own model/date/speed
         out.extend(dataclasses.replace(f, session_id=sub.session_id) for f in sub_findings)
         out.extend(_classify_subagents(sub, parent_map))  # recurse into grandchildren
     return out
@@ -128,20 +125,66 @@ def _billing_date(ts: datetime | None) -> date | None:
     return d if d >= _PRICING_DATE_FLOOR else None
 
 
-def _patch_costs(
-    findings: list[Finding],
-    model: str | None,
-    on: date | None = None,
-    speed: str | None = None,
-) -> list[Finding]:
-    # Token-turns span many requests, so they price at the trace's modal speed rather
-    # than any one turn's — see SessionTrace.primary_speed.
-    price = _price_per_tok(model, speed=speed, on=on)
+# Findings whose evidence carries a plain token count already attributable to
+# waste — priced at the trace's modal input rate. Token-turns/re-fetches span
+# many requests, so the modal rate (not any one turn's) is the honest number.
+_TOKEN_EVIDENCE_KEY: dict[FindingKind, str] = {
+    FindingKind.STALE_CONTEXT: "total_token_turns",
+    FindingKind.TOOL_THRASH: "total_waste_tokens",
+    FindingKind.EXPLORATION_THRASH: "total_waste_tokens",
+    FindingKind.COMPACTION: "total_refetch_tokens",
+}
+
+# Findings whose evidence carries specific wasted-request turn numbers — priced
+# as the whole request (input+output+cache) at that turn's own date/speed via
+# _compute_own_cost, since a wasted retry costs the full round-trip, not just
+# the error message.
+_TURN_EVIDENCE_KEY: dict[FindingKind, str] = {
+    FindingKind.RETRY_LOOP: "waste_turns",
+    FindingKind.DEAD_END: "waste_turns",
+}
+
+
+def _patch_costs(findings: list[Finding], trace: SessionTrace) -> list[Finding]:
+    """Fill cost_usd on findings, priced from `trace`'s own model/date/speed.
+
+    CACHE_HYGIENE is priced separately: it's counterfactual waste (tokens that
+    would have been cache hits at a healthy baseline rate), not observed waste
+    like every other kind here — see cache_hygiene.WASTE_BASELINE_HIT_RATE.
+
+    cost_usd stays None (rather than becoming 0.0) when a finding's own waste
+    basis computes to zero — e.g. a tool_thrash burst that turns out to be all
+    errors (excluded; that's retry_loop's cost) or a compaction with no
+    re-fetches. Every renderer/exporter branches on cost_usd is not None to
+    decide whether to print a dollar figure, so None vs. 0.0 is a real,
+    load-bearing distinction — collapsing "no data" and "zero waste" into a
+    single None keeps that check honest everywhere without special-casing
+    each consumer.
+    """
+    on = _billing_date(trace.start_time)
+    pricing = _get_pricing(trace.primary_model, speed=trace.primary_speed, on=on)
+    price = pricing.input_per_mtok / 1_000_000
+
     result = []
     for f in findings:
-        if f.kind is FindingKind.STALE_CONTEXT:
-            tt = f.evidence.get("total_token_turns", 0)
-            f = dataclasses.replace(f, cost_usd=round(tt * price, 4))
+        cost: float | None = None
+        token_key = _TOKEN_EVIDENCE_KEY.get(f.kind)
+        turn_key = _TURN_EVIDENCE_KEY.get(f.kind)
+        if token_key is not None:
+            tokens = f.evidence.get(token_key, 0)
+            cost = tokens * price
+        elif turn_key is not None:
+            waste_turns = set(f.evidence.get(turn_key, []))
+            cost = _compute_own_cost(trace, trace.primary_model, turn_numbers=waste_turns)
+        elif f.kind is FindingKind.CACHE_HYGIENE:
+            total_tokens = f.evidence.get("total_tokens", 0)
+            hit_rate = f.evidence.get("overall_hit_rate", 0.0)
+            miss_tokens = total_tokens * max(0.0, cache_hygiene.WASTE_BASELINE_HIT_RATE - hit_rate)
+            miss_penalty = price * (1 - pricing.cache_read_mult)
+            cost = miss_tokens * miss_penalty
+
+        if cost is not None and round(cost, 4) > 0:
+            f = dataclasses.replace(f, cost_usd=round(cost, 4))
         result.append(f)
     return result
 
@@ -204,7 +247,9 @@ def _collect_unknown_models(trace: SessionTrace) -> list[str]:
     return list(seen)
 
 
-def _compute_own_cost(trace: SessionTrace, model: str | None) -> float:
+def _compute_own_cost(
+    trace: SessionTrace, model: str | None, turn_numbers: set[int] | None = None
+) -> float:
     """Parent-turns-only cost — does not recurse into subagents.
 
     Prices input AND output tokens at the model's per-type rate (get_pricing),
@@ -214,10 +259,16 @@ def _compute_own_cost(trace: SessionTrace, model: str | None) -> float:
     Priced per turn rather than per session, because two request-level facts move the
     rate: usage.speed (fast mode bills at premium rates) and the turn's date (a session
     can straddle an announced rate change).
+
+    turn_numbers, when given, restricts pricing to that subset — used to cost
+    specific wasted requests (e.g. retry_loop's repeat attempts) rather than
+    the whole trace.
     """
     trace_on = _billing_date(trace.start_time)
     total = 0.0
     for turn in trace.turns:
+        if turn_numbers is not None and turn.turn_number not in turn_numbers:
+            continue
         u = turn.usage
         if u is None:
             continue
@@ -289,9 +340,7 @@ def run(trace: SessionTrace) -> Diagnosis:
     root_findings.sort(key=lambda f: f.first_turn)
 
     inflection_turn = inflection.detect(root_findings)          # root-only
-    root_findings = _patch_costs(
-        root_findings, trace.primary_model, _billing_date(trace.start_time), trace.primary_speed
-    )
+    root_findings = _patch_costs(root_findings, trace)
 
     # Recurse into subagents; each priced at its own model, stamped with its id.
     parent_map: dict[str, str | None] = {}
