@@ -31,7 +31,11 @@ def export_turn_rows(diagnosis: Diagnosis, trace: SessionTrace) -> list[dict[str
     for turn in trace.turns:
         input_tokens = turn.usage.input_tokens if turn.usage else 0
         if turn.usage:
-            p = _price_per_tok(turn.model)
+            p = _price_per_tok(
+                turn.model,
+                speed=turn.usage.speed,
+                on=turn.timestamp.date() if turn.timestamp else None,
+            )
             cost_usd = (
                 turn.usage.input_tokens * p
                 + turn.usage.cache_read * p * 0.1

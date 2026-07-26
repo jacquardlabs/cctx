@@ -10,7 +10,7 @@ The Recommender (cctx.recommender.claude_md) populates patches.
 from __future__ import annotations
 
 import dataclasses
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING
 
 from cctx.diagnostician import inflection
@@ -79,7 +79,9 @@ def _classify_subagents(
         sub_findings: list[Finding] = []
         for module in _PER_TURN_CLASSIFIER_MODULES:
             sub_findings.extend(_safe_classify(module.classify, sub))
-        sub_findings = _patch_costs(sub_findings, sub.primary_model)  # subagent's own model
+        sub_findings = _patch_costs(  # subagent's own model, run date, and speed
+            sub_findings, sub.primary_model, _billing_date(sub.start_time), sub.primary_speed
+        )
         out.extend(dataclasses.replace(f, session_id=sub.session_id) for f in sub_findings)
         out.extend(_classify_subagents(sub, parent_map))  # recurse into grandchildren
     return out
@@ -112,8 +114,29 @@ def _interior_waste(
     )
 
 
-def _patch_costs(findings: list[Finding], model: str | None) -> list[Finding]:
-    price = _price_per_tok(model)
+# Rates can change on an announced date, so cost lookups carry the date the session ran.
+# Turn.timestamp is non-optional and the parser substitutes the Unix epoch when a line
+# has no timestamp — anything predating Claude is that sentinel, not a billing date.
+_PRICING_DATE_FLOOR = date(2023, 1, 1)
+
+
+def _billing_date(ts: datetime | None) -> date | None:
+    """Date to price a turn or trace at. None means "unknown" — get_pricing uses today."""
+    if ts is None:
+        return None
+    d = ts.date()
+    return d if d >= _PRICING_DATE_FLOOR else None
+
+
+def _patch_costs(
+    findings: list[Finding],
+    model: str | None,
+    on: date | None = None,
+    speed: str | None = None,
+) -> list[Finding]:
+    # Token-turns span many requests, so they price at the trace's modal speed rather
+    # than any one turn's — see SessionTrace.primary_speed.
+    price = _price_per_tok(model, speed=speed, on=on)
     result = []
     for f in findings:
         if f.kind is FindingKind.STALE_CONTEXT:
@@ -187,19 +210,25 @@ def _compute_own_cost(trace: SessionTrace, model: str | None) -> float:
     Prices input AND output tokens at the model's per-type rate (get_pricing),
     plus prompt-cache reads/writes at the model's cache multipliers (5-min and
     1-hr writes billed separately; all zero for non-Anthropic models).
+
+    Priced per turn rather than per session, because two request-level facts move the
+    rate: usage.speed (fast mode bills at premium rates) and the turn's date (a session
+    can straddle an announced rate change).
     """
-    p = _get_pricing(model)
-    in_tok = p.input_per_mtok / 1_000_000
-    out_tok = p.output_per_mtok / 1_000_000
+    trace_on = _billing_date(trace.start_time)
     total = 0.0
     for turn in trace.turns:
         u = turn.usage
-        if u is not None:
-            total += u.input_tokens * in_tok
-            total += u.output_tokens * out_tok
-            total += u.cache_read * in_tok * p.cache_read_mult
-            total += u.cache_creation_5m * in_tok * p.cache_write_5m_mult
-            total += u.cache_creation_1h * in_tok * p.cache_write_1h_mult
+        if u is None:
+            continue
+        p = _get_pricing(model, speed=u.speed, on=_billing_date(turn.timestamp) or trace_on)
+        in_tok = p.input_per_mtok / 1_000_000
+        out_tok = p.output_per_mtok / 1_000_000
+        total += u.input_tokens * in_tok
+        total += u.output_tokens * out_tok
+        total += u.cache_read * in_tok * p.cache_read_mult
+        total += u.cache_creation_5m * in_tok * p.cache_write_5m_mult
+        total += u.cache_creation_1h * in_tok * p.cache_write_1h_mult
     return round(total, 4)
 
 
@@ -260,7 +289,9 @@ def run(trace: SessionTrace) -> Diagnosis:
     root_findings.sort(key=lambda f: f.first_turn)
 
     inflection_turn = inflection.detect(root_findings)          # root-only
-    root_findings = _patch_costs(root_findings, trace.primary_model)
+    root_findings = _patch_costs(
+        root_findings, trace.primary_model, _billing_date(trace.start_time), trace.primary_speed
+    )
 
     # Recurse into subagents; each priced at its own model, stamped with its id.
     parent_map: dict[str, str | None] = {}

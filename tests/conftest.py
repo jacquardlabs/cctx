@@ -54,6 +54,7 @@ def make_assistant_line(
     session_id: str = "test-session",
     version: str = "2.1.138",
     cwd: str = "/Users/test/Projects/demo",
+    speed: str = "standard",
 ) -> dict:
     """Construct a synthetic assistant line as it would appear in a JSONL transcript."""
     content: list[dict] = []
@@ -94,6 +95,7 @@ def make_assistant_line(
                     "ephemeral_1h_input_tokens": cache_creation_1h,
                 },
                 "service_tier": "standard",
+                "speed": speed,
                 "iterations": [
                     {
                         "input_tokens": input_tokens,
