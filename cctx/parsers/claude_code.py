@@ -607,13 +607,25 @@ def _parse_assistant_line(raw: dict) -> Turn | None:
         tool_uses=tool_uses,
         tool_results=[],
         usage=_parse_usage(message.get("usage")),
-        model=message.get("model"),
+        model=_normalize_model(message.get("model")),
         stop_reason=message.get("stop_reason"),
         timestamp=_parse_timestamp(raw.get("timestamp")),
         duration_ms=None,
         is_sidechain=bool(raw.get("isSidechain", False)),
         error=("api_error" if raw.get("isApiErrorMessage") else None),
     )
+
+
+def _normalize_model(raw: object) -> str | None:
+    """Map Claude Code's `<synthetic>` placeholder to None — the "no model" sentinel.
+
+    Locally-generated assistant messages (interrupts, error notices) carry
+    `model: "<synthetic>"` with all-zero usage. Normalizing at the boundary keeps it
+    out of primary_model election and out of the pricing table's unknown-model signal.
+    """
+    if not isinstance(raw, str) or raw == "<synthetic>":
+        return None
+    return raw
 
 
 def _parse_usage(raw: dict | None) -> Usage | None:

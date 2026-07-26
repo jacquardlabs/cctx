@@ -600,6 +600,21 @@ def test_primary_model_none_with_no_assistant_turns(write_jsonl):
     assert trace.primary_model is None
 
 
+def test_synthetic_model_placeholder_normalized_to_none(write_jsonl):
+    """`<synthetic>` marks a locally-generated message, not a model — it must not be
+    priced or elected primary_model, even when it outnumbers the real turns."""
+    path = write_jsonl(
+        [
+            make_assistant_line(uuid="a1", text="real", model="claude-opus-5"),
+            make_assistant_line(uuid="a2", parent_uuid="a1", text="stub", model="<synthetic>"),
+            make_assistant_line(uuid="a3", parent_uuid="a2", text="stub", model="<synthetic>"),
+        ]
+    )
+    trace = parse_session(path)
+    assert trace.primary_model == "claude-opus-5"
+    assert [t.model for t in trace.turns] == ["claude-opus-5", None, None]
+
+
 def test_version_and_cwd_from_first_line_with_them(write_jsonl):
     path = write_jsonl(
         [
