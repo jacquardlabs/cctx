@@ -5,8 +5,8 @@ per-million-token USD; cache multipliers are relative to base input price and
 apply to Anthropic prompt caching only (OpenAI Usage cache fields are zeroed by
 the OTEL parser, and these models carry 0.0 multipliers as belt-and-suspenders).
 
-PRICES VERIFIED 2026-07-17 against:
-  - Anthropic: https://platform.claude.com/docs/en/about-claude/models/overview
+PRICES VERIFIED 2026-07-26 against:
+  - Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
   - OpenAI:    current published API rates (gpt-4o/4.1/5, o3, o4-mini)
 
 WHEN TO UPDATE: the test_pricing_table_freshness tripwire fails CI once
@@ -21,7 +21,7 @@ from __future__ import annotations
 import dataclasses
 from datetime import date
 
-PRICING_LAST_VERIFIED = date(2026, 7, 17)
+PRICING_LAST_VERIFIED = date(2026, 7, 26)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -44,17 +44,18 @@ _PRICING: dict[str, ModelPricing] = {
     # --- Anthropic: current ---
     "claude-fable-5":   ModelPricing(10.0, 50.0, **_AC),
     "claude-mythos":    ModelPricing(10.0, 50.0, **_AC),  # mythos-5/preview → Fable 5 rates
+    "claude-opus-5":    ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-8":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-7":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-6":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-5":  ModelPricing(5.0, 25.0, **_AC),
-    "claude-sonnet-5":  ModelPricing(3.0, 15.0, **_AC),  # sticker; intro $2/$10 until 2026-08-31
+    "claude-sonnet-5":  ModelPricing(2.0, 10.0, **_AC),  # intro rate; $3/$15 from 2026-09-01
     "claude-sonnet-4":  ModelPricing(3.0, 15.0, **_AC),  # 4, 4.5, 4.6 share rates
     "claude-haiku-4-5": ModelPricing(1.0, 5.0, **_AC),
     # --- Anthropic: deprecated/retired, still present in historical logs ---
     "claude-opus-4-1":  ModelPricing(15.0, 75.0, **_AC),
     "claude-opus-4":    ModelPricing(15.0, 75.0, **_AC),  # original Opus 4.0 (dated ids)
-    "claude-haiku-3-5": ModelPricing(0.8, 4.0, **_AC),
+    "claude-3-5-haiku": ModelPricing(0.8, 4.0, **_AC),  # pre-4.6 ids put family after version
     # --- OpenAI (from OTEL traces; no prompt-cache billing) ---
     "gpt-4o-mini":      ModelPricing(0.15, 0.60, **_NC),
     "gpt-4o":           ModelPricing(2.50, 10.0, **_NC),

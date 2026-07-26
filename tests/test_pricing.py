@@ -10,7 +10,7 @@ from cctx.pricing import PRICING_LAST_VERIFIED, ModelPricing, get_pricing, price
 M = 1_000_000
 
 
-# --- prices verified 2026-07-17 (see pricing.py header) ---------------------
+# --- prices verified 2026-07-26 (see pricing.py header) ---------------------
 
 
 @pytest.mark.parametrize("model, inp, out", [
@@ -18,15 +18,16 @@ M = 1_000_000
     ("claude-fable-5",          10.0, 50.0),
     ("claude-mythos-5",         10.0, 50.0),
     ("claude-mythos-preview",   10.0, 50.0),
+    ("claude-opus-5",            5.0, 25.0),
     ("claude-opus-4-8",          5.0, 25.0),
     ("claude-opus-4-6",          5.0, 25.0),
-    ("claude-sonnet-5",          3.0, 15.0),
+    ("claude-sonnet-5",          2.0, 10.0),  # intro rate through 2026-08-31
     ("claude-sonnet-4-6",        3.0, 15.0),
     ("claude-sonnet-4",          3.0, 15.0),
     ("claude-haiku-4-5",         1.0,  5.0),
     # Anthropic — deprecated but still present in historical logs
     ("claude-opus-4-1",         15.0, 75.0),
-    ("claude-haiku-3-5",         0.8,  4.0),
+    ("claude-3-5-haiku-20241022", 0.8, 4.0),
     # OpenAI (from OTEL traces)
     ("gpt-4o",                   2.50, 10.0),
     ("gpt-4o-mini",              0.15,  0.60),
@@ -52,6 +53,20 @@ def test_longest_prefix_wins_with_dated_and_mini_suffixes():
     assert get_pricing("claude-opus-4-8-20251234").input_per_mtok == 5.0  # dated suffix
     assert get_pricing("gpt-4o-mini").input_per_mtok == 0.15             # mini, not gpt-4o
     assert get_pricing("gpt-5-mini").input_per_mtok == 0.25
+
+
+def test_claude_code_1m_context_suffix_prices_as_base_model():
+    """Claude Code logs the 1M-context variant as `<model>[1m]`; no long-context premium."""
+    assert get_pricing("claude-opus-5[1m]").input_per_mtok == 5.0
+    assert get_pricing("claude-opus-4-8[1m]").input_per_mtok == 5.0
+    assert get_pricing("claude-sonnet-5[1m]").input_per_mtok == 2.0
+
+
+def test_opus_5_is_not_captured_by_the_opus_4_stem():
+    """Opus 5 ($5/$25) must not fall through to _DEFAULT or the Opus 4.0 stem ($15/$75)."""
+    p = get_pricing("claude-opus-5")
+    assert (p.input_per_mtok, p.output_per_mtok) == (5.0, 25.0)
+    assert p != get_pricing(None)
 
 
 def test_anthropic_cache_multipliers_present_openai_zeroed():
@@ -100,11 +115,14 @@ def test_is_known_model_flags_unrecognized():
     from cctx.pricing import is_known_model
 
     assert is_known_model("claude-opus-4-8") is True
-    # claude-sonnet-5 prices the same as _DEFAULT, so only is_known_model
-    # distinguishes "listed" from "fell through to the default".
+    assert is_known_model("claude-opus-5") is True
+    assert is_known_model("claude-opus-5[1m]") is True
     assert is_known_model("claude-sonnet-5") is True
     assert is_known_model("claude-fable-5") is True
     assert is_known_model("claude-mythos-5") is True
+    # Claude Code's placeholder model for locally-generated assistant messages.
+    # The parser normalizes it to None, so it never reaches pricing as a model id.
+    assert is_known_model("<synthetic>") is False
     assert is_known_model("gpt-4o") is True
     assert is_known_model("gpt-4o-2026-01-01") is True   # dated suffix still matches
     assert is_known_model("gpt-6-preview") is False      # future model -> default
@@ -124,3 +142,17 @@ def test_pricing_table_freshness():
         "Re-verify input/output rates against the Anthropic and OpenAI pricing "
         "pages, add any new model families, and bump PRICING_LAST_VERIFIED."
     )
+
+
+SONNET_5_INTRO_ENDS = date(2026, 9, 1)
+
+
+def test_sonnet_5_introductory_rate_expiry():
+    """Sonnet 5 is priced at its introductory $2/$10 rate, which ends 2026-08-31.
+    This goes red on the flip date — set claude-sonnet-5 to $3/$15 and delete this test."""
+    assert date.today() < SONNET_5_INTRO_ENDS, (
+        f"Sonnet 5 introductory pricing ended {SONNET_5_INTRO_ENDS}. "
+        "Set claude-sonnet-5 to ModelPricing(3.0, 15.0) in cctx/pricing.py, update the "
+        "expected rates in this file, and remove this tripwire."
+    )
+    assert get_pricing("claude-sonnet-5").input_per_mtok == 2.0
