@@ -104,6 +104,91 @@ def test_autopsy_since_runs_on_project_dir(runner, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# _resolve_project_dir — --since/--efficacy TARGET resolution (#waste-cost)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_project_dir_translates_real_project_dir(tmp_path, monkeypatch):
+    """A real project working directory (no *.jsonl inside it) must translate
+    through find_project_dir(), the same way --latest already does — otherwise
+    --since/--efficacy silently glob an empty directory and report 0 sessions."""
+    from cctx.cli import _resolve_project_dir
+    from cctx.discovery import _encode_path
+
+    claude_home = tmp_path / "claude_home"
+    real_project = tmp_path / "Users" / "test" / "Projects" / "demo"
+    real_project.mkdir(parents=True)
+    encoded = claude_home / _encode_path(real_project)
+    encoded.mkdir(parents=True)
+    (encoded / "session1.jsonl").write_text("{}\n")
+
+    monkeypatch.setenv("CCTX_PROJECTS_DIR", str(claude_home))
+    assert _resolve_project_dir(real_project) == encoded
+
+
+def test_resolve_project_dir_leaves_already_encoded_dir_alone(tmp_path):
+    """TARGET already containing *.jsonl (an encoded claude dir) needs no translation."""
+    from cctx.cli import _resolve_project_dir
+
+    encoded_dir = tmp_path / "-Users-test-Projects-demo"
+    encoded_dir.mkdir()
+    (encoded_dir / "session1.jsonl").write_text("{}\n")
+
+    assert _resolve_project_dir(encoded_dir) == encoded_dir
+
+
+def test_resolve_project_dir_uses_file_parent(tmp_path):
+    """A session .jsonl file's parent dir needs no translation either."""
+    from cctx.cli import _resolve_project_dir
+
+    project_dir = tmp_path / "-Users-test-Projects-demo"
+    project_dir.mkdir()
+    session_file = project_dir / "session1.jsonl"
+    session_file.write_text("{}\n")
+
+    assert _resolve_project_dir(session_file) == project_dir
+
+
+def test_autopsy_since_translates_real_project_dir(runner, tmp_path, monkeypatch):
+    """cctx autopsy <real project dir> --since must find sessions, not report 0 (#waste-cost)."""
+    import json
+
+    from cctx.cli import cli
+    from cctx.discovery import _encode_path
+
+    claude_home = tmp_path / "claude_home"
+    real_project = tmp_path / "Users" / "test" / "Projects" / "demo"
+    real_project.mkdir(parents=True)
+    encoded_dir = claude_home / _encode_path(real_project)
+    encoded_dir.mkdir(parents=True)
+
+    session_id = "since-translate-sess-01"
+    line = {
+        "type": "user",
+        "uuid": f"{session_id}-u1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "timestamp": "2026-05-14T10:00:00.000Z",
+        "sessionId": session_id,
+        "version": "2.1.138",
+        "cwd": str(real_project),
+        "gitBranch": "main",
+        "userType": "external",
+        "entrypoint": "cli",
+        "message": {"role": "user", "content": "hello"},
+    }
+    (encoded_dir / f"{session_id}.jsonl").write_text(json.dumps(line) + "\n")
+
+    monkeypatch.setenv("CCTX_PROJECTS_DIR", str(claude_home))
+    result = runner.invoke(
+        cli, ["autopsy", str(real_project), "--since", "7", "--json"], catch_exceptions=False
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data["sessions_analysed"] == 1
+
+
+# ---------------------------------------------------------------------------
 # parse_since tests
 # ---------------------------------------------------------------------------
 

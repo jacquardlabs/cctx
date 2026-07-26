@@ -143,6 +143,28 @@ def parse_since(value: str) -> tuple[datetime, datetime, str]:
 
     return now - delta, now, label
 
+
+def _resolve_project_dir(target: Path) -> Path:
+    """Resolve TARGET to its ~/.claude/projects/<encoded> dir for cross-session
+    modes (--since, --efficacy).
+
+    Accepts a session .jsonl file (uses its parent), an already-encoded claude
+    project dir, or a local project working directory (~/Projects/foo) —
+    translating the latter via find_project_dir(), the same translation the
+    --latest single-session path already applies. Falls back to `target`
+    unchanged if no matching claude project dir exists, so aggregate.run()
+    surfaces "0 sessions" rather than this helper raising.
+    """
+    from cctx.discovery import find_project_dir
+
+    if not target.is_dir():
+        return target.parent
+    if any(target.glob("*.jsonl")):
+        return target
+    translated = find_project_dir(target)
+    return translated if translated is not None else target
+
+
 click.rich_click.TEXT_MARKUP = "rich"  # replaces deprecated USE_RICH_MARKUP = True
 click.rich_click.SHOW_ARGUMENTS = True
 
@@ -536,7 +558,7 @@ def autopsy(
         if github_summary:
             raise click.UsageError("--github-summary is not supported with --since.")
         # Cross-session path
-        project_dir = target if target.is_dir() else target.parent
+        project_dir = _resolve_project_dir(target)
         start, end, label = parse_since(since)
         if until_date is not None:
             try:
@@ -822,7 +844,7 @@ def harvest(
         from cctx.recommender.evidence import efficacy as _run_efficacy
         start = datetime(2020, 1, 1, tzinfo=UTC)
         end   = datetime(2035, 1, 1, tzinfo=UTC)
-        pairs = aggregate.run(target, start, end)
+        pairs = aggregate.run(_resolve_project_dir(target), start, end)
         h_dates = managed_heading_dates(resolved_dir)
         report  = _run_efficacy(pairs, h_dates)
         render_efficacy_report(report, resolved_dir, target)
@@ -853,7 +875,7 @@ def harvest(
     click.echo(f"Target: {claude_md_path}")
 
     if since is not None:
-        project_dir = target if target.is_dir() else target.parent
+        project_dir = _resolve_project_dir(target)
         start, end, _label = parse_since(since)
         pairs = aggregate.run(project_dir, start, end)
         diagnoses = [d for d, _ in pairs]
