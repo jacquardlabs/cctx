@@ -18,6 +18,9 @@ Thresholds:
 Evidence (Finding.evidence, kind=DEAD_END):
     dead_ends
     total_fails
+    waste_turns  — turn numbers of the repeat failing attempts (excludes each
+                   run's first, legitimate attempt). Priced as full requests
+                   by diagnostician/__init__.py (_compute_own_cost).
 """
 from __future__ import annotations
 
@@ -67,12 +70,14 @@ def classify(trace: SessionTrace) -> list[Finding]:
     run_key: str | None = None
     run_count: int = 0
     run_first_turn: int = 0
+    run_waste_turns: list[int] = []
 
     for turn in trace.turns:
         # Compaction resets state
         if is_compaction_turn(turn):
             run_tool = run_key = None
             run_count = 0
+            run_waste_turns = []
             continue
 
         if turn.role != "assistant":
@@ -88,14 +93,16 @@ def classify(trace: SessionTrace) -> list[Finding]:
 
             if errored:
                 if tu.tool_name == run_tool and key == run_key:
-                    # Continuing the same failing approach
+                    # Continuing the same failing approach — a repeat, i.e. waste
                     run_count += 1
+                    run_waste_turns.append(turn.turn_number)
                 else:
-                    # New failing approach — reset
+                    # New failing approach — reset. First attempt isn't waste.
                     run_tool = tu.tool_name
                     run_key = key
                     run_count = 1
                     run_first_turn = turn.turn_number
+                    run_waste_turns = []
             else:
                 # Successful call — check if it's a pivot away from an error run
                 if run_count >= N_FAIL_MIN:
@@ -108,10 +115,12 @@ def classify(trace: SessionTrace) -> list[Finding]:
                             "first_fail_turn": run_first_turn,
                             "pivot_turn": turn.turn_number,
                             "pivot_tool": tu.tool_name,
+                            "waste_turns": list(run_waste_turns),
                         })
                 # Reset — success ends the run
                 run_tool = run_key = None
                 run_count = 0
+                run_waste_turns = []
 
     if not dead_ends:
         return []
@@ -136,7 +145,11 @@ def classify(trace: SessionTrace) -> list[Finding]:
         confidence=Confidence.HIGH,
         first_turn=all_first,
         last_turn=all_last,
-        evidence={"dead_ends": dead_ends, "total_fails": total_fails},
+        evidence={
+            "dead_ends": dead_ends,
+            "total_fails": total_fails,
+            "waste_turns": [t for d in dead_ends for t in d["waste_turns"]],
+        },
         cost_usd=None,
         summary=summary,
     )]

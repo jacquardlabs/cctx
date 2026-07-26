@@ -192,10 +192,17 @@ def generate_from_evidence(
         description, diff_body, target_file = _TEMPLATES[kind]
 
         if ev.session_count >= 2:
-            evidence_line = (
-                f"\n+\n+Evidence: appeared in {ev.session_count} sessions "
-                f"(~${ev.total_waste_usd:.2f} wasted)."
-            )
+            # Some kinds (scope_creep, unused_context) have no honest per-session
+            # dollar basis, so total_waste_usd stays 0. Others can accumulate a
+            # genuine but sub-cent total that :.2f would still print as "$0.00".
+            # Either way, omit the clause rather than print a misleading figure.
+            if round(ev.total_waste_usd, 2) > 0:
+                evidence_line = (
+                    f"\n+\n+Evidence: appeared in {ev.session_count} sessions "
+                    f"(~${ev.total_waste_usd:.2f} wasted)."
+                )
+            else:
+                evidence_line = f"\n+\n+Evidence: appeared in {ev.session_count} sessions."
             diff_body = diff_body + evidence_line
 
         example = ev.example_summaries[0] if ev.example_summaries else ""

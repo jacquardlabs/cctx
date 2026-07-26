@@ -7,6 +7,10 @@ all occurrences in evidence.
 Evidence (Finding.evidence, kind=RETRY_LOOP):
     occurrences
     loop_length
+    waste_turns  — turn numbers of the repeat attempts (excludes each loop's
+                   first, legitimate attempt). diagnostician/__init__.py prices
+                   these as full requests (_compute_own_cost), since a wasted
+                   retry costs the whole round-trip, not just the error text.
 """
 from __future__ import annotations
 
@@ -112,6 +116,11 @@ def classify(trace: SessionTrace) -> list[Finding]:
     first_turn = min(second_errors)
     last_turn = max(r[2] for r in all_errors)
 
+    # Waste = the repeat attempts, excluding each loop's first (legitimate) try.
+    waste_turns = [
+        r[2] for occ in loop_occurrences for r in occ["error_recs"][1:]
+    ]
+
     severity = Severity.HIGH if loop_length >= 4 else Severity.MEDIUM
 
     evidence_occurrences = []
@@ -136,7 +145,11 @@ def classify(trace: SessionTrace) -> list[Finding]:
         confidence=Confidence.HIGH,
         first_turn=first_turn,
         last_turn=last_turn,
-        evidence={"occurrences": evidence_occurrences, "loop_length": loop_length},
+        evidence={
+            "occurrences": evidence_occurrences,
+            "loop_length": loop_length,
+            "waste_turns": waste_turns,
+        },
         cost_usd=None,
         summary=summary,
     )]

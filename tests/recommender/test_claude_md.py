@@ -117,6 +117,46 @@ def test_generate_from_evidence_single_session():
     assert "Evidence:" not in patches[0].unified_diff
 
 
+def test_generate_from_evidence_omits_dollar_when_no_cost_basis():
+    """Kinds with no honest per-session cost basis (e.g. scope_creep) must not
+    print a misleading '$0.00 wasted' — omit the dollar clause entirely."""
+    from cctx.models import FindingKind, KindEvidence
+    from cctx.recommender.claude_md import generate_from_evidence
+
+    evidence = {
+        FindingKind.SCOPE_CREEP: KindEvidence(
+            kind=FindingKind.SCOPE_CREEP,
+            session_count=5,
+            total_waste_usd=0.0,
+            example_summaries=["'while I'm here' at turn 4"],
+        )
+    }
+    patches = generate_from_evidence(evidence)
+    assert len(patches) == 1
+    assert "wasted" not in patches[0].unified_diff
+    assert "Evidence: appeared in 5 sessions." in patches[0].unified_diff
+
+
+def test_generate_from_evidence_omits_dollar_when_subcent():
+    """A nonzero but sub-cent total (rounds to $0.00 under :.2f) must also omit
+    the dollar clause rather than print a misleading '$0.00 wasted'."""
+    from cctx.models import FindingKind, KindEvidence
+    from cctx.recommender.claude_md import generate_from_evidence
+
+    evidence = {
+        FindingKind.EXPLORATION_THRASH: KindEvidence(
+            kind=FindingKind.EXPLORATION_THRASH,
+            session_count=4,
+            total_waste_usd=0.0045,
+            example_summaries=["1 exploration thrash window (turns 19-35)"],
+        )
+    }
+    patches = generate_from_evidence(evidence)
+    assert len(patches) == 1
+    assert "wasted" not in patches[0].unified_diff
+    assert "Evidence: appeared in 4 sessions." in patches[0].unified_diff
+
+
 def test_generate_from_evidence_cross_session_appends_evidence_line():
     """With session_count>=2, evidence line is appended."""
     from cctx.models import FindingKind, KindEvidence

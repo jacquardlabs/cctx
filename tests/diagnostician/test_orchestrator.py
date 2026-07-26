@@ -206,6 +206,221 @@ def test_stale_context_cost_usd_patched():
     assert stale[0].cost_usd > 0
 
 
+def test_retry_loop_cost_usd_patched():
+    """retry_loop prices the wasted retry as a full request, not the error text (#waste-cost)."""
+    import dataclasses
+
+    from cctx import diagnostician
+    from cctx.models import FindingKind
+
+    uid1, uid2 = "toolu_01", "toolu_02"
+    err = "Error: file not found"
+    fp = "src/foo.py"
+    t4 = make_assistant_turn(4, tool_uses=[make_tool_use(uid2, "Edit", {"file_path": fp})])
+    t4 = dataclasses.replace(t4, usage=_make_usage(input_tokens=50_000, cache_read=40_000))
+    turns = [
+        make_user_turn(1),
+        make_assistant_turn(2, tool_uses=[make_tool_use(uid1, "Edit", {"file_path": fp})]),
+        make_tool_result_turn(3, tool_results=[make_tool_result(uid1, "Edit", err, is_error=True)]),
+        t4,
+        make_tool_result_turn(5, tool_results=[make_tool_result(uid2, "Edit", err, is_error=True)]),
+    ]
+    trace = make_trace(turns, model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    retry = [f for f in diagnosis.findings if f.kind is FindingKind.RETRY_LOOP]
+    assert len(retry) == 1
+    # Only the repeat (turn 4) is waste — the first attempt (turn 2, usage=None) isn't.
+    assert retry[0].evidence["waste_turns"] == [4]
+    expected = round(50_000 * 3e-6 + 40_000 * 3e-6 * 0.10, 4)  # sonnet input + 10% cache-read
+    assert retry[0].cost_usd == pytest.approx(expected)
+
+
+def test_dead_end_cost_usd_patched():
+    """dead_end prices the wasted repeat attempts as full requests."""
+    import dataclasses
+
+    from cctx import diagnostician
+    from cctx.models import FindingKind
+
+    uid1, uid2, uid_pivot = "toolu_01", "toolu_02", "toolu_pivot"
+    err = "Error: file locked"
+    fp = "src/foo.py"
+    t4 = make_assistant_turn(4, tool_uses=[make_tool_use(uid2, "Edit", {"file_path": fp})])
+    t4 = dataclasses.replace(t4, usage=_make_usage(input_tokens=20_000))
+    turns = [
+        make_user_turn(1),
+        make_assistant_turn(2, tool_uses=[make_tool_use(uid1, "Edit", {"file_path": fp})]),
+        make_tool_result_turn(3, tool_results=[make_tool_result(uid1, "Edit", err, is_error=True)]),
+        t4,
+        make_tool_result_turn(5, tool_results=[make_tool_result(uid2, "Edit", err, is_error=True)]),
+        make_assistant_turn(6, tool_uses=[make_tool_use(uid_pivot, "Bash", {"command": "ls src/"})]),
+        make_tool_result_turn(
+            7, tool_results=[make_tool_result(uid_pivot, "Bash", "src/foo.py", is_error=False)]
+        ),
+    ]
+    trace = make_trace(turns, model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    dead = [f for f in diagnosis.findings if f.kind is FindingKind.DEAD_END]
+    assert len(dead) == 1
+    assert dead[0].evidence["waste_turns"] == [4]
+    expected = round(20_000 * 3e-6, 4)
+    assert dead[0].cost_usd == pytest.approx(expected)
+
+
+def test_tool_thrash_cost_usd_patched():
+    """tool_thrash prices repeat identical calls from tool_result content tokens."""
+    from cctx import diagnostician
+    from cctx.models import FindingKind
+
+    content = ("word " * 200).strip()  # 200 words * 1.3 = 260 tokens/read
+    turns = [make_user_turn(1)]
+    for i in range(3):
+        uid = f"toolu_read_{i}"
+        turns.append(make_assistant_turn(
+            2 + i * 2, tool_uses=[make_tool_use(uid, "Read", {"file_path": "src/app.py"})]
+        ))
+        turns.append(make_tool_result_turn(3 + i * 2, tool_results=[make_tool_result(uid, "Read", content)]))
+    trace = make_trace(turns, model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    thrash = [f for f in diagnosis.findings if f.kind is FindingKind.TOOL_THRASH]
+    assert len(thrash) == 1
+    # 2 of 3 occurrences are waste (first read is legitimate); 260 tokens each.
+    expected = round(2 * 260 * 3e-6, 4)
+    assert thrash[0].cost_usd == pytest.approx(expected)
+
+
+def test_tool_thrash_excludes_errored_occurrences_from_cost():
+    """Errored repeats are retry_loop's domain — tool_thrash must not double-count them."""
+    import dataclasses
+
+    from cctx import diagnostician
+    from cctx.models import FindingKind
+
+    err = "Error: locked"
+    turns = [make_user_turn(1)]
+    for i in range(3):
+        uid = f"toolu_e{i}"
+        t = make_assistant_turn(
+            2 + i * 2, tool_uses=[make_tool_use(uid, "Edit", {"file_path": "src/foo.py"})]
+        )
+        if i > 0:  # repeats get usage attached — proves retry_loop's cost is real, not a stub
+            t = dataclasses.replace(t, usage=_make_usage(input_tokens=10_000))
+        turns.append(t)
+        turns.append(make_tool_result_turn(3 + i * 2, tool_results=[make_tool_result(uid, "Edit", err, is_error=True)]))
+    trace = make_trace(turns, model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    thrash = [f for f in diagnosis.findings if f.kind is FindingKind.TOOL_THRASH]
+    assert len(thrash) == 1
+    # All repeats errored, so tool_thrash's own basis is 0 -> None, not a fake $0.00.
+    assert thrash[0].cost_usd is None
+    retry = [f for f in diagnosis.findings if f.kind is FindingKind.RETRY_LOOP]
+    assert len(retry) == 1
+    assert retry[0].cost_usd == pytest.approx(round(2 * 10_000 * 3e-6, 4))
+
+
+def test_exploration_thrash_cost_usd_patched():
+    """exploration_thrash's repeated_reads waste is priced from tool_result content."""
+    from cctx import diagnostician
+    from cctx.models import FindingKind
+
+    content = ("token " * 100).strip()  # 100 words * 1.3 = 130 tokens/read
+    turns = [make_user_turn(1)]
+    for i in range(3):
+        uid = f"toolu_grep_{i}"
+        turns.append(make_assistant_turn(
+            2 + i * 2, tool_uses=[make_tool_use(uid, "Grep", {"pattern": "TODO"})]
+        ))
+        turns.append(make_tool_result_turn(3 + i * 2, tool_results=[make_tool_result(uid, "Grep", content)]))
+    trace = make_trace(turns, model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    thrash = [f for f in diagnosis.findings if f.kind is FindingKind.EXPLORATION_THRASH]
+    assert len(thrash) == 1
+    expected = round(2 * 130 * 3e-6, 4)
+    assert thrash[0].cost_usd == pytest.approx(expected)
+
+
+def test_compaction_cost_usd_patched():
+    """compaction's total_refetch_tokens (already computed by the classifier) flows into cost_usd."""
+    import dataclasses
+
+    from cctx import diagnostician
+    from cctx.models import FindingKind, Turn
+    from tests.diagnostician.conftest import _dt
+
+    # compaction.py matches tool_use -> tool_result on the SAME turn.
+    content = ("x " * 3000).strip()  # 3000 words -> heuristic 4000 tokens
+    t_read = dataclasses.replace(
+        make_assistant_turn(2, tool_uses=[make_tool_use("r1", "Read", {"file_path": "/foo.py"})]),
+        tool_results=[make_tool_result("r1", "Read", content)],
+    )
+    t_reread = dataclasses.replace(
+        make_assistant_turn(4, tool_uses=[make_tool_use("r2", "Read", {"file_path": "/foo.py"})]),
+        tool_results=[make_tool_result("r2", "Read", content)],
+    )
+    turns = [
+        make_user_turn(1),
+        t_read,
+        Turn(
+            turn_number=3, uuid="uuid-compact", parent_uuid=None, role="system",
+            text="<context_window_compacted/>", thinking="", tool_uses=[], tool_results=[],
+            usage=None, model=None, stop_reason=None, timestamp=_dt(30), duration_ms=None,
+        ),
+        t_reread,
+    ]
+    trace = make_trace(turns, model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    comp = [f for f in diagnosis.findings if f.kind is FindingKind.COMPACTION]
+    assert len(comp) == 1
+    refetch_tokens = comp[0].evidence["total_refetch_tokens"]
+    assert refetch_tokens > 0
+    assert comp[0].cost_usd == pytest.approx(round(refetch_tokens * 3e-6, 4))
+
+
+def test_compaction_with_no_refetches_cost_usd_is_none():
+    """No re-fetches -> total_refetch_tokens is 0 -> cost_usd stays None, not a fake $0.00
+    (the --health terminal renderer prints a savings line whenever cost_usd is not None)."""
+    from cctx import diagnostician
+    from cctx.models import FindingKind, Turn
+    from tests.diagnostician.conftest import _dt
+
+    turns = [
+        make_user_turn(1),
+        Turn(
+            turn_number=2, uuid="uuid-compact", parent_uuid=None, role="system",
+            text="<context_window_compacted/>", thinking="", tool_uses=[], tool_results=[],
+            usage=None, model=None, stop_reason=None, timestamp=_dt(20), duration_ms=None,
+        ),
+        make_assistant_turn(3, text="Continuing after compaction"),
+    ]
+    trace = make_trace(turns, model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    comp = [f for f in diagnosis.findings if f.kind is FindingKind.COMPACTION]
+    assert len(comp) == 1
+    assert comp[0].evidence["total_refetch_tokens"] == 0
+    assert comp[0].cost_usd is None
+
+
+def test_cache_hygiene_cost_usd_patched():
+    """cache_hygiene's cost is counterfactual: baseline-hit-rate tokens priced at the miss/hit delta."""
+    import dataclasses
+
+    from cctx import diagnostician
+    from cctx.diagnostician.patterns import cache_hygiene
+    from cctx.models import FindingKind
+
+    t = dataclasses.replace(
+        make_assistant_turn(2, text="ok"),
+        usage=_make_usage(input_tokens=8_000, cache_read=2_000),
+    )
+    trace = make_trace([make_user_turn(1), t], model="claude-sonnet-4-6")
+    diagnosis = diagnostician.run(trace)
+    ch = [f for f in diagnosis.findings if f.kind is FindingKind.CACHE_HYGIENE]
+    assert len(ch) == 1
+    miss_tokens = 10_000 * (cache_hygiene.WASTE_BASELINE_HIT_RATE - 0.2)
+    expected = round(miss_tokens * 3e-6 * (1 - 0.10), 4)  # sonnet cache_read_mult = 0.10
+    assert ch[0].cost_usd == pytest.approx(expected)
+
+
 def test_total_cost_includes_cache_read():
     """_compute_total_cost includes cache_read at 10% and cache_writes at 125%."""
     import dataclasses
