@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.23.0 (2026-07-26)
+
+### Bug Fixes
+
+- **cli**: Resolve --since/--efficacy TARGET through find_project_dir
+  ([#200](https://github.com/jacquardlabs/cctx/pull/200),
+  [`ce6ea52`](https://github.com/jacquardlabs/cctx/commit/ce6ea52d5265c223bf2cccf505cee60661c018fc))
+
+### Features
+
+- **diagnostician**: Price retry_loop, dead_end, tool_thrash, exploration_thrash, compaction, and
+  cache_hygiene findings ([#200](https://github.com/jacquardlabs/cctx/pull/200),
+  [`ce6ea52`](https://github.com/jacquardlabs/cctx/commit/ce6ea52d5265c223bf2cccf505cee60661c018fc))
+
+- **diagnostician**: Price the six under-costed finding kinds, fix --since project resolution
+  ([#200](https://github.com/jacquardlabs/cctx/pull/200),
+  [`ce6ea52`](https://github.com/jacquardlabs/cctx/commit/ce6ea52d5265c223bf2cccf505cee60661c018fc))
+
+
 ## v1.22.0 (2026-07-26)
 
 ### Bug Fixes
