@@ -79,8 +79,8 @@ def _classify_subagents(
         sub_findings: list[Finding] = []
         for module in _PER_TURN_CLASSIFIER_MODULES:
             sub_findings.extend(_safe_classify(module.classify, sub))
-        sub_findings = _patch_costs(  # subagent's own model, at its own run date
-            sub_findings, sub.primary_model, _billing_date(sub.start_time)
+        sub_findings = _patch_costs(  # subagent's own model, run date, and speed
+            sub_findings, sub.primary_model, _billing_date(sub.start_time), sub.primary_speed
         )
         out.extend(dataclasses.replace(f, session_id=sub.session_id) for f in sub_findings)
         out.extend(_classify_subagents(sub, parent_map))  # recurse into grandchildren
@@ -129,9 +129,14 @@ def _billing_date(ts: datetime | None) -> date | None:
 
 
 def _patch_costs(
-    findings: list[Finding], model: str | None, on: date | None = None
+    findings: list[Finding],
+    model: str | None,
+    on: date | None = None,
+    speed: str | None = None,
 ) -> list[Finding]:
-    price = _price_per_tok(model, on=on)
+    # Token-turns span many requests, so they price at the trace's modal speed rather
+    # than any one turn's — see SessionTrace.primary_speed.
+    price = _price_per_tok(model, speed=speed, on=on)
     result = []
     for f in findings:
         if f.kind is FindingKind.STALE_CONTEXT:
@@ -285,7 +290,7 @@ def run(trace: SessionTrace) -> Diagnosis:
 
     inflection_turn = inflection.detect(root_findings)          # root-only
     root_findings = _patch_costs(
-        root_findings, trace.primary_model, _billing_date(trace.start_time)
+        root_findings, trace.primary_model, _billing_date(trace.start_time), trace.primary_speed
     )
 
     # Recurse into subagents; each priced at its own model, stamped with its id.

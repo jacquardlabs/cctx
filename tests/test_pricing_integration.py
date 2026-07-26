@@ -72,6 +72,53 @@ def test_unscheduled_model_cost_is_independent_of_session_date(write_jsonl):
     assert a.total_cost_usd == b.total_cost_usd == 0.021
 
 
+def test_waste_cost_uses_the_same_speed_as_total_cost(write_jsonl):
+    """A stale-context finding prices token-turns, which span many requests and so read
+    the trace's modal speed. Without that, one Diagnosis would report a doubled total cost
+    alongside half-rate waste costs."""
+    import dataclasses
+
+    from cctx.models import FindingKind, Usage
+    from tests.diagnostician.test_stale_context import _stale_trace
+
+    def stale_cost(speed):
+        # Real assistant turns always carry usage; the shared builder leaves it None.
+        turns = [
+            dataclasses.replace(t, usage=Usage(100, 50, 0, 0, 0, "standard", speed))
+            if t.role == "assistant" else t
+            for t in _stale_trace().turns
+        ]
+        trace = dataclasses.replace(_stale_trace(), turns=turns, primary_model="claude-opus-5")
+        findings = [f for f in run(trace).findings if f.kind is FindingKind.STALE_CONTEXT]
+        assert findings, "expected a stale_context finding"
+        return findings[0].cost_usd
+
+    standard, fast = stale_cost("standard"), stale_cost("fast")
+    assert standard > 0
+    assert fast == round(standard * 2, 4)
+
+
+def test_primary_speed_elects_the_modal_turn_speed(write_jsonl):
+    """Trace-level speed is elected like primary_model: most frequent wins, and turns
+    without usage or without the field don't vote."""
+    ts = "2026-07-20T02:00:00.000Z"
+    lines = [make_user_line(uuid="u1", content="go", timestamp=ts)]
+    for i, speed in enumerate(("fast", "fast", "standard")):
+        lines.append(
+            make_assistant_line(
+                uuid=f"a{i}", parent_uuid="u1", text="x",
+                model="claude-opus-5", speed=speed, timestamp=ts,
+            )
+        )
+    trace = parse_session(write_jsonl(lines, filename="modal.jsonl"))
+    assert trace.primary_speed == "fast"
+
+    none_recorded = parse_session(
+        write_jsonl([make_user_line(uuid="u1", content="go", timestamp=ts)], filename="empty.jsonl")
+    )
+    assert none_recorded.primary_speed is None
+
+
 def test_missing_timestamp_does_not_price_at_the_epoch():
     """Turn.timestamp is non-optional and the parser substitutes the Unix epoch when a
     line carries none. Priced literally, that would resolve every schedule to its earliest

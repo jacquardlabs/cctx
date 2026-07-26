@@ -199,6 +199,15 @@ def test_standard_and_absent_speed_use_standard_rates():
         assert (p.input_per_mtok, p.output_per_mtok) == (5.0, 25.0)
 
 
+def test_fast_mode_roster_is_pinned_to_the_models_that_support_it():
+    """Fast mode is Opus 5 and Opus 4.8 only. Pinning the roster is what catches a wrong
+    entry — asserting a non-fast model keeps its rate passes either way."""
+    from cctx.pricing import _FAST_MODE, _PRICING
+
+    assert set(_FAST_MODE) == {"claude-opus-5", "claude-opus-4-8"}
+    assert set(_FAST_MODE) <= set(_PRICING)
+
+
 def test_fast_mode_ignored_on_models_without_it():
     """Opus 4.6 runs at standard speed and bills standard; Opus 4.7 rejects the request
     outright; Sonnet and Fable have no fast mode. None of them get the premium rate."""

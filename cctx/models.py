@@ -163,6 +163,20 @@ class SessionTrace:
     warnings: list[ParserWarning]
     subagent_parse_errors: list[dict]  # {"path": Path, "reason": str}
 
+    @property
+    def primary_speed(self) -> str | None:
+        """Most-frequent usage.speed across turns — the trace-level analog of
+        primary_model, and elected the same way.
+
+        Fast mode bills at premium rates but is a per-request fact. Costs derived from a
+        single turn read that turn's speed directly; costs spanning many requests
+        (token-turns waste) have no single turn to read, so they use this.
+        """
+        speeds = [t.usage.speed for t in self.turns if t.usage is not None and t.usage.speed]
+        if not speeds:
+            return None
+        return max(set(speeds), key=speeds.count)
+
 
 # ---------------------------------------------------------------------------
 # Autopsy types — M2
