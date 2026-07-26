@@ -12,7 +12,7 @@ PRICES VERIFIED 2026-07-26 against:
 WHEN TO UPDATE: the test_pricing_table_freshness tripwire fails CI once
 PRICING_LAST_VERIFIED is >180 days old. On failure (or when a new model family
 ships), re-check both pricing pages, add/adjust entries, and bump the date.
-Model families not listed fall through to _DEFAULT (claude-sonnet rates) — a
+Model families not listed fall through to _DEFAULT (claude-sonnet-4.x rates) — a
 plausible non-zero estimate, but not family-accurate. The "prices as of <date>"
 line in cctx output is the honest signal that an estimate may be stale.
 """
@@ -66,7 +66,7 @@ _PRICING: dict[str, ModelPricing] = {
     "o3":               ModelPricing(2.0, 8.0, **_NC),
 }
 
-# Unknown/unlisted family fallback — claude-sonnet rates (mid-range, non-zero).
+# Unknown/unlisted family fallback — claude-sonnet-4.x rates (mid-range, non-zero).
 _DEFAULT = ModelPricing(3.0, 15.0, **_AC)
 
 
