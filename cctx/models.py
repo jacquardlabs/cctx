@@ -32,6 +32,7 @@ class Usage:
     cache_creation_1h: int  # ephemeral_1h_input_tokens
     cache_read: int
     service_tier: str | None  # "standard" | "priority" | ...
+    speed: str | None = None  # "standard" | "fast" — fast mode bills at premium rates
 
 
 @dataclass

@@ -665,6 +665,8 @@ def _parse_usage(raw: dict | None) -> Usage | None:
         cache_creation_1h=cache_1h,
         cache_read=cache_read,
         service_tier=raw.get("service_tier"),
+        # Top-level on usage, not per-iteration. Priced by get_pricing(speed=...).
+        speed=raw.get("speed"),
     )
 
 

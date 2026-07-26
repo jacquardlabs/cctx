@@ -21,7 +21,8 @@ M = 1_000_000
     ("claude-opus-5",            5.0, 25.0),
     ("claude-opus-4-8",          5.0, 25.0),
     ("claude-opus-4-6",          5.0, 25.0),
-    ("claude-sonnet-5",          2.0, 10.0),  # intro rate through 2026-08-31
+    # claude-sonnet-5 has a scheduled rate change — see the dated tests below, which pin
+    # `on=` rather than depending on when the suite runs.
     ("claude-sonnet-4-6",        3.0, 15.0),
     ("claude-sonnet-4",          3.0, 15.0),
     ("claude-haiku-4-5",         1.0,  5.0),
@@ -59,7 +60,8 @@ def test_claude_code_1m_context_suffix_prices_as_base_model():
     """Claude Code logs the 1M-context variant as `<model>[1m]`; no long-context premium."""
     assert get_pricing("claude-opus-5[1m]").input_per_mtok == 5.0
     assert get_pricing("claude-opus-4-8[1m]").input_per_mtok == 5.0
-    assert get_pricing("claude-sonnet-5[1m]").input_per_mtok == 2.0
+    # Sonnet 5's rate is date-scheduled, so pin the date rather than trusting the clock.
+    assert get_pricing("claude-sonnet-5[1m]", on=date(2026, 8, 31)).input_per_mtok == 2.0
 
 
 def test_opus_5_is_not_captured_by_the_opus_4_stem():
@@ -144,15 +146,69 @@ def test_pricing_table_freshness():
     )
 
 
-SONNET_5_INTRO_ENDS = date(2026, 9, 1)
+# --- scheduled rate changes: a session is priced at the rate it ran under -----
 
 
-def test_sonnet_5_introductory_rate_expiry():
-    """Sonnet 5 is priced at its introductory $2/$10 rate, which ends 2026-08-31.
-    This goes red on the flip date — set claude-sonnet-5 to $3/$15 and delete this test."""
-    assert date.today() < SONNET_5_INTRO_ENDS, (
-        f"Sonnet 5 introductory pricing ended {SONNET_5_INTRO_ENDS}. "
-        "Set claude-sonnet-5 to ModelPricing(3.0, 15.0) in cctx/pricing.py, update the "
-        "expected rates in this file, and remove this tripwire."
-    )
-    assert get_pricing("claude-sonnet-5").input_per_mtok == 2.0
+def test_sonnet_5_intro_rate_applies_before_the_scheduled_change():
+    """Introductory $2/$10 runs through 2026-08-31; standard $3/$15 starts 2026-09-01."""
+    intro = get_pricing("claude-sonnet-5", on=date(2026, 8, 31))
+    assert (intro.input_per_mtok, intro.output_per_mtok) == (2.0, 10.0)
+    standard = get_pricing("claude-sonnet-5", on=date(2026, 9, 1))
+    assert (standard.input_per_mtok, standard.output_per_mtok) == (3.0, 15.0)
+    later = get_pricing("claude-sonnet-5", on=date(2027, 3, 1))
+    assert (later.input_per_mtok, later.output_per_mtok) == (3.0, 15.0)
+
+
+def test_scheduled_change_applies_to_model_id_variants():
+    """The schedule is keyed by matched prefix, so `[1m]` and dated ids inherit it."""
+    assert get_pricing("claude-sonnet-5[1m]", on=date(2026, 8, 31)).input_per_mtok == 2.0
+    assert get_pricing("claude-sonnet-5[1m]", on=date(2026, 9, 1)).input_per_mtok == 3.0
+
+
+def test_unscheduled_model_ignores_the_session_date():
+    for on in (date(2024, 1, 1), date(2026, 9, 1), date(2030, 1, 1)):
+        assert get_pricing("claude-opus-5", on=on).input_per_mtok == 5.0
+
+
+def test_schedule_entries_reference_priced_prefixes_in_date_order():
+    """_SCHEDULE holds only future transitions for prefixes _PRICING already knows, and
+    _rate_on()'s last-match-wins resolution requires them oldest-first."""
+    from cctx.pricing import _PRICING, _SCHEDULE
+
+    assert set(_SCHEDULE) <= set(_PRICING)
+    for prefix, transitions in _SCHEDULE.items():
+        dates = [d for d, _ in transitions]
+        assert dates == sorted(dates), f"{prefix} transitions are out of order"
+
+
+# --- fast mode: premium rates on the models that support it -------------------
+
+
+def test_fast_mode_doubles_opus_rates_and_scales_cache_multipliers():
+    """Fast mode is $10/$50 on Opus 5 / Opus 4.8; cache multipliers stack on the fast base."""
+    for model in ("claude-opus-5", "claude-opus-4-8", "claude-opus-5[1m]"):
+        p = get_pricing(model, speed="fast")
+        assert (p.input_per_mtok, p.output_per_mtok) == (10.0, 50.0), model
+        assert p.cache_write_5m_mult == 1.25
+        assert p.cache_read_mult == 0.10
+
+
+def test_standard_and_absent_speed_use_standard_rates():
+    for speed in (None, "standard"):
+        p = get_pricing("claude-opus-5", speed=speed)
+        assert (p.input_per_mtok, p.output_per_mtok) == (5.0, 25.0)
+
+
+def test_fast_mode_ignored_on_models_without_it():
+    """Opus 4.6 runs at standard speed and bills standard; Opus 4.7 rejects the request
+    outright; Sonnet and Fable have no fast mode. None of them get the premium rate."""
+    assert get_pricing("claude-opus-4-7", speed="fast").input_per_mtok == 5.0
+    assert get_pricing("claude-opus-4-6", speed="fast").input_per_mtok == 5.0
+    assert get_pricing("claude-fable-5", speed="fast").input_per_mtok == 10.0  # its own rate
+    assert get_pricing("claude-sonnet-5", speed="fast", on=date(2026, 8, 31)).input_per_mtok == 2.0
+    assert get_pricing("some-future-model-9", speed="fast") == get_pricing(None)
+
+
+def test_price_per_tok_shim_forwards_speed_and_date():
+    assert price_per_tok("claude-opus-5", speed="fast") == 10.0 / M
+    assert price_per_tok("claude-sonnet-5", on=date(2026, 9, 1)) == 3.0 / M

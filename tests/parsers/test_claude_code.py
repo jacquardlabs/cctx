@@ -600,6 +600,27 @@ def test_primary_model_none_with_no_assistant_turns(write_jsonl):
     assert trace.primary_model is None
 
 
+def test_usage_speed_captured_for_fast_mode_pricing(write_jsonl):
+    """usage.speed sits at the top level of usage, alongside service_tier, and is read
+    even when the iterations[] summing path handles the token counts."""
+    path = write_jsonl(
+        [
+            make_assistant_line(uuid="a1", text="x", model="claude-opus-5", speed="fast"),
+            make_assistant_line(uuid="a2", parent_uuid="a1", text="y", model="claude-opus-5"),
+        ]
+    )
+    trace = parse_session(path)
+    assert [t.usage.speed for t in trace.turns] == ["fast", "standard"]
+
+
+def test_usage_speed_absent_is_none(write_jsonl):
+    """Sessions from before the field existed parse without it."""
+    line = make_assistant_line(uuid="a1", text="x", model="claude-opus-4-5-20251101")
+    del line["message"]["usage"]["speed"]
+    trace = parse_session(write_jsonl([line]))
+    assert trace.turns[0].usage.speed is None
+
+
 def test_synthetic_model_placeholder_normalized_to_none(write_jsonl):
     """`<synthetic>` marks a locally-generated message, not a model — it must not be
     priced or elected primary_model, even when it outnumbers the real turns."""

@@ -122,7 +122,10 @@ def _find_pairs(trace: SessionTrace) -> list[dict]:
 
 
 def _compute_waste(trace: SessionTrace, first_failure_turn: int, fix_turn: int) -> float:
-    price = price_per_tok(trace.primary_model)
+    # Priced at the session's own date so an announced rate change applies to the
+    # sessions it actually covers, not to whenever the autopsy runs.
+    on = trace.start_time.date() if trace.start_time else None
+    price = price_per_tok(trace.primary_model, on=on)
     total = 0.0
     for turn in trace.turns:
         if (
