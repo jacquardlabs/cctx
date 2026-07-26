@@ -2,6 +2,43 @@
 
 <!-- version list -->
 
+## v1.22.0 (2026-07-26)
+
+### Bug Fixes
+
+- **parser**: Normalize <synthetic> model placeholder to None
+  ([#199](https://github.com/jacquardlabs/cctx/pull/199),
+  [`50e2029`](https://github.com/jacquardlabs/cctx/commit/50e202991dc9d5ca5798eb749d3d14774046e527))
+
+- **pricing**: Add Claude Opus 5, correct Sonnet 5 to introductory rate
+  ([#199](https://github.com/jacquardlabs/cctx/pull/199),
+  [`50e2029`](https://github.com/jacquardlabs/cctx/commit/50e202991dc9d5ca5798eb749d3d14774046e527))
+
+- **pricing**: Price token-turns waste at the trace's speed too
+  ([#199](https://github.com/jacquardlabs/cctx/pull/199),
+  [`50e2029`](https://github.com/jacquardlabs/cctx/commit/50e202991dc9d5ca5798eb749d3d14774046e527))
+
+- **tokenizer**: Count each trace against the model that ran it
+  ([#199](https://github.com/jacquardlabs/cctx/pull/199),
+  [`50e2029`](https://github.com/jacquardlabs/cctx/commit/50e202991dc9d5ca5798eb749d3d14774046e527))
+
+### Documentation
+
+- **pricing**: Disambiguate the default-rate comment now that Sonnet tiers differ
+  ([#199](https://github.com/jacquardlabs/cctx/pull/199),
+  [`50e2029`](https://github.com/jacquardlabs/cctx/commit/50e202991dc9d5ca5798eb749d3d14774046e527))
+
+### Features
+
+- **pricing**: Add Claude Opus 5, and price by session date and request speed
+  ([#199](https://github.com/jacquardlabs/cctx/pull/199),
+  [`50e2029`](https://github.com/jacquardlabs/cctx/commit/50e202991dc9d5ca5798eb749d3d14774046e527))
+
+- **pricing**: Price by session date and request speed
+  ([#199](https://github.com/jacquardlabs/cctx/pull/199),
+  [`50e2029`](https://github.com/jacquardlabs/cctx/commit/50e202991dc9d5ca5798eb749d3d14774046e527))
+
+
 ## v1.21.2 (2026-07-17)
 
 ### Bug Fixes
