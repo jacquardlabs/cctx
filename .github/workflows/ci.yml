@@ -43,5 +43,5 @@ jobs:
           {
             echo "## Coverage"
             echo
-            coverage report --format=markdown
+            python -m coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
