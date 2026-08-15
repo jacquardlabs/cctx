@@ -1,7 +1,8 @@
-"""Tests for pure-Python helpers in cctx/renderers/trace_tui.py.
+"""Tests for cctx/renderers/trace_tui.py.
 
-Textual Pilot (async UI) tests are omitted — the pure functions cover
-correctness of the logic; the TUI is exercised manually.
+Covers the pure helpers directly plus the Textual app through Pilot
+(App.run_test()), driven from sync wrappers around asyncio.run() so the file
+does not depend on pytest-asyncio being active.
 """
 
 from __future__ import annotations

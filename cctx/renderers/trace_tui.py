@@ -8,11 +8,18 @@ Public API:
     build_app(trace, diagnosis) -> App   # for tests (Pilot); not run
     launch(trace, diagnosis) -> None
 
+    tool_result_modal_text(turn) -> str
+    turn_row_cells(turn, findings) -> list[str]
+
 Internal:
     _build_flagged_index(findings, trace) -> dict[int, list[Finding]]
+    _build_finding_modal_cls() -> type
+    _build_tool_result_modal_cls() -> type
+    _build_help_screen_cls() -> type
+    _build_app_cls(trace, flagged, verdict_line, sub_labels) -> type
 
-Textual is only imported inside launch() so that the pure helpers remain
-importable without the textual package (e.g. during testing).
+Textual is imported lazily inside the _build_*_cls factories and build_app, so
+the pure helpers above stay importable without the textual package.
 """
 
 from __future__ import annotations
@@ -23,6 +30,26 @@ from cctx.models import KIND_LABEL, FindingKind
 
 if TYPE_CHECKING:
     from cctx.models import Diagnosis, Finding, SessionTrace, Turn
+
+_TEXT_PREVIEW_LIMIT = 2000
+_TOOL_RESULT_PREVIEW_LIMIT = 1000
+
+_TURN_TABLE_COLUMNS = (
+    ("#", 6),
+    ("Role", 14),
+    ("Model", 22),
+    ("Tokens", 10),
+    ("Flags", 22),
+)
+
+HELP_TEXT = (
+    "[bold]cctx trace — keyboard shortcuts[/]\n\n"
+    "  [bold]↑ / ↓[/]    Navigate turns\n"
+    "  [bold]Enter[/]    Show turn content / tool results\n"
+    "  [bold]f[/]        Show finding details (flagged turns only)\n"
+    "  [bold]?[/]        Toggle this help screen\n"
+    "  [bold]q[/]        Quit\n"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +111,62 @@ def flags_label(findings: list[Finding]) -> str:
     return ", ".join(KIND_LABEL.get(f.kind, f.kind.value.upper()) for f in findings)
 
 
+def tool_result_modal_text(turn: Turn) -> str:
+    """Body of the turn-content modal: turn text plus each tool result."""
+    lines: list[str] = [f"[bold]Turn {turn.turn_number}[/] — {turn.role}", ""]
+    if turn.text:
+        preview = turn.text[:_TEXT_PREVIEW_LIMIT]
+        if len(turn.text) > _TEXT_PREVIEW_LIMIT:
+            preview += "\n[dim]…truncated[/]"
+        lines.append(preview)
+        lines.append("")
+    for tr in turn.tool_results:
+        lines.append(f"[bold]{tr.tool_name}[/] ({tr.tool_use_id})")
+        content_preview = tr.content[:_TOOL_RESULT_PREVIEW_LIMIT]
+        if len(tr.content) > _TOOL_RESULT_PREVIEW_LIMIT:
+            content_preview += "\n[dim]…truncated[/]"
+        lines.append(content_preview)
+        lines.append("")
+    if not turn.text and not turn.tool_results:
+        lines.append("[dim](no content)[/]")
+    return "\n".join(lines)
+
+
+def turn_row_cells(turn: Turn, findings: list[Finding]) -> list[str]:
+    """One trace-table row. Flagged rows carry red markup.
+
+    Tokens is input + cache creation + cache read; output_tokens is
+    deliberately excluded (pinned by test_turn_row_tokens_sum_excludes_output_tokens).
+
+    A turn is flagged iff it has findings. That is equivalent to the old
+    `turn_number in flagged` check only because _build_flagged_index
+    setdefault-appends and so never stores an empty list — an invariant this
+    signature now depends on.
+    """
+    if turn.usage:
+        total = (
+            turn.usage.input_tokens
+            + turn.usage.cache_creation_5m
+            + turn.usage.cache_creation_1h
+            + turn.usage.cache_read
+        )
+        tokens = f"{total:,}"
+    else:
+        tokens = ""
+    model = turn.model or ""
+    flags = flags_label(findings)
+
+    if findings:
+        return [
+            f"[bold red]{turn.turn_number}[/]",
+            f"[bold red]{turn.role}[/]",
+            f"[red]{model}[/]",
+            f"[red]{tokens}[/]",
+            f"[bold red]{flags}[/]",
+        ]
+    return [str(turn.turn_number), turn.role, model, tokens, flags]
+
+
 def _build_flagged_index(findings: list[Finding], trace: SessionTrace) -> dict[int, list[Finding]]:
     """Map turn_number -> list of findings that affect that turn."""
     index: dict[int, list[Finding]] = {}
@@ -94,25 +177,17 @@ def _build_flagged_index(findings: list[Finding], trace: SessionTrace) -> dict[i
 
 
 # ---------------------------------------------------------------------------
-# Entry point — Textual imports deferred here
+# Textual class factories — each defers its own textual import
 # ---------------------------------------------------------------------------
 
 
-def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
-    """Build the Textual app and return it (does NOT run it). Imports textual on call.
-
-    Returned rather than run so tests can drive it via App.run_test() (Textual
-    Pilot). launch() wraps this with .run() for the blocking CLI path.
-    """
-    from textual.app import App, ComposeResult
+def _build_finding_modal_cls() -> type:
+    """FindingModal: finding details for the selected turn."""
+    from textual.app import ComposeResult
     from textual.binding import Binding
     from textual.containers import ScrollableContainer
     from textual.screen import ModalScreen
-    from textual.widgets import DataTable, Footer, Header, Label, Static
-
-    flagged = _build_flagged_index(diagnosis.findings, trace)
-    session_verdict = verdict(diagnosis)
-    sub_labels = {a.session_id: a.label for a in diagnosis.subagent_costs}
+    from textual.widgets import Label
 
     class FindingModal(ModalScreen):  # type: ignore[type-arg]
         """Finding details for the selected turn."""
@@ -135,14 +210,26 @@ def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
             Binding("q", "dismiss", "Close"),
         ]
 
-        def __init__(self, findings: list[Finding]) -> None:
+        def __init__(self, findings: list[Finding], sub_labels: dict[str, str]) -> None:
             super().__init__()
             self._findings = findings
+            self._sub_labels = sub_labels
 
         def compose(self) -> ComposeResult:
-            text = finding_modal_text(self._findings, sub_labels)
+            text = finding_modal_text(self._findings, self._sub_labels)
             with ScrollableContainer():
                 yield Label(text, markup=True)
+
+    return FindingModal
+
+
+def _build_tool_result_modal_cls() -> type:
+    """ToolResultModal: turn content and tool results for the selected turn."""
+    from textual.app import ComposeResult
+    from textual.binding import Binding
+    from textual.containers import ScrollableContainer
+    from textual.screen import ModalScreen
+    from textual.widgets import Label
 
     class ToolResultModal(ModalScreen):  # type: ignore[type-arg]
         """Turn content and tool results for the selected turn."""
@@ -170,25 +257,19 @@ def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
             self._turn = selected_turn
 
         def compose(self) -> ComposeResult:
-            t = self._turn
-            lines: list[str] = [f"[bold]Turn {t.turn_number}[/] — {t.role}", ""]
-            if t.text:
-                preview = t.text[:2000]
-                if len(t.text) > 2000:
-                    preview += "\n[dim]…truncated[/]"
-                lines.append(preview)
-                lines.append("")
-            for tr in t.tool_results:
-                lines.append(f"[bold]{tr.tool_name}[/] ({tr.tool_use_id})")
-                content_preview = tr.content[:1000]
-                if len(tr.content) > 1000:
-                    content_preview += "\n[dim]…truncated[/]"
-                lines.append(content_preview)
-                lines.append("")
-            if not t.text and not t.tool_results:
-                lines.append("[dim](no content)[/]")
             with ScrollableContainer():
-                yield Label("\n".join(lines), markup=True)
+                yield Label(tool_result_modal_text(self._turn), markup=True)
+
+    return ToolResultModal
+
+
+def _build_help_screen_cls() -> type:
+    """HelpScreen: keyboard shortcut reference."""
+    from textual.app import ComposeResult
+    from textual.binding import Binding
+    from textual.containers import ScrollableContainer
+    from textual.screen import ModalScreen
+    from textual.widgets import Label
 
     class HelpScreen(ModalScreen):  # type: ignore[type-arg]
         """Keyboard shortcut reference."""
@@ -213,16 +294,26 @@ def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
         ]
 
         def compose(self) -> ComposeResult:
-            help_text = (
-                "[bold]cctx trace — keyboard shortcuts[/]\n\n"
-                "  [bold]↑ / ↓[/]    Navigate turns\n"
-                "  [bold]Enter[/]    Show turn content / tool results\n"
-                "  [bold]f[/]        Show finding details (flagged turns only)\n"
-                "  [bold]?[/]        Toggle this help screen\n"
-                "  [bold]q[/]        Quit\n"
-            )
             with ScrollableContainer():
-                yield Label(help_text, markup=True)
+                yield Label(HELP_TEXT, markup=True)
+
+    return HelpScreen
+
+
+def _build_app_cls(
+    trace: SessionTrace,
+    flagged: dict[int, list[Finding]],
+    verdict_line: str,
+    sub_labels: dict[str, str],
+) -> type:
+    """TraceTUI: the trace table plus its three modal screens."""
+    from textual.app import App, ComposeResult
+    from textual.binding import Binding
+    from textual.widgets import DataTable, Footer, Header, Static
+
+    FindingModal = _build_finding_modal_cls()
+    ToolResultModal = _build_tool_result_modal_cls()
+    HelpScreen = _build_help_screen_cls()
 
     class TraceTUI(App):  # type: ignore[type-arg]
         """Interactive turn-by-turn trace viewer with autopsy overlay."""
@@ -245,45 +336,16 @@ def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
         def compose(self) -> ComposeResult:
             yield Header()
             yield DataTable(id="turns", cursor_type="row")
-            yield Static(session_verdict, id="verdict")
+            yield Static(verdict_line, id="verdict")
             yield Footer()
 
         def on_mount(self) -> None:
             table = self.query_one("#turns", DataTable)
-            table.add_column("#", width=6)
-            table.add_column("Role", width=14)
-            table.add_column("Model", width=22)
-            table.add_column("Tokens", width=10)
-            table.add_column("Flags", width=22)
+            for name, width in _TURN_TABLE_COLUMNS:
+                table.add_column(name, width=width)
 
             for t in trace.turns:
-                is_flagged = t.turn_number in flagged
-                findings = flagged.get(t.turn_number, [])
-                if t.usage:
-                    total = (
-                        t.usage.input_tokens
-                        + t.usage.cache_creation_5m
-                        + t.usage.cache_creation_1h
-                        + t.usage.cache_read
-                    )
-                    tokens = f"{total:,}"
-                else:
-                    tokens = ""
-                model = t.model or ""
-                flags = flags_label(findings)
-
-                if is_flagged:
-                    cells = [
-                        f"[bold red]{t.turn_number}[/]",
-                        f"[bold red]{t.role}[/]",
-                        f"[red]{model}[/]",
-                        f"[red]{tokens}[/]",
-                        f"[bold red]{flags}[/]",
-                    ]
-                else:
-                    cells = [str(t.turn_number), t.role, model, tokens, flags]
-
-                table.add_row(*cells)
+                table.add_row(*turn_row_cells(t, flagged.get(t.turn_number, [])))
                 self._turn_numbers.append(t.turn_number)
 
         def _current_turn_number(self) -> int | None:
@@ -309,12 +371,32 @@ def build_app(trace: SessionTrace, diagnosis: Diagnosis):  # noqa: C901
             findings = flagged.get(tn)
             if not findings:
                 return
-            self.push_screen(FindingModal(findings))
+            self.push_screen(FindingModal(findings, sub_labels))
 
         def action_show_help(self) -> None:
             self.push_screen(HelpScreen())
 
-    return TraceTUI()
+    return TraceTUI
+
+
+# ---------------------------------------------------------------------------
+# Entry points
+# ---------------------------------------------------------------------------
+
+
+def build_app(trace: SessionTrace, diagnosis: Diagnosis):
+    """Build the Textual app and return it (does NOT run it). Imports textual on call.
+
+    Returned rather than run so tests can drive it via App.run_test() (Textual
+    Pilot). launch() wraps this with .run() for the blocking CLI path.
+    """
+    cls = _build_app_cls(
+        trace,
+        _build_flagged_index(diagnosis.findings, trace),
+        verdict(diagnosis),
+        {a.session_id: a.label for a in diagnosis.subagent_costs},
+    )
+    return cls()
 
 
 def launch(trace: SessionTrace, diagnosis: Diagnosis) -> None:

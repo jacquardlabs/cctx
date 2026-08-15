@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 from cctx.models import (
     Attachment,
@@ -31,6 +32,20 @@ _BOOKKEEPING_TYPES = frozenset(
 )
 
 
+class _ScanResult(NamedTuple):
+    """What one pass over a session's JSONL lines yields.
+
+    Parser-internal: no consumer outside this module, so it does not belong in
+    models.py.
+    """
+
+    turns: list[Turn]
+    attachments: list[Attachment]
+    warnings: list[ParserWarning]
+    claude_code_version: str | None
+    observed_cwd: str | None
+
+
 def parse_session(
     session_path: Path,
     *,
@@ -52,84 +67,15 @@ def parse_session(
     project_dir = jsonl_path.parent
     project_path = _decode_project_path(project_dir.name)
 
-    turns: list[Turn] = []
-    attachments: list[Attachment] = []
-    warnings: list[ParserWarning] = []
-    claude_code_version: str | None = None
-    observed_cwd: str | None = None
-
-    for line_number, raw, truncated, had_encoding_error in _iter_lines(jsonl_path):
-        if had_encoding_error:
-            warnings.append(
-                ParserWarning(
-                    code="encoding_error",
-                    detail=f"non-UTF-8 bytes replaced on line {line_number}",
-                    line_number=line_number,
-                    path=jsonl_path,
-                )
-            )
-        if raw is None:
-            if not truncated:
-                warnings.append(
-                    ParserWarning(
-                        code="malformed_json",
-                        detail="failed to parse JSON",
-                        line_number=line_number,
-                        path=jsonl_path,
-                    )
-                )
-            continue
-        if claude_code_version is None:
-            v = raw.get("version")
-            if v:
-                claude_code_version = str(v)
-        if observed_cwd is None:
-            c = raw.get("cwd")
-            if c:
-                observed_cwd = str(c)
-        line_type = raw.get("type")
-        if line_type == "user":
-            turn = _parse_user_line(raw)
-            if turn is not None:
-                turns.append(turn)
-        elif line_type == "assistant":
-            turn = _parse_assistant_line(raw)
-            if turn is not None:
-                turns.append(turn)
-        elif line_type == "system":
-            turn = _parse_system_line(raw)
-            if turn is not None:
-                turns.append(turn)
-        elif line_type == "attachment":
-            att = _parse_attachment_line(raw)
-            if att is not None:
-                attachments.append(att)
-        elif line_type in _BOOKKEEPING_TYPES:
-            # Known bookkeeping — drop silently.
-            continue
-        else:
-            warnings.append(
-                ParserWarning(
-                    code="unknown_type",
-                    detail=str(line_type) if line_type else "<missing>",
-                    line_number=line_number,
-                    path=jsonl_path,
-                )
-            )
+    scan = _scan_lines(jsonl_path)
+    turns = scan.turns
+    attachments = scan.attachments
+    warnings = list(scan.warnings)
+    claude_code_version = scan.claude_code_version
+    observed_cwd = scan.observed_cwd
 
     _pair_tool_results(turns)
-
-    # Validate parent_uuid references — warn on orphaned links (spec §9).
-    seen_uuids = {t.uuid for t in turns if t.uuid}
-    for turn in turns:
-        if turn.parent_uuid is not None and turn.parent_uuid not in seen_uuids:
-            warnings.append(
-                ParserWarning(
-                    code="orphan_parent",
-                    detail=f"parent_uuid {turn.parent_uuid} not seen in this session",
-                    path=jsonl_path,
-                )
-            )
+    warnings.extend(_orphan_parent_warnings(turns, jsonl_path))
 
     # Number turns 1-based and compute start/end.
     for i, turn in enumerate(turns, start=1):
@@ -138,12 +84,7 @@ def parse_session(
     start_time = turns[0].timestamp if turns else None
     end_time = turns[-1].timestamp if turns else None
 
-    # Compute initial_context_tokens from the first assistant turn.
-    initial_context_tokens = 0
-    for turn in turns:
-        if turn.role == "assistant" and turn.usage is not None:
-            initial_context_tokens = turn.usage.cache_creation_5m + turn.usage.cache_creation_1h
-            break
+    initial_context_tokens = _initial_context_tokens(turns)
 
     # Metadata pass.
     primary_model = _most_common([t.model for t in turns if t.role == "assistant" and t.model])
@@ -152,15 +93,7 @@ def parse_session(
     tool_names_loaded = _collect_tool_names(turns, attachments)
     raw_tool_result_files = _enumerate_raw_tool_result_files(jsonl_path)
 
-    # Load subagent meta if this is a child session.
-    subagent_meta: dict = {}
-    if _depth > 0:
-        meta_path = jsonl_path.with_suffix(".meta.json")
-        if meta_path.exists():
-            try:
-                subagent_meta = json.loads(meta_path.read_text())
-            except json.JSONDecodeError:
-                subagent_meta = {}
+    subagent_meta = _load_subagent_meta(jsonl_path, _depth)
 
     subagents, subagent_parse_errors, depth_warnings = _parse_subagents(
         jsonl_path,
@@ -170,6 +103,7 @@ def parse_session(
     )
     warnings.extend(depth_warnings)
 
+    # Appends into `warnings` by reference — do not rewrite as a return value.
     _link_subagents(turns, subagents, warnings, jsonl_path)
 
     parent_session_id = _parent_session_id
@@ -194,6 +128,124 @@ def parse_session(
         warnings=warnings,
         subagent_parse_errors=subagent_parse_errors,
     )
+
+
+def _decode_warnings(
+    line_number: int, raw: dict | None, truncated: bool, had_encoding_error: bool, path: Path
+) -> list[ParserWarning]:
+    """Per-line decode warnings, in emission order: encoding first, then malformed."""
+    out: list[ParserWarning] = []
+    if had_encoding_error:
+        out.append(
+            ParserWarning(
+                code="encoding_error",
+                detail=f"non-UTF-8 bytes replaced on line {line_number}",
+                line_number=line_number,
+                path=path,
+            )
+        )
+    if raw is None and not truncated:
+        out.append(
+            ParserWarning(
+                code="malformed_json",
+                detail="failed to parse JSON",
+                line_number=line_number,
+                path=path,
+            )
+        )
+    return out
+
+
+def _dispatch_line(
+    raw: dict, line_number: int, path: Path
+) -> tuple[Turn | None, Attachment | None, ParserWarning | None]:
+    """Route one decoded line to its parser. Exactly one slot is ever non-None."""
+    line_type = raw.get("type")
+    if line_type == "user":
+        return _parse_user_line(raw), None, None
+    if line_type == "assistant":
+        return _parse_assistant_line(raw), None, None
+    if line_type == "system":
+        return _parse_system_line(raw), None, None
+    if line_type == "attachment":
+        return None, _parse_attachment_line(raw), None
+    if line_type in _BOOKKEEPING_TYPES:
+        return None, None, None  # known bookkeeping — drop silently
+    return None, None, ParserWarning(
+        code="unknown_type",
+        detail=str(line_type) if line_type else "<missing>",
+        line_number=line_number,
+        path=path,
+    )
+
+
+def _scan_lines(jsonl_path: Path) -> _ScanResult:
+    """One pass over the file: decode each line, route it, collect warnings."""
+    turns: list[Turn] = []
+    attachments: list[Attachment] = []
+    warnings: list[ParserWarning] = []
+    claude_code_version: str | None = None
+    observed_cwd: str | None = None
+
+    for line_number, raw, truncated, had_encoding_error in _iter_lines(jsonl_path):
+        warnings.extend(
+            _decode_warnings(line_number, raw, truncated, had_encoding_error, jsonl_path)
+        )
+        if raw is None:
+            continue
+        if claude_code_version is None:
+            v = raw.get("version")
+            if v:
+                claude_code_version = str(v)
+        if observed_cwd is None:
+            c = raw.get("cwd")
+            if c:
+                observed_cwd = str(c)
+
+        turn, attachment, warning = _dispatch_line(raw, line_number, jsonl_path)
+        if turn is not None:
+            turns.append(turn)
+        if attachment is not None:
+            attachments.append(attachment)
+        if warning is not None:
+            warnings.append(warning)
+
+    return _ScanResult(turns, attachments, warnings, claude_code_version, observed_cwd)
+
+
+def _orphan_parent_warnings(turns: list[Turn], path: Path) -> list[ParserWarning]:
+    """Warn on parent_uuid references not seen in this session (spec §9)."""
+    seen_uuids = {t.uuid for t in turns if t.uuid}
+    return [
+        ParserWarning(
+            code="orphan_parent",
+            detail=f"parent_uuid {turn.parent_uuid} not seen in this session",
+            path=path,
+        )
+        for turn in turns
+        if turn.parent_uuid is not None and turn.parent_uuid not in seen_uuids
+    ]
+
+
+def _initial_context_tokens(turns: list[Turn]) -> int:
+    """Cache-creation tokens on the first assistant turn that has usage."""
+    for turn in turns:
+        if turn.role == "assistant" and turn.usage is not None:
+            return turn.usage.cache_creation_5m + turn.usage.cache_creation_1h
+    return 0
+
+
+def _load_subagent_meta(jsonl_path: Path, depth: int) -> dict:
+    """Verbatim .meta.json for a child session; {} for the root or on bad JSON."""
+    if depth == 0:
+        return {}
+    meta_path = jsonl_path.with_suffix(".meta.json")
+    if not meta_path.exists():
+        return {}
+    try:
+        return json.loads(meta_path.read_text())
+    except json.JSONDecodeError:
+        return {}
 
 
 def _iter_lines(path: Path):
