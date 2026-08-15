@@ -23,12 +23,10 @@ import rich_click as click
 
 from cctx import aggregate, diagnostician
 from cctx.agents import live_sessions as _live_sessions
-from cctx.diagnostician.patterns import project_specific
 from cctx.emit import EMIT_TARGETS
 from cctx.models import KIND_LABEL, AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
-from cctx.recommender import evidence as evidence_mod
 from cctx.renderers.terminal import (
     render_aggregate,
     render_aggregate_drilldown,
@@ -280,92 +278,18 @@ def ls(project: Path | None) -> None:
 
 def _run_all_projects(since: str, json_out: bool) -> None:
     """Execute cctx autopsy --all --since: aggregate across all projects."""
-    import dataclasses as _dc
-    from collections import Counter
-
-    from cctx.discovery import list_projects as _list_projects
-    from cctx.models import CrossProjectDigest, KindEvidence, ProjectDigestRow
-
     start, end, label = parse_since(since)
-    projects = _list_projects()
+    digest = aggregate.build_cross_project_digest(
+        aggregate.run_all_projects(start, end), period_label=label
+    )
 
-    # Per-project lightweight aggregation: skip project_specific.detect and patch generation
-    per_project: list[tuple[str, int, int, float, float, dict]] = []
-    for proj in projects:
-        pairs = aggregate.run(proj.project_dir, start, end)
-        if not pairs:
-            continue
-        diagnoses_p = [d for d, _ in pairs]
-        ev_p = evidence_mod.accumulate(diagnoses_p)
-        per_project.append((
-            proj.display_name,
-            len(diagnoses_p),
-            sum(1 for d in diagnoses_p if d.findings),
-            sum(d.total_cost_usd for d in diagnoses_p),
-            sum(d.waste_cost_usd for d in diagnoses_p),
-            ev_p,
-        ))
-
-    if not per_project:
+    if not digest.projects:
         click.echo("No sessions found in this window across all projects.")
         return
 
-    def _top_pattern(ev_p: dict) -> str | None:
-        if not ev_p:
-            return None
-        kind = max(
-            ev_p.items(),
-            key=lambda x: (x[1].session_count, x[1].total_waste_usd, x[0].value),
-        )[0]
-        return KIND_LABEL.get(kind)
-
-    rows = [
-        ProjectDigestRow(
-            display_name=name,
-            sessions_analysed=n,
-            sessions_with_findings=nf,
-            total_cost_usd=cost,
-            waste_cost_usd=waste,
-            top_pattern=_top_pattern(ev_p),
-        )
-        for name, n, nf, cost, waste, ev_p in per_project
-    ]
-
-    project_kind_counts: Counter = Counter(
-        kind
-        for _, _, _, _, _, ev_p in per_project
-        for kind in ev_p
-    )
-    global_kinds = {k for k, n in project_kind_counts.items() if n >= 2}
-
-    global_ev: dict = {}
-    for kind in global_kinds:
-        all_ev = [ev_p[kind] for _, _, _, _, _, ev_p in per_project if kind in ev_p]
-        global_ev[kind] = KindEvidence(
-            kind=kind,
-            session_count=sum(e.session_count for e in all_ev),
-            total_waste_usd=sum(e.total_waste_usd for e in all_ev),
-            example_summaries=[s for e in all_ev for s in e.example_summaries][:3],
-        )
-
-    global_patches_raw = claude_md.generate_from_evidence(global_ev)
-    global_patches = [_dc.replace(p, target_file="~/.claude/CLAUDE.md") for p in global_patches_raw]
-
-    digest = CrossProjectDigest(
-        period_label=label,
-        projects=rows,
-        total_cost_usd=sum(cost for _, _, _, cost, _, _ in per_project),
-        total_waste_usd=sum(waste for _, _, _, _, waste, _ in per_project),
-        global_patches=global_patches,
-        global_by_kind=global_ev,
-        global_project_counts=dict(project_kind_counts),
-    )
-
     if json_out:
-        import json as _json2
-
         from cctx.exporters.jsonl import export_cross_project_digest as _export_digest
-        click.echo(_json2.dumps(_json2.loads(_export_digest(digest)), indent=2))
+        click.echo(_json.dumps(_json.loads(_export_digest(digest)), indent=2))
     else:
         from cctx.renderers.terminal import render_cross_project_digest as _render_digest
         _render_digest(digest)
@@ -571,23 +495,7 @@ def autopsy(
                 ) from None
             label = f"{label} until {until_date.strip()}"
         pairs = aggregate.run(project_dir, start, end)
-        diagnoses = [d for d, _ in pairs]
-        ev = evidence_mod.accumulate(diagnoses)
-        if top_n is not None:
-            ev = dict(sorted(ev.items(), key=lambda x: x[1].session_count, reverse=True)[:top_n])
-        patterns = project_specific.detect(pairs)
-        pattern_patches = claude_md.generate_from_patterns(patterns)
-        patches = claude_md.generate_from_evidence(ev) + pattern_patches
-        report = AggregateReport(
-            period_label=label,
-            sessions_analysed=len(diagnoses),
-            sessions_with_findings=sum(1 for d in diagnoses if d.findings),
-            total_cost_usd=sum(d.total_cost_usd for d in diagnoses),
-            waste_cost_usd=sum(d.waste_cost_usd for d in diagnoses),
-            by_kind=ev,
-            patches=patches,
-            project_patterns=patterns,
-        )
+        report = aggregate.build_aggregate_report(pairs, period_label=label, top_n=top_n)
         if json_out:
             import json as _json
 
@@ -595,7 +503,7 @@ def autopsy(
             click.echo(_json.dumps(_json.loads(_export_agg(report)), indent=2))
         else:
             render_aggregate(report)
-            _aggregate_drilldown(report, diagnoses)
+            _aggregate_drilldown(report, [d for d, _ in pairs])
     else:
         # Single-session path
         if target.is_dir():
@@ -876,13 +784,13 @@ def harvest(
 
     if since is not None:
         project_dir = _resolve_project_dir(target)
-        start, end, _label = parse_since(since)
+        start, end, label = parse_since(since)
         pairs = aggregate.run(project_dir, start, end)
-        diagnoses = [d for d, _ in pairs]
-        ev = evidence_mod.accumulate(diagnoses)
-        # project_specific.detect() intentionally omitted: pattern patches need human review
-        # (autopsy shows them; harvest doesn't auto-apply).
-        patches = claude_md.generate_from_evidence(ev)
+        # detect_project_patterns=False: pattern patches need human review
+        # (autopsy shows them; harvest can auto-apply, so it must not generate them).
+        patches = aggregate.build_aggregate_report(
+            pairs, period_label=label, detect_project_patterns=False
+        ).patches
     else:
         if target.is_dir():
             raise click.UsageError(
