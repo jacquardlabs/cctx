@@ -212,3 +212,27 @@ def test_github_summary_tags_subagent_finding():
     ])
     md = render_github_summary(diag)
     assert "Resolver" in md
+
+
+def test_result_line_renders_diagnosis_verdict_verbatim():
+    """github.py decorates around Diagnosis.verdict, never reformats it (#174 F1)."""
+    from cctx.renderers.github import render_github_summary
+
+    clean = _make_diagnosis(findings=[])
+    assert f"**Result:** ✅ {clean.verdict}" in render_github_summary(clean)
+
+    dirty = _make_diagnosis(
+        findings=[_make_finding("retry_loop", 0.05), _make_finding("stale_context", 0.05)],
+    )
+    md = render_github_summary(dirty)
+    assert dirty.verdict in md
+    assert "2 findings · $0.10 waste" in md
+
+
+def test_no_local_verdict_format_in_github_summary():
+    """The retired local strings must not come back."""
+    from cctx.renderers.github import render_github_summary
+
+    md = render_github_summary(_make_diagnosis(findings=[_make_finding("retry_loop", 0.05)]))
+    assert "finding(s) —" not in md
+    assert "attributed waste" not in md

@@ -138,7 +138,7 @@ def render_diagnosis(
         else:
             con.print(badge, conf_note, "—", finding.summary)
         if show_health and finding.cost_usd is not None:
-            con.print(f"  → savings if fixed: ~${finding.cost_usd:.2f}")
+            con.print(f"  → savings if fixed: ~${finding.cost_usd:.4f}")
 
     # Patches
     if diagnosis.patches:

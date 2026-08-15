@@ -128,7 +128,7 @@ Implement `cctx init --remove` to cleanly uninstall:
 
 A new `--quiet` flag on `cctx autopsy` emits:
 
-- **One-line verdict** when findings exist (e.g., `"3 findings: retry_loop, stale_context, scope_creep"`)
+- **One-line verdict** when findings exist — `Diagnosis.verdict` joined to `Diagnosis.kind_summary` (e.g., `"3 findings · $0.34 waste — RETRY LOOP + STALE CONTEXT + SCOPE CREEP"`)
 - **Nothing (exit 0)** when the session is clean
 
 The verdict line must be concise and actionable, showing the count and categories of findings without verbose detail. This enables forensic-first: output only when something went wrong, reducing noise in session output.

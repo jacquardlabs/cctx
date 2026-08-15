@@ -323,3 +323,48 @@ def test_autopsy_quiet_with_findings_emits_verdict(runner, tmp_path, monkeypatch
     # Canonical KIND_LABEL, never the raw enum value (#136)
     assert "RETRY LOOP" in result.output
     assert "retry_loop" not in result.output
+
+
+def test_autopsy_quiet_uses_canonical_verdict_and_separator(runner, tmp_path, monkeypatch):
+    """--quiet renders Diagnosis.verdict verbatim + kind_summary (#174 F2).
+
+    This is the SessionEnd hook's output, so the exact shape is load-bearing:
+    the canonical " + " separator replaces the old local ", " join, and the
+    line now carries a dollar figure.
+    """
+    from datetime import datetime, timezone
+
+    from cctx import diagnostician
+    from cctx.cli import cli
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
+
+    session = _make_session_file(tmp_path, "quiet-canonical-01")
+
+    def _f(kind):
+        return Finding(
+            kind=kind,
+            severity=Severity.HIGH,
+            confidence=Confidence.HIGH,
+            first_turn=1,
+            last_turn=2,
+            evidence={},
+            cost_usd=0.01,
+            summary="s",
+        )
+
+    diag = Diagnosis(
+        session_id="quiet-canonical-01",
+        findings=[_f(FindingKind.RETRY_LOOP), _f(FindingKind.STALE_CONTEXT)],
+        inflection_turn=1,
+        patches=[],
+        total_cost_usd=0.10,
+        waste_cost_usd=0.02,
+        analysed_at=datetime(2026, 5, 14, 10, 0, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(diagnostician, "run", lambda trace: diag)
+
+    result = runner.invoke(cli, ["autopsy", str(session), "--quiet"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert result.output.strip() == f"{diag.verdict} — {diag.kind_summary}"
+    assert " + " in result.output          # canonical separator
+    assert "RETRY LOOP, " not in result.output  # retired local ", " join
