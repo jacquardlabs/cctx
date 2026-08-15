@@ -35,4 +35,13 @@ jobs:
       - name: Pytest
         env:
           CCTX_OFFLINE: "1"
-        run: pytest -v
+        run: pytest -v --cov=cctx --cov-report=term-missing
+
+      - name: Coverage job summary
+        if: matrix.python-version == '3.12'
+        run: |
+          {
+            echo "## Coverage"
+            echo
+            coverage report --format=markdown
+          } >> "$GITHUB_STEP_SUMMARY"
