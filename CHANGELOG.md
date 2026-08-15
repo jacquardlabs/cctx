@@ -2,6 +2,42 @@
 
 <!-- version list -->
 
+## v1.24.1 (2026-08-15)
+
+### Bug Fixes
+
+- **aggregate**: Extract cross-session report assembly from cli.py
+  ([#208](https://github.com/jacquardlabs/cctx/pull/208),
+  [`b45d2ab`](https://github.com/jacquardlabs/cctx/commit/b45d2abc6835dfd85fc9f78664c94a42c54d6e7e))
+
+- **renderer**: Single-source the verdict and fix WCAG AA badge contrast
+  ([#209](https://github.com/jacquardlabs/cctx/pull/209),
+  [`ae65da0`](https://github.com/jacquardlabs/cctx/commit/ae65da0082040f812f5825e9fc19d51d0261865d))
+
+### Continuous Integration
+
+- Invoke coverage via python -m so the summary step is PATH-independent
+  ([#207](https://github.com/jacquardlabs/cctx/pull/207),
+  [`f2f8a24`](https://github.com/jacquardlabs/cctx/commit/f2f8a24adff142962ee867cf9f69c5078147f0b0))
+
+- Measure test coverage on every CI run ([#207](https://github.com/jacquardlabs/cctx/pull/207),
+  [`f2f8a24`](https://github.com/jacquardlabs/cctx/commit/f2f8a24adff142962ee867cf9f69c5078147f0b0))
+
+### Documentation
+
+- Execution plan for the M22-M25 close-out train
+  ([#206](https://github.com/jacquardlabs/cctx/pull/206),
+  [`2fb9e6d`](https://github.com/jacquardlabs/cctx/commit/2fb9e6db99137e815818ef12d2cbc3f253b56371))
+
+- Execution plan for the M22-M25 close-out train (6 PRs)
+  ([#206](https://github.com/jacquardlabs/cctx/pull/206),
+  [`2fb9e6d`](https://github.com/jacquardlabs/cctx/commit/2fb9e6db99137e815818ef12d2cbc3f253b56371))
+
+- Fold user resolutions and follow-up issue numbers into the M22-M25 plan
+  ([#206](https://github.com/jacquardlabs/cctx/pull/206),
+  [`2fb9e6d`](https://github.com/jacquardlabs/cctx/commit/2fb9e6db99137e815818ef12d2cbc3f253b56371))
+
+
 ## v1.24.0 (2026-08-15)
 
 ### Documentation
