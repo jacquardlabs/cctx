@@ -524,10 +524,7 @@ def autopsy(
         diagnosis = claude_md.generate(diagnosis)
         if quiet:
             if diagnosis.findings:
-                kinds = list(dict.fromkeys(
-                    KIND_LABEL.get(f.kind, f.kind.value.upper()) for f in diagnosis.findings
-                ))
-                click.echo(f"{len(diagnosis.findings)} finding(s): {', '.join(kinds)}")
+                click.echo(f"{diagnosis.verdict} — {diagnosis.kind_summary}")
         elif json_out:
             import json as _json
 

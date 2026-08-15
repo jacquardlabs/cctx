@@ -6,6 +6,10 @@ render_github_summary(diagnosis) -> str
 write_github_summary(diagnosis) -> None
     Appends the markdown to $GITHUB_STEP_SUMMARY. Falls back to stderr warning
     when $GITHUB_STEP_SUMMARY is not set (e.g. local invocations).
+
+The Result line renders `Diagnosis.verdict` verbatim (DESIGN.md — Verdict
+string); this module never formats its own verdict. The waste percentage is
+the one datum the verdict does not carry, so it survives as decoration.
 """
 from __future__ import annotations
 
@@ -42,7 +46,7 @@ def render_github_summary(diagnosis: Diagnosis) -> str:
         )
 
     if not diagnosis.findings:
-        lines.append("**Result:** ✅ Clean session — no findings.\n")
+        lines.append(f"**Result:** ✅ {diagnosis.verdict}\n")
         return "\n".join(lines)
 
     pct = (
@@ -50,10 +54,7 @@ def render_github_summary(diagnosis: Diagnosis) -> str:
         if diagnosis.total_cost_usd
         else 0
     )
-    lines.append(
-        f"**Result:** {len(diagnosis.findings)} finding(s) — "
-        f"~${diagnosis.waste_cost_usd:.2f} attributed waste ({pct:.0f}%)\n"
-    )
+    lines.append(f"**Result:** {diagnosis.verdict} ({pct:.0f}% of session cost)\n")
 
     # Findings table
     sub_labels = {a.session_id: a.label for a in diagnosis.subagent_costs}

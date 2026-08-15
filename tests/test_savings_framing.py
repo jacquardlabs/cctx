@@ -207,3 +207,27 @@ def test_render_diagnosis_health_hidden_by_default(make_diagnosis):
     output = buf.getvalue()
     assert "Health grade:" not in output
     assert "savings if fixed" not in output
+
+
+def test_render_diagnosis_savings_line_uses_four_decimals():
+    """Per-finding savings uses :.4f per DESIGN.md's cost table (#174 F3).
+
+    Assertions are scoped to the savings line on purpose: terminal.py
+    independently emits "Attributed waste: ~$0.01" for this fixture, so an
+    unscoped `"~$0.01" not in output` would fail regardless of this change.
+    """
+    import io
+
+    from rich.console import Console
+
+    buf = io.StringIO()
+    con = Console(file=buf, width=120, highlight=False, markup=False)
+    findings = [_finding(cost=0.0082)]
+    render_diagnosis(
+        _diagnosis(findings, total_cost=1.0, waste_cost=0.0082),
+        show_health=True,
+        console=con,
+    )
+    output = buf.getvalue()
+    assert "savings if fixed: ~$0.0082" in output
+    assert "savings if fixed: ~$0.01" not in output

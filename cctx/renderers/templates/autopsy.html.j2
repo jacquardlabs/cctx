@@ -45,19 +45,22 @@ dl.costs dd { font-variant-numeric: tabular-nums; }
   margin-right: .3rem;
   vertical-align: middle;
 }
-/* One rule per FindingKind — a missing rule renders an invisible badge. */
-.badge.kind-retry_loop         { background: #f85149; color: #fff; }
-.badge.kind-scope_creep        { background: #d29922; color: #fff; }
-.badge.kind-stale_context      { background: #388bfd; color: #fff; }
+/* One rule per FindingKind — a missing rule renders an invisible badge.
+   Every pair must clear WCAG AA 4.5:1: .badge is .7rem (11.2px) bold, under
+   the 18.66px large-text exemption. Enforced by
+   tests/renderers/test_report_contrast.py. */
+.badge.kind-retry_loop         { background: #cf222e; color: #fff; }
+.badge.kind-scope_creep        { background: #bc4c00; color: #fff; }
+.badge.kind-stale_context      { background: #0550ae; color: #fff; }
 .badge.kind-tool_thrash        { background: #bc4b81; color: #fff; }
 .badge.kind-dead_end           { background: #8957e5; color: #fff; }
-.badge.kind-fanout_waste       { background: #2da44e; color: #fff; }
+.badge.kind-fanout_waste       { background: #1a7f37; color: #fff; }
 .badge.kind-project_pattern    { background: #1f6feb; color: #fff; }
 .badge.kind-cache_hygiene      { background: #9e6a03; color: #fff; }
 .badge.kind-compaction         { background: #57606a; color: #fff; }
 .badge.kind-exploration_thrash { background: #bf3989; color: #fff; }
 .badge.kind-unused_context     { background: #6639ba; color: #fff; }
-.badge.sev-high   { background: #6e1507; color: #f85149; border: 1px solid #f85149; }
+.badge.sev-high   { background: #6e1507; color: #ff8182; border: 1px solid #ff8182; }
 .badge.sev-medium { background: #4d3500; color: #d29922; border: 1px solid #d29922; }
 .badge.sev-low    { background: #033a16; color: #3fb950; border: 1px solid #3fb950; }
 .badge.sub-label  { background: #30363d; color: #adbac7; }
