@@ -719,6 +719,54 @@ def test_subagent_meta_loaded_when_present(session_dir):
     assert trace.subagents[0].subagent_meta == {"tool_use_id": "toolu_42"}
 
 
+def test_malformed_subagent_meta_json_ignored(session_dir):
+    """An unparseable .meta.json degrades to {} rather than raising (#180)."""
+    sid = "parent-sid"
+    jsonl = session_dir / f"{sid}.jsonl"
+    jsonl.write_text("")
+    sub_dir = session_dir / sid / "subagents"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "agent-aaa.jsonl").write_text("")
+    (sub_dir / "agent-aaa.meta.json").write_text("{not json")
+
+    trace = parse_session(jsonl)
+    assert len(trace.subagents) == 1
+    assert trace.subagents[0].subagent_meta == {}
+
+
+def test_warning_order_is_stable_across_phases(tmp_path):
+    """Pins warning ORDER, which no existing test constrains (#180).
+
+    Within the scan, encoding_error precedes malformed_json for the same line.
+    Across phases the order is scan -> orphan_parent. Every existing warning
+    test uses a fixture that produces one code from one phase, so none of them
+    would catch a reordering introduced by the split.
+    """
+    path = tmp_path / "mixed-warnings.jsonl"
+    good = _json.dumps({
+        "type": "user",
+        "uuid": "u1",
+        "parentUuid": "missing-parent",
+        "isSidechain": False,
+        "timestamp": "2026-05-14T10:00:00.000Z",
+        "sessionId": "mixed-warnings",
+        "version": "2.1.138",
+        "cwd": "/Users/test/Projects/demo",
+        "message": {"role": "user", "content": "hi"},
+    })
+    # Line 1 is both non-UTF-8 AND unparseable, so it emits two codes in order.
+    with path.open("wb") as f:
+        f.write(b"{\xff not json\n")
+        f.write(good.encode("utf-8") + b"\n")
+
+    trace = parse_session(path)
+    assert [w.code for w in trace.warnings] == [
+        "encoding_error",
+        "malformed_json",
+        "orphan_parent",
+    ]
+
+
 # --- Task 19: Link subagent_session_id and orphan detection ---
 
 

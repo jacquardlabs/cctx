@@ -1,7 +1,8 @@
-"""Tests for pure-Python helpers in cctx/renderers/trace_tui.py.
+"""Tests for cctx/renderers/trace_tui.py.
 
-Textual Pilot (async UI) tests are omitted — the pure functions cover
-correctness of the logic; the TUI is exercised manually.
+Covers the pure helpers directly plus the Textual app through Pilot
+(App.run_test()), driven from sync wrappers around asyncio.run() so the file
+does not depend on pytest-asyncio being active.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 
 from tests.diagnostician.conftest import (
     make_assistant_turn,
+    make_tool_result,
     make_trace,
     make_user_turn,
 )
@@ -472,3 +474,187 @@ def test_finding_modal_text_root_finding_has_no_tag():
 
     text = finding_modal_text([_finding_of_kind(FindingKind.RETRY_LOOP)])
     assert "[bold]RETRY LOOP" in text  # kind label directly after bold, no [tag] inserted
+
+
+# ---------------------------------------------------------------------------
+# Characterization tests (#180)
+#
+# build_app() is 78% covered with three entirely dead regions, so these pin
+# current behavior BEFORE the split. They are written against unmodified
+# source and must pass unchanged after it.
+# ---------------------------------------------------------------------------
+
+
+def _usage_trace():
+    """A trace whose assistant turn carries real usage.
+
+    conftest's make_assistant_turn leaves usage=None, which is exactly why the
+    token-sum branch was dead. Usage is a mutable dataclass, so assign after.
+    """
+    from cctx.models import Usage
+
+    t = make_assistant_turn(1, text="hi")
+    t.usage = Usage(
+        input_tokens=1000,
+        output_tokens=7,
+        cache_creation_5m=200,
+        cache_creation_1h=300,
+        cache_read=500,
+        service_tier="standard",
+    )
+    return make_trace([t])
+
+
+def _modal_body(app) -> str:
+    """Body text of the open modal, markup stripped.
+
+    .render() specifically: .renderable does not exist on textual 8.2.6, and
+    .content returns raw markup.
+    """
+    from textual.widgets import Label
+
+    return str(app.screen.query_one(Label).render())
+
+
+def test_turn_row_tokens_sum_excludes_output_tokens():
+    """Tokens column = input + cache_creation_5m + cache_creation_1h + cache_read.
+
+    output_tokens is deliberately excluded. This test is the only thing
+    stopping the refactor from silently "fixing" that.
+    """
+    import asyncio
+
+    from textual.widgets import DataTable
+
+    from cctx.renderers.trace_tui import build_app
+
+    async def scenario():
+        app = build_app(_usage_trace(), _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            table = app.query_one("#turns", DataTable)
+            assert table.get_row_at(0)[3] == "2,000"
+
+    asyncio.run(scenario())
+
+
+def test_row_selection_opens_tool_result_modal():
+    import asyncio
+
+    from cctx.renderers.trace_tui import build_app
+
+    async def scenario():
+        app = build_app(_simple_trace(), _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            await pilot.pause()
+            assert type(app.screen).__name__ == "ToolResultModal"
+
+    asyncio.run(scenario())
+
+
+def test_tool_result_modal_truncates_long_text():
+    import asyncio
+
+    from cctx.renderers.trace_tui import build_app
+
+    trace = make_trace([make_assistant_turn(1, text=("x" * 2000) + "TAIL_MARKER")])
+
+    async def scenario():
+        app = build_app(trace, _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            await pilot.pause()
+            body = _modal_body(app)
+            assert "…truncated" in body
+            assert "TAIL_MARKER" not in body
+
+    asyncio.run(scenario())
+
+
+def test_tool_result_modal_truncates_long_tool_result():
+    import asyncio
+    import dataclasses
+
+    from cctx.renderers.trace_tui import build_app
+
+    tr = make_tool_result("tu-1", "Bash", ("y" * 1000) + "TAIL_MARKER")
+    turn = dataclasses.replace(make_assistant_turn(1, text=""), tool_results=[tr])
+
+    async def scenario():
+        app = build_app(make_trace([turn]), _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            await pilot.pause()
+            body = _modal_body(app)
+            assert "…truncated" in body
+            assert "TAIL_MARKER" not in body
+            assert "Bash" in body
+            assert "tu-1" in body
+
+    asyncio.run(scenario())
+
+
+def test_tool_result_modal_empty_turn_shows_no_content():
+    import asyncio
+
+    from cctx.renderers.trace_tui import build_app
+
+    async def scenario():
+        app = build_app(make_trace([make_assistant_turn(1, text="")]), _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.press("enter")
+            await pilot.pause()
+            assert "(no content)" in _modal_body(app)
+
+    asyncio.run(scenario())
+
+
+def test_flagged_row_cells_carry_red_markup():
+    """get_row_at returns the raw strings handed to add_row, markup included."""
+    import asyncio
+
+    from textual.widgets import DataTable
+
+    from cctx.renderers.trace_tui import build_app
+
+    async def scenario():
+        app = build_app(_simple_trace(), _diag_flagging_turn_1())
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cells = app.query_one("#turns", DataTable).get_row_at(0)
+            assert cells[0] == "[bold red]1[/]"
+            assert cells[1].startswith("[bold red]")
+
+    asyncio.run(scenario())
+
+
+def test_show_finding_noop_on_unflagged_turn():
+    import asyncio
+
+    from cctx.renderers.trace_tui import build_app
+
+    async def scenario():
+        app = build_app(_simple_trace(), _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.press("f")
+            await pilot.pause()
+            assert type(app.screen).__name__ != "FindingModal"
+
+    asyncio.run(scenario())
+
+
+def test_show_finding_noop_on_empty_trace():
+    """No rows: _current_turn_number returns None and nothing raises."""
+    import asyncio
+
+    from cctx.renderers.trace_tui import build_app
+
+    async def scenario():
+        app = build_app(make_trace([]), _clean_diag())
+        async with app.run_test() as pilot:
+            await pilot.press("f")
+            await pilot.pause()
+            assert type(app.screen).__name__ != "FindingModal"
+
+    asyncio.run(scenario())
