@@ -58,20 +58,24 @@ HELP_TEXT = (
 
 
 def affected_turns(finding: Finding, trace: SessionTrace) -> frozenset[int]:
-    """Return turn numbers covered by a finding using per-kind evidence extraction."""
+    """Return turn numbers covered by a finding using per-kind evidence extraction.
+
+    RETRY_LOOP / SCOPE_CREEP / STALE_CONTEXT carry typed evidence items
+    (RetryOccurrence / ScopeCreepPhrase / StaleItem in models.py); every other
+    kind falls through to the first_turn..last_turn range.
+    """
     ev = finding.evidence or {}
     kind = finding.kind
 
     if kind is FindingKind.RETRY_LOOP:
-        turns: set[int] = {occ["turn"] for occ in ev.get("occurrences", []) if "turn" in occ}
+        turns: set[int] = {occ.turn for occ in ev.get("occurrences", [])}
     elif kind is FindingKind.SCOPE_CREEP:
-        turns = {ph["turn"] for ph in ev.get("phrases", []) if "turn" in ph}
+        turns = {ph.turn for ph in ev.get("phrases", [])}
     elif kind is FindingKind.STALE_CONTEXT:
         last = finding.last_turn if finding.last_turn is not None else finding.first_turn
         turns = set()
         for item in ev.get("stale_items", []):
-            if "last_referenced_turn" in item:
-                turns.update(range(item["last_referenced_turn"] + 1, last + 1))
+            turns.update(range(item.last_referenced_turn + 1, last + 1))
     else:
         last = finding.last_turn if finding.last_turn is not None else finding.first_turn
         turns = set(range(finding.first_turn, last + 1))

@@ -6,6 +6,7 @@ render_html(diag, trace) -> str
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -16,6 +17,19 @@ if TYPE_CHECKING:
     from cctx.models import Diagnosis, Finding, SessionTrace
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+
+def _json_default(o: object) -> object:
+    """json.dumps fallback: expand evidence dataclasses, stringify anything else.
+
+    Finding.evidence carries typed items (RetryOccurrence / ScopeCreepPhrase /
+    StaleItem) for three kinds. Without this they would hit the previous
+    default=str and render as repr strings — "RetryOccurrence(turn=3, ...)" —
+    inside the HTML evidence block instead of JSON objects.
+    """
+    if dataclasses.is_dataclass(o) and not isinstance(o, type):
+        return dataclasses.asdict(o)
+    return str(o)
 
 
 def _flagged_index(findings: list[Finding]) -> dict[int, list[Finding]]:
@@ -33,7 +47,7 @@ def render_html(diag: Diagnosis, trace: SessionTrace) -> str:
         loader=FileSystemLoader(_TEMPLATES_DIR),
         autoescape=select_autoescape(["html"]),
     )
-    env.filters["to_json"] = lambda v: json.dumps(v, indent=2, default=str)
+    env.filters["to_json"] = lambda v: json.dumps(v, indent=2, default=_json_default)
 
     def _diff_highlight(diff_text: str) -> str:
         lines = []

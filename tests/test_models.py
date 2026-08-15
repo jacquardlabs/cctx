@@ -647,3 +647,61 @@ def test_finding_session_id_can_be_set():
         session_id="sub-1",
     )
     assert f.session_id == "sub-1"
+
+
+# ---------------------------------------------------------------------------
+# Typed evidence items (#179)
+# ---------------------------------------------------------------------------
+
+
+def test_evidence_items_are_frozen():
+    """Evidence crosses several surfaces and must not be mutated in transit."""
+    import dataclasses
+
+    import pytest
+
+    from cctx.models import RetryOccurrence, ScopeCreepPhrase, StaleItem
+
+    for obj, field in (
+        (RetryOccurrence(turn=1, key="k", call="Edit", error="e"), "turn"),
+        (ScopeCreepPhrase(turn=1, phrase="p", snippet="s"), "phrase"),
+        (StaleItem(
+            tool_name="Grep",
+            content_tokens=1,
+            first_seen_turn=1,
+            last_referenced_turn=1,
+            turns_stale=1,
+            token_turns=1,
+        ), "token_turns"),
+    ):
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            setattr(obj, field, 99)
+
+
+def test_evidence_items_asdict_preserves_legacy_key_order():
+    """Field order must match the dict literals these replaced.
+
+    The HTML report serializes evidence via dataclasses.asdict, so a reordering
+    would silently change the rendered JSON.
+    """
+    import dataclasses
+
+    from cctx.models import RetryOccurrence, ScopeCreepPhrase, StaleItem
+
+    assert list(dataclasses.asdict(
+        RetryOccurrence(turn=1, key="k", call="Edit", error="e")
+    )) == ["turn", "key", "call", "error"]
+    assert list(dataclasses.asdict(
+        ScopeCreepPhrase(turn=1, phrase="p", snippet="s")
+    )) == ["turn", "phrase", "snippet"]
+    assert list(dataclasses.asdict(StaleItem(
+        tool_name="Grep",
+        content_tokens=1,
+        first_seen_turn=1,
+        last_referenced_turn=1,
+        turns_stale=1,
+        token_turns=1,
+    ))) == [
+        "tool_name", "content_tokens", "first_seen_turn",
+        "last_referenced_turn", "turns_stale", "token_turns",
+    ]

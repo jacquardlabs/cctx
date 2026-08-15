@@ -9,7 +9,7 @@ Thresholds (per spec):
   N_stale = 5 turns after last reference before "stale"
 
 Evidence (Finding.evidence, kind=STALE_CONTEXT):
-    stale_items
+    stale_items       — list[StaleItem]; see cctx/models.py
     total_token_turns
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cctx.diagnostician.patterns.compaction import is_compaction_turn
-from cctx.models import Confidence, Finding, FindingKind, Severity
+from cctx.models import Confidence, Finding, FindingKind, Severity, StaleItem
 
 if TYPE_CHECKING:
     from cctx.models import SessionTrace
@@ -67,7 +67,7 @@ def classify(trace: SessionTrace) -> list[Finding]:
 
     last_turn_number = max((t.turn_number for t in trace.turns), default=0)
 
-    stale_items: list[dict] = []
+    stale_items: list[StaleItem] = []
 
     for cand in candidates:
         first_seen = cand["first_seen_turn"]
@@ -100,33 +100,33 @@ def classify(trace: SessionTrace) -> list[Finding]:
             if t.turn_number > last_ref and t.role == "assistant"
         )
         token_turns = cand["tokens"] * billed_stale
-        stale_items.append({
-            "tool_name": cand["tool_name"],
-            "content_tokens": cand["tokens"],
-            "first_seen_turn": first_seen,
-            "last_referenced_turn": last_ref,
-            "turns_stale": turns_stale,
-            "token_turns": token_turns,
-        })
+        stale_items.append(StaleItem(
+            tool_name=cand["tool_name"],
+            content_tokens=cand["tokens"],
+            first_seen_turn=first_seen,
+            last_referenced_turn=last_ref,
+            turns_stale=turns_stale,
+            token_turns=token_turns,
+        ))
 
     if not stale_items:
         return []
 
-    total_token_turns = sum(item["token_turns"] for item in stale_items)
+    total_token_turns = sum(item.token_turns for item in stale_items)
     level = Confidence.HIGH if total_token_turns > STALE_HIGH_THRESHOLD else Confidence.MEDIUM
     severity = Severity.HIGH if total_token_turns > STALE_HIGH_THRESHOLD else Severity.MEDIUM
 
     # first_turn = when the first item became officially stale
     first_stale = min(
-        item["last_referenced_turn"] + N_STALE for item in stale_items
+        item.last_referenced_turn + N_STALE for item in stale_items
     )
 
     # Summary describes the worst offender
-    worst = max(stale_items, key=lambda i: i["token_turns"])
-    tokens_k = worst["content_tokens"] // 1000
+    worst = max(stale_items, key=lambda i: i.token_turns)
+    tokens_k = worst.content_tokens // 1000
     summary = (
-        f"{tokens_k}K-token {worst['tool_name']} result stale "
-        f"{worst['turns_stale']} turns "
+        f"{tokens_k}K-token {worst.tool_name} result stale "
+        f"{worst.turns_stale} turns "
         f"(~{total_token_turns:,} token-turns)"
     )
 

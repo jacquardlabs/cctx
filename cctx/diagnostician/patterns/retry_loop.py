@@ -5,7 +5,7 @@ fix. One Finding per session — all loops bundled into a single Finding with
 all occurrences in evidence.
 
 Evidence (Finding.evidence, kind=RETRY_LOOP):
-    occurrences
+    occurrences  — list[RetryOccurrence]; see cctx/models.py
     loop_length
     waste_turns  — turn numbers of the repeat attempts (excludes each loop's
                    first, legitimate attempt). diagnostician/__init__.py prices
@@ -18,7 +18,7 @@ import json
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from cctx.models import Confidence, Finding, FindingKind, Severity
+from cctx.models import Confidence, Finding, FindingKind, RetryOccurrence, Severity
 
 if TYPE_CHECKING:
     from cctx.models import SessionTrace, ToolResult
@@ -123,15 +123,16 @@ def classify(trace: SessionTrace) -> list[Finding]:
 
     severity = Severity.HIGH if loop_length >= 4 else Severity.MEDIUM
 
-    evidence_occurrences = []
+    evidence_occurrences: list[RetryOccurrence] = []
     for r in all_errors:
         result, _ = result_map[r[4]]
-        evidence_occurrences.append({
-            "turn": r[2],
-            "key": r[1],
-            "call": r[0],
-            "error": result.content[:120],
-        })
+        # r is (tool_name, key, turn_number, ..., tool_use_id)
+        evidence_occurrences.append(RetryOccurrence(
+            turn=r[2],
+            key=r[1],
+            call=r[0],
+            error=result.content[:120],
+        ))
 
     # Summary: describe the first loop
     first_occ = loop_occurrences[0]

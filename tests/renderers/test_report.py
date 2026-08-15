@@ -363,3 +363,45 @@ def test_html_tags_subagent_finding():
     html = _render(diag)
     # the finding itself carries a sub-label badge (not just the subagent cost table)
     assert 'class="badge sub-label">Resolver' in html
+
+
+def test_typed_evidence_serializes_as_json_object():
+    """Typed evidence items render as JSON objects, not dataclass reprs (#179).
+
+    The negative assertion is the load-bearing half: a positive-only check
+    still passes under the previous default=str, which would emit
+    "RetryOccurrence(turn=12, ...)" into the evidence block.
+    """
+    from cctx.models import Confidence, Finding, FindingKind, RetryOccurrence, Severity
+
+    finding = Finding(
+        kind=FindingKind.RETRY_LOOP,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=12,
+        last_turn=14,
+        evidence={
+            "occurrences": [
+                RetryOccurrence(turn=12, key="src/app.py", call="Edit", error="boom")
+            ],
+            "loop_length": 2,
+        },
+        cost_usd=0.01,
+        summary="retry",
+    )
+    html = _render(_make_diagnosis(findings=[finding]))
+
+    assert "RetryOccurrence(" not in html
+    assert '"turn": 12' in html
+    assert '"key": "src/app.py"' in html
+
+
+def test_json_default_falls_back_to_str_for_non_dataclass():
+    from datetime import datetime, timezone
+
+    from cctx.renderers.report import _json_default
+
+    assert _json_default(datetime(2026, 5, 14, tzinfo=timezone.utc)).startswith("2026-05-14")
+    # A dataclass *type* (not an instance) must not be expanded.
+    from cctx.models import RetryOccurrence
+    assert _json_default(RetryOccurrence) == str(RetryOccurrence)
