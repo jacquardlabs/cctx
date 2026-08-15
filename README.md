@@ -189,7 +189,9 @@ CSV output covers the root session and every subagent at every depth, one row pe
 | `dispatching_tool_use_id` | empty | the `Agent` `tool_use_id` in the immediate parent that dispatched this session |
 | `root_dispatch_tool_use_id` | empty | the depth-1 ancestor's dispatch id, carried down the whole subtree |
 
-`SELECT root_dispatch_tool_use_id, SUM(cost_usd) ... GROUP BY 1` gives inclusive cost per top-level dispatch. Filter `depth == 0` to get the root-only table.
+`SELECT root_dispatch_tool_use_id, SUM(cost_usd) ... GROUP BY 1` rolls a whole subtree up to the dispatch that spawned it. Filter `depth == 0` to get the root-only table.
+
+**Caveat on `cost_usd`:** the CSV column counts input and cache tokens only — output tokens are omitted, so it understates real cost, worst for output-heavy roles ([#178](https://github.com/jacquardlabs/cctx/issues/178)). The `subagent_costs[].cost_usd` field in JSON/JSONL is the full-request figure; use that for absolute dollars and CSV for the join.
 
 ## Going further
 

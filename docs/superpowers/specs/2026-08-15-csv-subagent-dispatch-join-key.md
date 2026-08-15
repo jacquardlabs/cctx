@@ -48,7 +48,7 @@ For a depth-1 row, `dispatching_tool_use_id == root_dispatch_tool_use_id`. They 
 
 ### 2.3 Contract change
 
-`sum(cost_usd)` over all rows moves from root-only to inclusive-of-subagents. Filtering `depth == 0` recovers today's exact output, byte for byte. This is documented in the README export section.
+`sum(cost_usd)` over all rows moves from root-only to inclusive-of-subagents. Filtering `depth == 0` recovers today's exact output on the original nine columns; the four new columns are present in every row and constant (`0`, empty, empty, empty) on root rows. This is documented in the README export section.
 
 ### 2.4 Finding scoping
 
@@ -75,6 +75,8 @@ From `diagnosis.subagent_costs` — already public on the `Diagnosis`, already a
 ### 2.7 Cost
 
 Unchanged. The existing per-turn formula already prices on `turn.model`, so subagent turns are priced at the subagent's own model with no new code. Issue #178 (the exporter recomputing cost via `price_per_tok` with hardcoded cache multipliers instead of `get_pricing`) is M23 scope and deliberately untouched here.
+
+**#178 caps what this join is good for.** The CSV formula omits output tokens entirely, which bill at ~5× input on Anthropic models — so `SUM(cost_usd)` per dispatch is biased low, worst for the output-heavy roles a routing table most wants to price. The join key is exact; the dollars are not. Callers tuning a routing table on absolute cost should read `subagent_costs[].cost_usd` from JSON/JSONL (full-request, via `_compute_inclusive_cost`) until #178 lands. Documented as a caveat in the README rather than papered over.
 
 ---
 

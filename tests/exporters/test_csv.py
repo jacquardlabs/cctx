@@ -608,7 +608,10 @@ def test_csv_orphaned_subagent_has_empty_dispatch_columns() -> None:
     identity is empty rather than missing."""
     from cctx.exporters.csv import write
 
-    child = _make_trace("orphan", turns=[_make_turn(1)], parent_session_id="sess-xyz")
+    grandchild = _make_trace("under-orphan", turns=[_make_turn(1)], parent_session_id="orphan")
+    child = _make_trace(
+        "orphan", turns=[_make_turn(1)], subagents=[grandchild], parent_session_id="sess-xyz"
+    )
     trace = _make_trace(turns=[_make_turn(1)], subagents=[child])
     diagnosis = _make_diagnosis(findings=[])  # no subagent_costs
 
@@ -616,11 +619,16 @@ def test_csv_orphaned_subagent_has_empty_dispatch_columns() -> None:
     write([(diagnosis, trace)], buf)
 
     _, rows = _read_csv(buf.getvalue())
-    orphan_row = next(r for r in rows if r["session_id"] == "orphan")
-    assert orphan_row["depth"] == "1"
-    assert orphan_row["parent_session_id"] == "sess-xyz"
-    assert orphan_row["dispatching_tool_use_id"] == ""
-    assert orphan_row["root_dispatch_tool_use_id"] == ""
+    by_sid = {r["session_id"]: r for r in rows}
+    assert by_sid["orphan"]["depth"] == "1"
+    assert by_sid["orphan"]["parent_session_id"] == "sess-xyz"
+    assert by_sid["orphan"]["dispatching_tool_use_id"] == ""
+    assert by_sid["orphan"]["root_dispatch_tool_use_id"] == ""
+    # A descendant of an unlinked dispatch has no top-level dispatch to roll up
+    # to — it stays blank rather than inheriting a wrong key.
+    assert by_sid["under-orphan"]["depth"] == "2"
+    assert by_sid["under-orphan"]["parent_session_id"] == "orphan"
+    assert by_sid["under-orphan"]["root_dispatch_tool_use_id"] == ""
 
 
 def test_csv_subagent_turn_priced_at_own_model() -> None:
