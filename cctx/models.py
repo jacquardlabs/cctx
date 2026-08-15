@@ -244,6 +244,54 @@ class Confidence(str, Enum):
     MEDIUM = "medium"
 
 
+# ---------------------------------------------------------------------------
+# Per-kind evidence items
+#
+# Finding.evidence stays dict[str, Any] — these type its nested *values* for
+# the three kinds with more than one consumer (#179). Two readers,
+# recommender/claude_md.py and renderers/trace_tui.py, previously disagreed on
+# access style: one subscripted and would KeyError on a schema change, the
+# other guarded with `in` and silently degraded. Constructing these at the
+# producing classifier makes a schema change fail in one place instead.
+#
+# frozen=True is a deliberate departure from the other dataclasses in this
+# module: evidence is read by several surfaces and must not be mutated in
+# transit. Field order matches the dict literals these replaced, so
+# dataclasses.asdict() serializes byte-identically.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RetryOccurrence:
+    """One failed attempt inside a RETRY_LOOP finding."""
+
+    turn:  int
+    key:   str   # normalized call target, e.g. a file path or command
+    call:  str   # tool name
+    error: str   # first 120 chars of the error content
+
+
+@dataclass(frozen=True)
+class ScopeCreepPhrase:
+    """One scope-expanding phrase located in a SCOPE_CREEP finding."""
+
+    turn:    int
+    phrase:  str
+    snippet: str  # ~80 chars of surrounding text
+
+
+@dataclass(frozen=True)
+class StaleItem:
+    """One tool result left in context after its last reference (STALE_CONTEXT)."""
+
+    tool_name:            str
+    content_tokens:       int
+    first_seen_turn:      int
+    last_referenced_turn: int
+    turns_stale:          int
+    token_turns:          int  # content_tokens x billed turns present
+
+
 @dataclass
 class Finding:
     kind:       FindingKind
@@ -251,7 +299,8 @@ class Finding:
     confidence: Confidence
     first_turn: int
     last_turn:  int | None
-    evidence:   dict[str, Any]
+    evidence:   dict[str, Any]  # nested items typed for RETRY_LOOP,
+                                # SCOPE_CREEP, STALE_CONTEXT (see above)
     cost_usd:   float | None
     summary:    str
     session_id: str | None = None   # subagent id; None = root trace

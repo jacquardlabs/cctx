@@ -92,7 +92,7 @@ def test_first_turn_is_after_n_stale():
 
     findings = classify(_stale_trace(n_silent_turns=6))
     item = findings[0].evidence["stale_items"][0]
-    expected_first_turn = item["last_referenced_turn"] + 5
+    expected_first_turn = item.last_referenced_turn + 5
     assert findings[0].first_turn == expected_first_turn
 
 

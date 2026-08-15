@@ -91,7 +91,9 @@ The canonical headline is **count-based** and comes from a single source — the
 | HTML report | Per-finding `<details>` with evidence as formatted JSON |
 | TUI FindingModal | Summary + raw evidence |
 
-`Finding.evidence` is a `dict[str, Any]` whose shape varies per `FindingKind` (e.g. `retry_loop` carries `occurrences`/`loop_length`; `stale_context` carries `stale_items`/`total_token_turns`). The recommender reads specific keys with `.get()` fallbacks. The authoritative per-kind schema lives in each producing classifier's module docstring under an `Evidence (Finding.evidence, kind=...)` block (e.g. `cctx/diagnostician/patterns/retry_loop.py`); `recommender/claude_md.py:summarize()` points back to it.
+`Finding.evidence` is a `dict[str, Any]` whose shape varies per `FindingKind` (e.g. `retry_loop` carries `occurrences`/`loop_length`; `stale_context` carries `stale_items`/`total_token_turns`). The authoritative per-kind schema lives in each producing classifier's module docstring under an `Evidence (Finding.evidence, kind=...)` block (e.g. `cctx/diagnostician/patterns/retry_loop.py`); `recommender/claude_md.py:summarize()` points back to it.
+
+**Three kinds carry typed nested items** — `RETRY_LOOP` (`RetryOccurrence`), `SCOPE_CREEP` (`ScopeCreepPhrase`), and `STALE_CONTEXT` (`StaleItem`), all frozen dataclasses in `cctx/models.py`. They were typed because they are the kinds with more than one consumer: `recommender/claude_md.py:summarize()` and `renderers/trace_tui.py:affected_turns()` both read their nested fields, and previously disagreed on access style — one subscripted and would `KeyError`, the other guarded with `in` and silently degraded. Top-level keys are still read with `.get()` fallbacks so absent evidence degrades to `finding.summary`. The other 8 kinds stay untyped; escalate a kind when a second consumer starts reading its nested items.
 
 ## Anti-patterns
 

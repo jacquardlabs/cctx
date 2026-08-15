@@ -11,6 +11,9 @@ from datetime import datetime, timezone
 
 from tests.diagnostician.conftest import (
     make_assistant_turn,
+    make_retry_occurrence,
+    make_scope_phrase,
+    make_stale_item,
     make_tool_result,
     make_trace,
     make_user_turn,
@@ -23,7 +26,7 @@ def _make_finding(first_turn: int, last_turn: int | None = None, waste: float = 
     # Build evidence so stale_context extraction produces the expected range
     stale_items = []
     if last_turn is not None and last_turn > first_turn:
-        stale_items = [{"last_referenced_turn": first_turn - 1, "token_turns": 100}]
+        stale_items = [make_stale_item(last_referenced_turn=first_turn - 1, token_turns=100)]
 
     return Finding(
         kind=FindingKind.STALE_CONTEXT,
@@ -79,7 +82,7 @@ def test_affected_turns_stale_context_range():
         first_turn=3,
         last_turn=7,
         evidence={
-            "stale_items": [{"last_referenced_turn": 2, "token_turns": 100}],
+            "stale_items": [make_stale_item(last_referenced_turn=2, token_turns=100)],
             "total_token_turns": 100,
         },
         cost_usd=None,
@@ -101,7 +104,7 @@ def test_affected_turns_same_start_end():
         first_turn=5,
         last_turn=5,
         evidence={
-            "stale_items": [{"last_referenced_turn": 4, "token_turns": 50}],
+            "stale_items": [make_stale_item(last_referenced_turn=4, token_turns=50)],
             "total_token_turns": 50,
         },
         cost_usd=None,
@@ -124,8 +127,8 @@ def test_affected_turns_retry_loop():
         last_turn=7,
         evidence={
             "occurrences": [
-                {"turn": 3, "key": "f.py", "call": "Edit", "error": "err"},
-                {"turn": 7, "key": "f.py", "call": "Edit", "error": "err"},
+                make_retry_occurrence(turn=3, key="f.py", error="err"),
+                make_retry_occurrence(turn=7, key="f.py", error="err"),
             ],
             "loop_length": 2,
         },
@@ -148,7 +151,7 @@ def test_affected_turns_scope_creep():
         confidence=Confidence.MEDIUM,
         first_turn=4,
         last_turn=4,
-        evidence={"phrases": [{"turn": 4, "phrase": "let me also", "snippet": "..."}]},
+        evidence={"phrases": [make_scope_phrase(turn=4, phrase="let me also")]},
         cost_usd=None,
         summary="scope",
     )

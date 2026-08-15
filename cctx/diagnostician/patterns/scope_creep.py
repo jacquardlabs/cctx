@@ -5,14 +5,14 @@ v0). No structural heuristics. One Finding per session; all phrase matches
 bundled into evidence.
 
 Evidence (Finding.evidence, kind=SCOPE_CREEP):
-    phrases
+    phrases  — list[ScopeCreepPhrase]; see cctx/models.py
 """
 from __future__ import annotations
 
 import re
 from typing import TYPE_CHECKING
 
-from cctx.models import Confidence, Finding, FindingKind, Severity
+from cctx.models import Confidence, Finding, FindingKind, ScopeCreepPhrase, Severity
 
 if TYPE_CHECKING:
     from cctx.models import SessionTrace
@@ -47,7 +47,7 @@ def _matches(text: str) -> list[str]:
 
 
 def classify(trace: SessionTrace) -> list[Finding]:
-    phrases_found: list[dict] = []
+    phrases_found: list[ScopeCreepPhrase] = []
 
     for turn in trace.turns:
         if turn.role != "assistant" or not turn.text:
@@ -58,18 +58,18 @@ def classify(trace: SessionTrace) -> list[Finding]:
             idx = low.find(phrase)
             start = max(0, idx - 20)
             snippet = turn.text[start : start + 80]
-            phrases_found.append({
-                "turn": turn.turn_number,
-                "phrase": phrase,
-                "snippet": snippet,
-            })
+            phrases_found.append(ScopeCreepPhrase(
+                turn=turn.turn_number,
+                phrase=phrase,
+                snippet=snippet,
+            ))
 
     if not phrases_found:
         return []
 
-    first_turn = min(p["turn"] for p in phrases_found)
+    first_turn = min(p.turn for p in phrases_found)
     count = len(phrases_found)
-    first_phrase = phrases_found[0]["phrase"]
+    first_phrase = phrases_found[0].phrase
     plural = "s" if count > 1 else ""
     summary = f"'{first_phrase}' at turn {first_turn} ({count} scope expansion{plural} total)"
 
@@ -78,7 +78,7 @@ def classify(trace: SessionTrace) -> list[Finding]:
         severity=Severity.MEDIUM,
         confidence=Confidence.MEDIUM,
         first_turn=first_turn,
-        last_turn=phrases_found[-1]["turn"] if len(phrases_found) > 1 else None,
+        last_turn=phrases_found[-1].turn if len(phrases_found) > 1 else None,
         evidence={"phrases": phrases_found},
         cost_usd=None,
         summary=summary,

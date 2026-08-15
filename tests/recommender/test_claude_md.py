@@ -3,6 +3,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from tests.diagnostician.conftest import (
+    make_retry_occurrence,
+    make_scope_phrase,
+    make_stale_item,
+)
+
 
 def _make_finding(kind_str: str, first_turn: int = 5, evidence: dict | None = None):
     from cctx.models import Confidence, Finding, FindingKind, Severity
@@ -85,7 +91,7 @@ def test_stale_context_patch_has_hygiene_content():
 def test_evidence_summary_populated():
     from cctx.recommender.claude_md import generate
 
-    occ = {"turn": 12, "key": "src/foo.py", "call": "Edit", "error": "not found"}
+    occ = make_retry_occurrence(turn=12, key="src/foo.py", call="Edit", error="not found")
     evidence = {"occurrences": [occ], "loop_length": 2}
     result = generate(_make_diagnosis([_make_finding("retry_loop", evidence=evidence)]))
     assert result.patches[0].evidence_summary != ""
@@ -188,7 +194,9 @@ def test_summarize_scope_creep_with_phrases():
 
     evidence = {
         "phrases": [
-            {"turn": 4, "phrase": "let me also", "snippet": "while doing this let me also fix"},
+            make_scope_phrase(
+                turn=4, phrase="let me also", snippet="while doing this let me also fix"
+            ),
         ]
     }
     finding = _make_finding("scope_creep", evidence=evidence)
@@ -212,14 +220,14 @@ def test_summarize_stale_context_with_stale_items():
 
     evidence = {
         "stale_items": [
-            {
-                "tool_name": "Bash",
-                "content_tokens": 5000,
-                "first_seen_turn": 2,
-                "last_referenced_turn": 3,
-                "turns_stale": 8,
-                "token_turns": 40000,
-            }
+            make_stale_item(
+                tool_name="Bash",
+                content_tokens=5000,
+                first_seen_turn=2,
+                last_referenced_turn=3,
+                turns_stale=8,
+                token_turns=40000,
+            )
         ],
         "total_token_turns": 40000,
     }
@@ -236,14 +244,14 @@ def test_summarize_stale_context_includes_cost_when_present():
 
     evidence = {
         "stale_items": [
-            {
-                "tool_name": "Bash",
-                "content_tokens": 22000,
-                "first_seen_turn": 1,
-                "last_referenced_turn": 2,
-                "turns_stale": 14,
-                "token_turns": 308000,
-            }
+            make_stale_item(
+                tool_name="Bash",
+                content_tokens=22000,
+                first_seen_turn=1,
+                last_referenced_turn=2,
+                turns_stale=14,
+                token_turns=308000,
+            )
         ],
         "total_token_turns": 308000,
     }
@@ -275,8 +283,8 @@ def test_summarize_retry_loop_with_occurrences():
 
     evidence = {
         "occurrences": [
-            {"turn": 3, "key": "src/foo.py", "call": "Edit", "error": "Error: not found"},
-            {"turn": 5, "key": "src/foo.py", "call": "Edit", "error": "Error: not found"},
+            make_retry_occurrence(turn=3, key="src/foo.py", error="Error: not found"),
+            make_retry_occurrence(turn=5, key="src/foo.py", error="Error: not found"),
         ],
         "loop_length": 2,
     }
@@ -334,7 +342,7 @@ def test_generate_retry_loop_evidence_summary_contains_call_and_key():
 
     evidence = {
         "occurrences": [
-            {"turn": 3, "key": "file.py", "call": "Edit", "error": "Error: not found"},
+            make_retry_occurrence(turn=3, key="file.py", error="Error: not found"),
         ],
         "loop_length": 1,
     }
@@ -348,7 +356,9 @@ def test_generate_scope_creep_evidence_summary_contains_phrase():
     from cctx.recommender.claude_md import generate
 
     evidence = {
-        "phrases": [{"turn": 4, "phrase": "let me also", "snippet": "let me also fix X"}]
+        "phrases": [
+            make_scope_phrase(turn=4, phrase="let me also", snippet="let me also fix X")
+        ]
     }
     finding = _make_finding("scope_creep", evidence=evidence)
     result = generate(_make_diagnosis([finding]))
@@ -360,14 +370,14 @@ def test_generate_stale_context_evidence_summary_contains_tool_name():
 
     evidence = {
         "stale_items": [
-            {
-                "tool_name": "Bash",
-                "content_tokens": 5000,
-                "first_seen_turn": 2,
-                "last_referenced_turn": 3,
-                "turns_stale": 8,
-                "token_turns": 40000,
-            }
+            make_stale_item(
+                tool_name="Bash",
+                content_tokens=5000,
+                first_seen_turn=2,
+                last_referenced_turn=3,
+                turns_stale=8,
+                token_turns=40000,
+            )
         ],
         "total_token_turns": 40000,
     }

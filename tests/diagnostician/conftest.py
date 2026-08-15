@@ -107,3 +107,29 @@ def make_trace(turns, model: str = "claude-sonnet-4-6"):
         warnings=[],
         subagent_parse_errors=[],
     )
+
+
+def make_retry_occurrence(turn: int = 3, key: str = "src/app.py",
+                          call: str = "Edit", error: str = "boom"):
+    from cctx.models import RetryOccurrence
+    return RetryOccurrence(turn=turn, key=key, call=call, error=error)
+
+
+def make_scope_phrase(turn: int = 5, phrase: str = "while i'm at it",
+                      snippet: str = "...while i'm at it, refactor..."):
+    from cctx.models import ScopeCreepPhrase
+    return ScopeCreepPhrase(turn=turn, phrase=phrase, snippet=snippet)
+
+
+def make_stale_item(tool_name: str = "Grep", content_tokens: int = 22_000,
+                    first_seen_turn: int = 9, last_referenced_turn: int = 9,
+                    turns_stale: int = 14, token_turns: int = 308_000):
+    from cctx.models import StaleItem
+    return StaleItem(
+        tool_name=tool_name,
+        content_tokens=content_tokens,
+        first_seen_turn=first_seen_turn,
+        last_referenced_turn=last_referenced_turn,
+        turns_stale=turns_stale,
+        token_turns=token_turns,
+    )

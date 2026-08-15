@@ -124,9 +124,14 @@ def summarize(finding: Finding) -> str:
     # Reads kind-specific keys from finding.evidence. The authoritative schema
     # for each key lives in the producing classifier's module docstring under
     # "Evidence (Finding.evidence, kind=...)" — e.g. cctx/diagnostician/patterns/
-    # retry_loop.py documents occurrences/loop_length. Keep accesses defensive
-    # (.get with defaults) so a schema change degrades to finding.summary rather
-    # than raising.
+    # retry_loop.py documents occurrences/loop_length.
+    #
+    # Top-level .get() with defaults is retained deliberately, so an empty or
+    # absent list degrades to finding.summary rather than raising. The nested
+    # items are typed (RetryOccurrence / ScopeCreepPhrase / StaleItem in
+    # models.py), so their fields are attributes — a schema change now fails at
+    # construction in the classifier rather than diverging between here and
+    # renderers/trace_tui.py, which used to guard where this subscripted.
     ev = finding.evidence
     match finding.kind:
         case FindingKind.RETRY_LOOP:
@@ -135,24 +140,24 @@ def summarize(finding: Finding) -> str:
                 first = occs[0]
                 loop_len = ev.get("loop_length", "?")
                 return (
-                    f"{first['call']}({first['key'][:40]}) failed {loop_len}×"
-                    f" between turns {first['turn']}–{occs[-1]['turn']}"
+                    f"{first.call}({first.key[:40]}) failed {loop_len}×"
+                    f" between turns {first.turn}–{occs[-1].turn}"
                 )
             return finding.summary
         case FindingKind.SCOPE_CREEP:
             phrases = ev.get("phrases", [])
             if phrases:
-                return f"'{phrases[0]['phrase']}' at turn {phrases[0]['turn']}"
+                return f"'{phrases[0].phrase}' at turn {phrases[0].turn}"
             return finding.summary
         case FindingKind.STALE_CONTEXT:
             items = ev.get("stale_items", [])
             if items:
-                worst = max(items, key=lambda i: i["token_turns"])
-                tokens_k = worst["content_tokens"] // 1000
+                worst = max(items, key=lambda i: i.token_turns)
+                tokens_k = worst.content_tokens // 1000
                 cost_str = f", ~${finding.cost_usd:.2f}" if finding.cost_usd else ""
                 return (
-                    f"{tokens_k}K-token {worst['tool_name']} result stale "
-                    f"{worst['turns_stale']} turns "
+                    f"{tokens_k}K-token {worst.tool_name} result stale "
+                    f"{worst.turns_stale} turns "
                     f"(~{ev.get('total_token_turns', 0):,} token-turns{cost_str})"
                 )
             return finding.summary
