@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.24.0 (2026-08-15)
+
+### Documentation
+
+- Caveat CSV cost_usd against #178; pin depth-2-under-orphan rollup
+  ([#201](https://github.com/jacquardlabs/cctx/pull/201),
+  [`cddf05e`](https://github.com/jacquardlabs/cctx/commit/cddf05e66e9e61b26de21d8b17c3328f4cbe775f))
+
+- Spec for CSV subagent rows + dispatch join key
+  ([#201](https://github.com/jacquardlabs/cctx/pull/201),
+  [`cddf05e`](https://github.com/jacquardlabs/cctx/commit/cddf05e66e9e61b26de21d8b17c3328f4cbe775f))
+
+### Features
+
+- **exporter**: Emit subagent turns and dispatch join key in CSV export
+  ([#201](https://github.com/jacquardlabs/cctx/pull/201),
+  [`cddf05e`](https://github.com/jacquardlabs/cctx/commit/cddf05e66e9e61b26de21d8b17c3328f4cbe775f))
+
+
 ## v1.23.0 (2026-07-26)
 
 ### Bug Fixes
