@@ -76,13 +76,14 @@ def _make_trace(
     turns: list[Turn] | None = None,
     subagents: list[SessionTrace] | None = None,
     parent_session_id: str | None = None,
+    primary_model: str = "claude-sonnet-4-6",
 ) -> SessionTrace:
     return SessionTrace(
         session_id=session_id,
         parent_session_id=parent_session_id,
         project_path="/Users/test",
         cwd="/Users/test",
-        primary_model="claude-sonnet-4-6",
+        primary_model=primary_model,
         claude_code_version="2.1.138",
         turns=turns or [],
         subagents=subagents or [],
@@ -261,14 +262,14 @@ def test_tool_names_joined() -> None:
 
 def test_no_usage_turn_has_zero_tokens_and_cost() -> None:
     """User/tool_result turns with no usage get input_tokens=0 and cost_usd=0.0."""
+    from cctx.diagnostician import run
     from cctx.exporters.csv import write
 
     turns = [_make_turn(1, role="user", model=None, input_tokens=0)]
     trace = _make_trace(turns=turns)
-    diagnosis = _make_diagnosis(inflection_turn=None, findings=[])
 
     buf = io.StringIO()
-    write([(diagnosis, trace)], buf)
+    write([(run(trace), trace)], buf)
 
     _, rows = _read_csv(buf.getvalue())
     assert rows[0]["input_tokens"] == "0"
@@ -323,17 +324,21 @@ def test_export_turn_rows_returns_correct_count() -> None:
     assert len(rows) == 3
 
 
-def test_csv_cost_includes_cache_read() -> None:
-    """Per-turn cost_usd must include cache_read at 10% of input rate."""
-    import dataclasses
-    from datetime import datetime, timezone
+def test_csv_cost_includes_input_output_and_cache_read() -> None:
+    """cost_usd is the full request: input + output + cache read (#178).
 
+    Before #178 the exporter ran its own formula that omitted output tokens
+    entirely; it now reads Diagnosis.turn_costs, so the number matches what
+    every other surface reports.
+    """
+    import dataclasses
+
+    from cctx.diagnostician import run
     from cctx.exporters.csv import export_turn_rows
-    from cctx.models import Diagnosis, Usage
+    from cctx.models import Usage
     from tests.diagnostician.conftest import make_assistant_turn, make_trace, make_user_turn
 
-    # Sonnet rate = $3/MTok = 3e-6 per token
-    # 1000 input × 1.00 + 10000 cache_read × 0.10 = 2000 effective tokens × 3e-6 = $0.006
+    # Sonnet-4 family: $3/MTok input, $15/MTok output, cache read at 0.10x input.
     t = make_assistant_turn(2, text="ok")
     t = dataclasses.replace(
         t,
@@ -348,20 +353,14 @@ def test_csv_cost_includes_cache_read() -> None:
         model="claude-sonnet-4-6",
     )
     trace = make_trace([make_user_turn(1), t], model="claude-sonnet-4-6")
-    diag = Diagnosis(
-        session_id="test",
-        findings=[],
-        inflection_turn=None,
-        patches=[],
-        total_cost_usd=0.0,
-        waste_cost_usd=0.0,
-        analysed_at=datetime(2026, 5, 15, tzinfo=timezone.utc),
-    )
-    rows = export_turn_rows(diag, trace)
+    rows = export_turn_rows(run(trace), trace)
+
     assistant_row = next(r for r in rows if r["role"] == "assistant")
     cost = float(assistant_row["cost_usd"])
-    # 1000 × 3e-6 + 10000 × 3e-6 × 0.10 = 3e-3 + 3e-3 = 6e-3 = 0.006
-    assert abs(cost - 0.006) < 1e-6, f"Expected ~0.006 but got {cost}"
+    # 1000×3e-6 + 20×15e-6 + 10000×3e-6×0.10 = 0.003 + 0.0003 + 0.003 = 0.0063
+    expected = 1_000 * 3e-6 + 20 * 15e-6 + 10_000 * 3e-6 * 0.10
+    assert cost == pytest.approx(expected, abs=1e-9)
+    assert cost == pytest.approx(0.0063, abs=1e-9)
 
 
 # ---------------------------------------------------------------------------
@@ -373,6 +372,7 @@ def _one_child_trace(
     *,
     child_session_id: str = "child-session",
     child_turns: list[Turn] | None = None,
+    child_model: str = "claude-sonnet-4-6",
 ) -> SessionTrace:
     """Root with one dispatch turn and one direct subagent."""
     import dataclasses
@@ -381,6 +381,7 @@ def _one_child_trace(
         session_id=child_session_id,
         turns=child_turns if child_turns is not None else [_make_turn(1)],
         parent_session_id="sess-xyz",
+        primary_model=child_model,
     )
     dispatch_turn = dataclasses.replace(
         _make_turn(1),
@@ -520,16 +521,16 @@ def test_csv_depth_zero_filter_recovers_root_only_rows() -> None:
         "cost_usd", "tool_names", "finding_kinds", "is_inflection_turn",
     ]
 
+    from cctx.diagnostician import run
+
     with_subagents = _one_child_trace()
     root_only = _make_trace(turns=with_subagents.turns)
-    diagnosis = _make_diagnosis(
-        findings=[],
-        subagent_costs=[_attribution("child-session", "tu-dispatch")],
-    )
 
+    # A diagnosis per trace, so cost_usd is non-zero on both sides — comparing
+    # two all-zero columns would assert nothing.
     buf_a, buf_b = io.StringIO(), io.StringIO()
-    write([(diagnosis, with_subagents)], buf_a)
-    write([(diagnosis, root_only)], buf_b)
+    write([(run(with_subagents), with_subagents)], buf_a)
+    write([(run(root_only), root_only)], buf_b)
 
     _, rows_a = _read_csv(buf_a.getvalue())
     _, rows_b = _read_csv(buf_b.getvalue())
@@ -633,22 +634,79 @@ def test_csv_orphaned_subagent_has_empty_dispatch_columns() -> None:
 
 def test_csv_subagent_turn_priced_at_own_model() -> None:
     """Subagent rows are priced at the subagent's model, not the root's."""
+    from cctx.diagnostician import run
     from cctx.exporters.csv import write
 
-    # Sonnet-4 family = $3/MTok input; Opus 5 = $5/MTok.
+    # Sonnet-4 family: $3/MTok in, $15/MTok out. Opus 5: $5/MTok in, $25/MTok out.
     child_turn = _make_turn(1, model="claude-opus-5", input_tokens=1_000)
-    # The root's dispatch turn keeps _make_turn's default 100 input tokens.
-    trace = _one_child_trace(child_turns=[child_turn])
-    diagnosis = _make_diagnosis(
-        findings=[],
-        subagent_costs=[_attribution("child-session", "tu-dispatch")],
-    )
+    # The root's dispatch turn keeps _make_turn's default 100 input / 20 output.
+    trace = _one_child_trace(child_turns=[child_turn], child_model="claude-opus-5")
 
     buf = io.StringIO()
-    write([(diagnosis, trace)], buf)
+    write([(run(trace), trace)], buf)
 
     _, rows = _read_csv(buf.getvalue())
     root_row = next(r for r in rows if r["session_id"] == "sess-xyz")
     child_row = next(r for r in rows if r["session_id"] == "child-session")
-    assert float(root_row["cost_usd"]) == pytest.approx(100 * 3e-6)
-    assert float(child_row["cost_usd"]) == pytest.approx(1_000 * 5e-6)
+    assert float(root_row["cost_usd"]) == pytest.approx(100 * 3e-6 + 20 * 15e-6, abs=1e-9)
+    assert float(child_row["cost_usd"]) == pytest.approx(1_000 * 5e-6 + 20 * 25e-6, abs=1e-9)
+
+
+def test_csv_cost_column_sums_to_diagnosis_total() -> None:
+    """The whole point of reading turn_costs: per-turn dollars reconcile to the total.
+
+    Tolerance is fixture-scoped. _compute_own_cost rounds each trace to 4dp and
+    _compute_inclusive_cost sums the already-rounded values, so drift is ~5e-5
+    per trace in the tree. Anyone enlarging this fixture must widen it.
+    """
+    from cctx.diagnostician import run
+    from cctx.exporters.csv import export_turn_rows
+
+    child_turn = _make_turn(1, model="claude-opus-5", input_tokens=1_000)
+    trace = _one_child_trace(child_turns=[child_turn], child_model="claude-opus-5")
+    diag = run(trace)
+
+    rows = export_turn_rows(diag, trace)
+    assert sum(float(r["cost_usd"]) for r in rows) == pytest.approx(
+        diag.total_cost_usd, abs=1e-4
+    )
+
+
+def test_csv_cost_reads_the_analyzer_map() -> None:
+    """cost_usd comes from Diagnosis.turn_costs, not from the exporter (#178 AC1)."""
+    import dataclasses
+
+    from cctx.exporters.csv import export_turn_rows
+
+    trace = _make_trace(turns=[_make_turn(1, input_tokens=1_000)])
+
+    # Empty map: a turn with real usage still exports 0.0, proving no fallback
+    # arithmetic survives in the exporter.
+    empty = _make_diagnosis(findings=[])
+    assert export_turn_rows(empty, trace)[0]["cost_usd"] == "0.000000"
+
+    # Injected map: the exporter reports exactly what the analyzer handed it.
+    injected = dataclasses.replace(empty, turn_costs={("sess-xyz", 1): 1.234567})
+    assert export_turn_rows(injected, trace)[0]["cost_usd"] == "1.234567"
+
+
+def test_csv_mixed_model_session_prices_each_turn_at_its_own_model() -> None:
+    """opusplan interleaves models within one session; each turn bills at its own.
+
+    Pricing a mixed-model trace at its modal model understates the expensive
+    turns and overstates the cheap ones.
+    """
+    from cctx.diagnostician import run
+    from cctx.exporters.csv import export_turn_rows
+
+    turns = [
+        _make_turn(1, model="claude-sonnet-4-6", input_tokens=1_000),
+        _make_turn(2, model="claude-opus-5", input_tokens=1_000),
+    ]
+    trace = _make_trace(turns=turns, primary_model="claude-sonnet-4-6")
+    rows = export_turn_rows(run(trace), trace)
+
+    by_turn = {int(r["turn_number"]): float(r["cost_usd"]) for r in rows}
+    assert by_turn[1] == pytest.approx(1_000 * 3e-6 + 20 * 15e-6, abs=1e-9)
+    assert by_turn[2] == pytest.approx(1_000 * 5e-6 + 20 * 25e-6, abs=1e-9)
+    assert by_turn[2] > by_turn[1], "opus turn must not be priced at the trace's sonnet rate"

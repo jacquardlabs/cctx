@@ -4,13 +4,14 @@ Rows cover the root session *and* every subagent at every depth (DFS order,
 matching `Diagnosis.subagent_costs`). Row identity is `(session_id,
 turn_number)` — turn numbers restart at 1 in each subagent trace. Filtering
 `depth == 0` recovers the root-only table this exporter emitted before #194.
+
+`cost_usd` is read from `Diagnosis.turn_costs`, the per-turn figure the
+analyzer already computes — this exporter does no cost arithmetic (#178).
 """
 from __future__ import annotations
 
 import csv as _csv
 from typing import IO, TYPE_CHECKING
-
-from cctx.pricing import price_per_tok as _price_per_tok
 
 if TYPE_CHECKING:
     from cctx.models import Diagnosis, SessionTrace
@@ -55,19 +56,7 @@ def export_turn_rows(diagnosis: Diagnosis, trace: SessionTrace) -> list[dict[str
         dispatching = dispatch_by_sid.get(t.session_id, "") if depth else ""
         for turn in t.turns:
             input_tokens = turn.usage.input_tokens if turn.usage else 0
-            if turn.usage:
-                p = _price_per_tok(
-                    turn.model,
-                    speed=turn.usage.speed,
-                    on=turn.timestamp.date() if turn.timestamp else None,
-                )
-                cost_usd = (
-                    turn.usage.input_tokens * p
-                    + turn.usage.cache_read * p * 0.1
-                    + (turn.usage.cache_creation_5m + turn.usage.cache_creation_1h) * p * 1.25
-                )
-            else:
-                cost_usd = 0.0
+            cost_usd = diagnosis.turn_costs.get((t.session_id, turn.turn_number), 0.0)
             # inflection_turn is detected on root findings only — a subagent
             # turn sharing that number is not the inflection point.
             is_inflection = depth == 0 and turn.turn_number == diagnosis.inflection_turn

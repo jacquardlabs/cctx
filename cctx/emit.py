@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from cctx.harvest import _parse_sections
+from cctx.harvest import parse_sections
 from cctx.models import MANAGED_HEADING_PREFIX, MANAGED_HEADINGS
 
 if TYPE_CHECKING:
@@ -74,7 +74,7 @@ def sync_managed_sections(target_dir: Path, emit_target: str) -> list[Patch]:
     content = claude_md.read_text(encoding="utf-8")
     patches: list[Patch] = []
 
-    for heading, body in _parse_sections(content):
+    for heading, body in parse_sections(content):
         is_fixed = heading in _HEADING_TO_KIND
         is_prefixed = heading.startswith(MANAGED_HEADING_PREFIX)
         if not (is_fixed or is_prefixed):

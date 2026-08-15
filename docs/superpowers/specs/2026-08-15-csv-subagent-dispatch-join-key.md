@@ -74,9 +74,21 @@ From `diagnosis.subagent_costs` — already public on the `Diagnosis`, already a
 
 ### 2.7 Cost
 
-Unchanged. The existing per-turn formula already prices on `turn.model`, so subagent turns are priced at the subagent's own model with no new code. Issue #178 (the exporter recomputing cost via `price_per_tok` with hardcoded cache multipliers instead of `get_pricing`) is M23 scope and deliberately untouched here.
+**Superseded by #178 (2026-08-15).** As shipped, this spec left the exporter's own
+formula in place — input and cache only, output tokens omitted, cache multipliers
+hardcoded — which capped what the join key was good for: `SUM(cost_usd)` per dispatch
+was biased low, worst for exactly the output-heavy roles a routing table most wants to
+price.
 
-**#178 caps what this join is good for.** The CSV formula omits output tokens entirely, which bill at ~5× input on Anthropic models — so `SUM(cost_usd)` per dispatch is biased low, worst for the output-heavy roles a routing table most wants to price. The join key is exact; the dollars are not. Callers tuning a routing table on absolute cost should read `subagent_costs[].cost_usd` from JSON/JSONL (full-request, via `_compute_inclusive_cost`) until #178 lands. Documented as a caveat in the README rather than papered over.
+#178 removed that formula. Per-turn cost now comes from `Diagnosis.turn_costs`, the
+analyzer's own figure: input + output + cache reads and writes at the model's per-type
+rates via `get_pricing`, priced at each turn's own model (falling back to the trace's
+modal model) so a session interleaving models bills each turn correctly. The exporter
+performs no cost arithmetic and imports nothing from `cctx.pricing`.
+
+`SUM(cost_usd)` per dispatch is therefore the full-request figure, reconciling with
+`total_cost_usd` to within rounding — the analyzer rounds per trace at 4dp while
+`turn_costs` holds unrounded per-turn floats.
 
 ---
 
@@ -97,7 +109,7 @@ Unchanged. The existing per-turn formula already prices on `turn.model`, so suba
 - Root finding kinds do not leak onto a subagent turn with the same `turn_number`.
 - `is_inflection_turn` is `"false"` on a subagent turn whose number equals `diagnosis.inflection_turn`.
 - Orphaned subagent (no matching `SubagentAttribution`) emits rows with empty dispatch columns.
-- Subagent turns priced at the subagent's own model, not the root's.
+- Subagent turns priced at their own turn's model, falling back to the subagent trace's modal model — not the root's.
 
 ---
 
@@ -105,4 +117,4 @@ Unchanged. The existing per-turn formula already prices on `turn.model`, so suba
 
 - `--include-subagents` flag or a separate CSV mode. Rejected: CSV exists to be flat, and `depth == 0` already recovers the old output.
 - CSV columns for `label` / `model` of the dispatch. `subagent_costs` in JSON carries those; the join key is what CSV was missing.
-- #178's cost-computation refactor.
+- ~~#178's cost-computation refactor.~~ Landed 2026-08-15 — see §2.7.

@@ -31,7 +31,7 @@ from cctx.pricing import get_pricing as _get_pricing
 from cctx.pricing import is_known_model as _is_known_model
 
 if TYPE_CHECKING:
-    from cctx.models import SessionTrace
+    from cctx.models import SessionTrace, Turn
 
 UTC = timezone.utc
 
@@ -247,6 +247,33 @@ def _collect_unknown_models(trace: SessionTrace) -> list[str]:
     return list(seen)
 
 
+def _turn_cost(turn: Turn, model: str | None, *, on: date | None) -> float:
+    """Unrounded USD for one turn: input + output + cache reads/writes.
+
+    Priced at the turn's OWN model where the line records one, falling back to
+    the trace's modal model. A session can interleave models (opusplan alternates
+    opus and sonnet turns), and pricing the whole trace at its modal model
+    understates the expensive turns and overstates the cheap ones.
+
+    Two request-level facts also move the rate: usage.speed (fast mode bills at
+    premium rates) and the turn's date (a session can straddle an announced
+    change), so both are per-turn too.
+    """
+    u = turn.usage
+    if u is None:
+        return 0.0
+    p = _get_pricing(turn.model or model, speed=u.speed, on=_billing_date(turn.timestamp) or on)
+    in_tok = p.input_per_mtok / 1_000_000
+    out_tok = p.output_per_mtok / 1_000_000
+    return (
+        u.input_tokens * in_tok
+        + u.output_tokens * out_tok
+        + u.cache_read * in_tok * p.cache_read_mult
+        + u.cache_creation_5m * in_tok * p.cache_write_5m_mult
+        + u.cache_creation_1h * in_tok * p.cache_write_1h_mult
+    )
+
+
 def _compute_own_cost(
     trace: SessionTrace, model: str | None, turn_numbers: set[int] | None = None
 ) -> float:
@@ -265,22 +292,35 @@ def _compute_own_cost(
     the whole trace.
     """
     trace_on = _billing_date(trace.start_time)
-    total = 0.0
-    for turn in trace.turns:
-        if turn_numbers is not None and turn.turn_number not in turn_numbers:
-            continue
-        u = turn.usage
-        if u is None:
-            continue
-        p = _get_pricing(model, speed=u.speed, on=_billing_date(turn.timestamp) or trace_on)
-        in_tok = p.input_per_mtok / 1_000_000
-        out_tok = p.output_per_mtok / 1_000_000
-        total += u.input_tokens * in_tok
-        total += u.output_tokens * out_tok
-        total += u.cache_read * in_tok * p.cache_read_mult
-        total += u.cache_creation_5m * in_tok * p.cache_write_5m_mult
-        total += u.cache_creation_1h * in_tok * p.cache_write_1h_mult
-    return round(total, 4)
+    return round(
+        sum(
+            (
+                _turn_cost(turn, model, on=trace_on)
+                for turn in trace.turns
+                if turn_numbers is None or turn.turn_number in turn_numbers
+            ),
+            # Seeding 0.0 keeps an all-unpriced trace at float 0.0 rather than int 0,
+            # which would flip "total_cost_usd": 0.0 to 0 in the JSON export.
+            0.0,
+        ),
+        4,
+    )
+
+
+def _collect_turn_costs(trace: SessionTrace) -> dict[tuple[str, int], float]:
+    """Per-turn USD for the whole trace tree, keyed (session_id, turn_number).
+
+    Turn numbers restart at 1 in each subagent, so the session id is part of
+    the key. Values are unrounded; consumers format for display.
+    """
+    on = _billing_date(trace.start_time)
+    costs = {
+        (trace.session_id, turn.turn_number): _turn_cost(turn, trace.primary_model, on=on)
+        for turn in trace.turns
+    }
+    for sub in trace.subagents:
+        costs.update(_collect_turn_costs(sub))
+    return costs
 
 
 def _compute_inclusive_cost(trace: SessionTrace) -> float:
@@ -381,4 +421,5 @@ def run(trace: SessionTrace) -> Diagnosis:
         analysed_at=datetime.now(UTC),
         subagent_costs=subagent_costs,
         unknown_models=_collect_unknown_models(trace),
+        turn_costs=_collect_turn_costs(trace),
     )

@@ -278,3 +278,15 @@ def test_evidence_fields_present():
     ev = findings[0].evidence
     for key in ("overall_hit_rate", "early_hit_rate", "late_hit_rate", "total_tokens", "cause"):
         assert key in ev, f"Missing evidence key: {key}"
+
+
+def test_cache_hygiene_uses_the_public_compaction_predicate():
+    """#177 Track-4: the vestigial stale_context._is_compaction shim is gone.
+
+    cache_hygiene reached across to a private alias in a sibling classifier
+    instead of compaction.py's public predicate.
+    """
+    from cctx.diagnostician.patterns import compaction, stale_context
+
+    assert not hasattr(stale_context, "_is_compaction")
+    assert hasattr(compaction, "is_compaction_turn")

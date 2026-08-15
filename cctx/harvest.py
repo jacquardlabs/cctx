@@ -5,6 +5,7 @@ Public API:
     preview_patches(patches, target_dir) -> list[ApplyResult]
     apply_patches(patches, target_dir) -> list[ApplyResult]
     check_claude_md(target_dir) -> list[CheckFinding]
+    parse_sections(content) -> list[tuple[str, str]]
 
 Cross-agent emit (EMIT_TARGETS, retarget_patches, sync_managed_sections,
 managed_heading_dates) lives in cctx/emit.py, which imports this module's
@@ -246,7 +247,7 @@ def _words(text: str) -> set[str]:
     return {t for t in tokens if t not in _STOPWORDS}
 
 
-def _parse_sections(content: str) -> list[tuple[str, str]]:
+def parse_sections(content: str) -> list[tuple[str, str]]:
     """Split markdown into (heading, body) pairs.
 
     The text before the first ## heading is yielded as ("(preamble)", text).
@@ -461,7 +462,7 @@ def check_claude_md(target_dir: Path) -> list[CheckFinding]:
         return []
 
     content = claude_md.read_text(encoding="utf-8")
-    sections = _parse_sections(content)
+    sections = parse_sections(content)
     return (
         _check_structure(sections, target_dir)
         + check_contradictions(sections)

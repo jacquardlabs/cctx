@@ -210,3 +210,29 @@ def test_emit_applies_both_targets(tmp_path):
     assert all(r.status is ApplyStatus.APPLIED for r in results)
     assert "## Retry discipline" in (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
     assert "## Retry discipline" in (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+
+
+def test_emit_imports_only_public_harvest_api():
+    """#177 Track-1: emit.py consumes harvest's public surface, not its privates.
+
+    Scoped to emit.py deliberately — repo-wide this would also fail on
+    cctx/watcher.py's `from cctx.discovery import _encode_path`, which #177
+    does not cover and #203 tracks.
+    """
+    import ast
+    from pathlib import Path
+
+    import cctx
+    import cctx.harvest
+
+    src = Path(cctx.__file__).parent / "emit.py"
+    tree = ast.parse(src.read_text(encoding="utf-8"))
+    private = [
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("cctx")
+        for alias in node.names
+        if alias.name.startswith("_")
+    ]
+    assert private == [], f"emit.py reaches into private cctx names: {private}"
+    assert callable(cctx.harvest.parse_sections)

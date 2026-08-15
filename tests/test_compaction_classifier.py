@@ -161,22 +161,6 @@ def test_is_compaction_turn_normal_system():
     assert is_compaction_turn(t) is False
 
 
-# ---------------------------------------------------------------------------
-# Backwards-compat: stale_context._is_compaction still works
-# ---------------------------------------------------------------------------
-
-
-def test_stale_context_is_compaction_compat():
-    from cctx.diagnostician.patterns.stale_context import _is_compaction
-    t = _turn(1, "system", text="<context_window_compaction>...</context_window_compaction>")
-    assert _is_compaction(t) is True
-
-
-def test_stale_context_is_compaction_compat_false():
-    from cctx.diagnostician.patterns.stale_context import _is_compaction
-    t = _turn(1, "assistant", text="Just a normal assistant turn.")
-    assert _is_compaction(t) is False
-
 
 # ---------------------------------------------------------------------------
 # Classifier: no compactions → no findings

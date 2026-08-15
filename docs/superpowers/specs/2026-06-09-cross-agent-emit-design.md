@@ -99,7 +99,7 @@ Clones patches suitable for emission:
 > preview, contradicting the `--dry-run` requirement and `test_dry_run_no_writes`.
 
 1. Reads `CLAUDE.md` from `target_dir`. Returns empty list if absent.
-2. Calls `_parse_sections(content)` (already in `harvest.py`).
+2. Calls `parse_sections(content)` (already in `harvest.py`).
 3. Keeps sections whose heading is exactly in `MANAGED_HEADINGS.values()` OR
    starts with `MANAGED_HEADING_PREFIX`. The leading `("(preamble)", …)` pair
    matches neither branch and is skipped.
