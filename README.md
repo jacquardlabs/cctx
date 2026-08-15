@@ -178,7 +178,18 @@ cctx export session.jsonl --format jsonl                   # one object per sess
 
 Dumps session analysis as `jsonl`/`csv`/`json` for external tools. Add `--no-content` to omit patch text and finding summaries.
 
-JSON/JSONL output includes a `subagent_costs` array — one entry per dispatched subagent, with `session_id`, `label`, `cost_usd`, `depth`, `model`, and `dispatching_tool_use_id` (the parent turn's `tool_use_id` that dispatched it — a join key for correlating external dispatch-time telemetry against actual cost). CSV output is per-turn for the root session only; it doesn't carry subagent rows yet.
+JSON/JSONL output includes a `subagent_costs` array — one entry per dispatched subagent, with `session_id`, `label`, `cost_usd`, `depth`, `model`, and `dispatching_tool_use_id` (the parent turn's `tool_use_id` that dispatched it — a join key for correlating external dispatch-time telemetry against actual cost).
+
+CSV output covers the root session and every subagent at every depth, one row per turn. Row identity is `(session_id, turn_number)` — turn numbers restart at 1 in each subagent trace. Four columns carry dispatch identity:
+
+| Column | Root row | Subagent row |
+|---|---|---|
+| `depth` | `0` | `1` = direct child, `2` = grandchild, … |
+| `parent_session_id` | empty | the dispatching session |
+| `dispatching_tool_use_id` | empty | the `Agent` `tool_use_id` in the immediate parent that dispatched this session |
+| `root_dispatch_tool_use_id` | empty | the depth-1 ancestor's dispatch id, carried down the whole subtree |
+
+`SELECT root_dispatch_tool_use_id, SUM(cost_usd) ... GROUP BY 1` gives inclusive cost per top-level dispatch. Filter `depth == 0` to get the root-only table.
 
 ## Going further
 
