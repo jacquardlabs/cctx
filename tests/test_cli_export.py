@@ -35,6 +35,43 @@ def session_jsonl(tmp_path):
     return path
 
 
+@pytest.fixture
+def priced_session_jsonl(tmp_path):
+    """Session with a real assistant turn carrying usage, so cost is non-zero."""
+    session_id = "test-export-priced-01"
+    base = {
+        "parentUuid": None,
+        "isSidechain": False,
+        "timestamp": "2026-05-14T10:00:00.000Z",
+        "sessionId": session_id,
+        "version": "2.1.138",
+        "cwd": "/Users/test/Projects/demo",
+        "gitBranch": "main",
+        "userType": "external",
+        "entrypoint": "cli",
+    }
+    lines = [
+        {**base, "type": "user", "uuid": f"{session_id}-u1",
+         "message": {"role": "user", "content": "hello"}},
+        {**base, "type": "assistant", "uuid": f"{session_id}-a1",
+         "message": {
+             "role": "assistant",
+             "model": "claude-sonnet-4-6",
+             "content": [{"type": "text", "text": "hi"}],
+             "stop_reason": "end_turn",
+             "usage": {
+                 "input_tokens": 1_000,
+                 "output_tokens": 500,
+                 "cache_creation_input_tokens": 0,
+                 "cache_read_input_tokens": 0,
+             },
+         }},
+    ]
+    path = tmp_path / f"{session_id}.jsonl"
+    path.write_text("".join(json.dumps(x) + "\n" for x in lines))
+    return path
+
+
 def test_export_help(runner: CliRunner) -> None:
     """cctx export --help exits 0 and mentions format."""
     from cctx.cli import cli
@@ -155,3 +192,29 @@ def test_export_default_format_is_jsonl(runner: CliRunner, session_jsonl) -> Non
     assert len(lines) >= 1
     # Should parse as JSON
     json.loads(lines[0])
+
+
+def test_export_csv_cost_column_is_populated(runner: CliRunner, priced_session_jsonl) -> None:
+    """End-to-end proof of #178 AC1: cost reaches CSV from the analyzer.
+
+    Built in-process rather than from tests/fixtures/claude_code/ -- four of
+    the five fixture dirs raise TypeError inside _parse_usage (#197), and the
+    fifth, short-clean, has no assistant turn so its cost is legitimately zero.
+    """
+    import csv as _csv
+    import io as _io
+
+    from cctx.cli import cli
+
+    result = runner.invoke(
+        cli, ["export", str(priced_session_jsonl), "--format", "csv"], catch_exceptions=False
+    )
+    assert result.exit_code == 0
+    rows = list(_csv.DictReader(_io.StringIO(result.output)))
+    assert rows, "expected at least one turn row"
+
+    assistant = next(r for r in rows if r["role"] == "assistant")
+    # Sonnet-4 family: 1000 input at $3/MTok + 500 output at $15/MTok.
+    assert float(assistant["cost_usd"]) == pytest.approx(
+        1_000 * 3e-6 + 500 * 15e-6, abs=1e-9
+    )

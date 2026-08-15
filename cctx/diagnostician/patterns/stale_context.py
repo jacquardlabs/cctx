@@ -20,7 +20,7 @@ from cctx.diagnostician.patterns.compaction import is_compaction_turn
 from cctx.models import Confidence, Finding, FindingKind, Severity
 
 if TYPE_CHECKING:
-    from cctx.models import SessionTrace, Turn
+    from cctx.models import SessionTrace
 
 T_SIZE = 2_000   # token threshold
 N_STALE = 5      # turns before officially stale
@@ -37,10 +37,6 @@ def _make_3grams(text: str) -> set[tuple[str, ...]]:
         return set()
     return {tuple(words[i : i + 3]) for i in range(len(words) - 2)}
 
-
-# Backwards-compat alias — external callers that import _is_compaction keep working.
-def _is_compaction(turn: Turn) -> bool:
-    return is_compaction_turn(turn)
 
 
 def classify(trace: SessionTrace) -> list[Finding]:

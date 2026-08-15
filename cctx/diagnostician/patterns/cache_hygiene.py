@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from cctx.diagnostician.patterns.compaction import is_compaction_turn
 from cctx.models import Confidence, Finding, FindingKind, Severity
 
 if TYPE_CHECKING:
@@ -48,10 +49,9 @@ def _hit_rate(turns: list[Turn]) -> float:
 
 def _detect_cause(trace: SessionTrace, assistant_turns: list[Turn]) -> str | None:
     """Identify the most likely cause of low cache hit rate from JSONL signals."""
-    from cctx.diagnostician.patterns.stale_context import _is_compaction
 
     # Compaction events invalidate the cache entirely.
-    compaction_turns = [t for t in trace.turns if _is_compaction(t)]
+    compaction_turns = [t for t in trace.turns if is_compaction_turn(t)]
     if compaction_turns:
         return (
             f"context compacted at turn {compaction_turns[0].turn_number}"

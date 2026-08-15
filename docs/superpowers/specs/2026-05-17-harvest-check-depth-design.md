@@ -125,7 +125,7 @@ Calls all four checks in sequence:
 ```python
 def check_claude_md(target_dir: Path) -> list[CheckFinding]:
     ...
-    sections = _parse_sections(content)
+    sections = parse_sections(content)
     findings: list[CheckFinding] = []
     findings += _check_structure(sections)          # existing: dead refs, empty sections
     findings += check_contradictions(sections)

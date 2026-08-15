@@ -128,3 +128,37 @@ def test_missing_timestamp_does_not_price_at_the_epoch():
     assert _billing_date(datetime.fromtimestamp(0, tz=UTC)) is None
     assert _billing_date(None) is None
     assert _billing_date(datetime(2026, 9, 1, 12, 0, tzinfo=UTC)).isoformat() == "2026-09-01"
+
+
+def test_mixed_model_session_prices_each_turn_at_its_own_model(write_jsonl):
+    """total_cost_usd bills each turn at its own model, not the trace's modal one.
+
+    opusplan interleaves opus and sonnet turns inside one session. Pricing the
+    whole trace at the modal model understates the expensive turns and
+    overstates the cheap ones (#178). This asserts at the analyzer boundary --
+    the CSV exporter is one consumer of the same number, not the contract.
+    """
+    ts = "2026-07-20T02:00:00.000Z"
+    lines = [
+        make_user_line(uuid="u1", content="go", timestamp=ts),
+        make_assistant_line(
+            uuid="a1", parent_uuid="u1", text="sonnet turn",
+            model="claude-sonnet-4-6", timestamp=ts,
+            input_tokens=1000, output_tokens=100,
+        ),
+        make_assistant_line(
+            uuid="a2", parent_uuid="a1", text="opus turn",
+            model="claude-opus-5", timestamp=ts,
+            input_tokens=1000, output_tokens=100,
+        ),
+    ]
+    diag = run(parse_session(write_jsonl(lines, filename="mixed.jsonl")))
+
+    # Sonnet-4 family: $3/MTok in, $15/MTok out. Opus 5: $5/MTok in, $25/MTok out.
+    sonnet = 1000 * 3e-6 + 100 * 15e-6   # 0.0045
+    opus = 1000 * 5e-6 + 100 * 25e-6     # 0.0075
+    assert diag.total_cost_usd == round(sonnet + opus, 4)
+
+    # The modal model is sonnet (tie broken toward first-seen); pricing the whole
+    # trace at it would have produced 2x the sonnet figure.
+    assert diag.total_cost_usd != round(sonnet * 2, 4)

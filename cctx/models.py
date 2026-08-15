@@ -292,6 +292,12 @@ class Diagnosis:
     # surfaced so a newly-released model doesn't get mispriced silently.
     unknown_models:  list[str] = field(default_factory=list)
 
+    # Per-turn USD keyed (session_id, turn_number), covering the root trace and
+    # every subagent at every depth. Populated by diagnostician.run(). The CSV
+    # exporter reads it instead of recomputing, so per-turn dollars cannot drift
+    # from total_cost_usd.
+    turn_costs: dict[tuple[str, int], float] = field(default_factory=dict)
+
     @property
     def verdict(self) -> str:
         """Canonical count-based headline, identical across every surface (#139)."""
