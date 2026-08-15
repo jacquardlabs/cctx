@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v1.24.2 (2026-08-15)
+
+### Bug Fixes
+
+- **exporter**: Count output tokens in CSV cost, close private-import seams
+  ([#210](https://github.com/jacquardlabs/cctx/pull/210),
+  [`c2f4c7b`](https://github.com/jacquardlabs/cctx/commit/c2f4c7b271e90a179af24a69ffee872bf502fa9e))
+
+### Refactoring
+
+- Split oversized functions (trace_tui.build_app, parse_session)
+  ([#211](https://github.com/jacquardlabs/cctx/pull/211),
+  [`e9174ce`](https://github.com/jacquardlabs/cctx/commit/e9174ce1965fac03c9e166848430d3c4fc9eb0ec))
+
+- Split trace_tui.build_app and parse_session
+  ([#211](https://github.com/jacquardlabs/cctx/pull/211),
+  [`e9174ce`](https://github.com/jacquardlabs/cctx/commit/e9174ce1965fac03c9e166848430d3c4fc9eb0ec))
+
+### Testing
+
+- Assert mixed-model pricing at the analyzer boundary
+  ([#210](https://github.com/jacquardlabs/cctx/pull/210),
+  [`c2f4c7b`](https://github.com/jacquardlabs/cctx/commit/c2f4c7b271e90a179af24a69ffee872bf502fa9e))
+
+- Characterize build_app and parse_session before splitting them
+  ([#211](https://github.com/jacquardlabs/cctx/pull/211),
+  [`e9174ce`](https://github.com/jacquardlabs/cctx/commit/e9174ce1965fac03c9e166848430d3c4fc9eb0ec))
+
+
 ## v1.24.1 (2026-08-15)
 
 ### Bug Fixes
