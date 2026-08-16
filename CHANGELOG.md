@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.24.3 (2026-08-16)
+
+### Bug Fixes
+
+- **parser**: Link subagents on toolUseId, the key Claude Code actually writes
+  ([#214](https://github.com/jacquardlabs/cctx/pull/214),
+  [`f272f2d`](https://github.com/jacquardlabs/cctx/commit/f272f2d2b85c534f2bf777ca2b0a0969e018459d))
+
+### Refactoring
+
+- **models**: Typed evidence items for the three multi-consumer finding kinds
+  ([#212](https://github.com/jacquardlabs/cctx/pull/212),
+  [`fa39317`](https://github.com/jacquardlabs/cctx/commit/fa39317de3b1c09a96efcb4a78cd337a707418a9))
+
+
 ## v1.24.2 (2026-08-15)
 
 ### Bug Fixes
