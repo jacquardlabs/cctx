@@ -793,6 +793,67 @@ def test_agent_tool_use_linked_to_subagent_via_meta_tool_use_id(session_dir):
     assert trace.turns[0].tool_uses[0].subagent_session_id == "agent-aaa"
 
 
+def _linking_session(session_dir, meta: dict):
+    """Parent with one Agent tool_use (toolu_42) + one child carrying `meta`."""
+    sid = "parent-sid"
+    jsonl = session_dir / f"{sid}.jsonl"
+    jsonl.write_text(
+        _json.dumps(
+            make_assistant_line(
+                uuid="a1",
+                tool_uses=[
+                    make_tool_use_block("toolu_42", "Agent", {"subagent_type": "doc-auditor"})
+                ],
+                session_id=sid,
+            )
+        )
+        + "\n"
+    )
+    sub_dir = session_dir / sid / "subagents"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "agent-aaa.jsonl").write_text(
+        _json.dumps(make_user_line(uuid="cu1", content="prompt", session_id="agent-aaa")) + "\n"
+    )
+    (sub_dir / "agent-aaa.meta.json").write_text(_json.dumps(meta))
+    return jsonl
+
+
+def test_subagent_links_via_camelcase_tool_use_id(session_dir):
+    """Claude Code writes `toolUseId`; the parser read `tool_use_id` for 3 months.
+
+    Census over 3,380 real .meta.json files: 523 carry `toolUseId`, 0 carry
+    `tool_use_id`. So linking never fired on a real session -- every subagent
+    orphaned, fan-out attribution had nothing to attribute, and
+    SubagentAttribution.dispatching_tool_use_id was always None. This is the
+    test that would have caught it.
+    """
+    trace = parse_session(_linking_session(session_dir, {"toolUseId": "toolu_42"}))
+    assert trace.turns[0].tool_uses[0].subagent_session_id == "agent-aaa"
+    assert not [w for w in trace.warnings if w.code == "orphan_subagent_file"]
+
+
+def test_subagent_links_via_snake_case_tool_use_id(session_dir):
+    """The older/synthetic spelling still links -- back-compat is deliberate."""
+    trace = parse_session(_linking_session(session_dir, {"tool_use_id": "toolu_42"}))
+    assert trace.turns[0].tool_uses[0].subagent_session_id == "agent-aaa"
+
+
+def test_camelcase_wins_when_both_spellings_present(session_dir):
+    trace = parse_session(
+        _linking_session(session_dir, {"toolUseId": "toolu_42", "tool_use_id": "toolu_99"})
+    )
+    assert trace.turns[0].tool_uses[0].subagent_session_id == "agent-aaa"
+
+
+def test_subagent_with_neither_spelling_still_orphans(session_dir):
+    """A real .meta.json carrying only agentType/description must still warn."""
+    trace = parse_session(
+        _linking_session(session_dir, {"agentType": "doc-auditor", "description": "audit"})
+    )
+    assert trace.turns[0].tool_uses[0].subagent_session_id is None
+    assert [w for w in trace.warnings if w.code == "orphan_subagent_file"]
+
+
 def test_orphan_agent_call_warns_and_keeps_subagent_session_id_none(session_dir):
     sid = "parent-sid"
     jsonl = session_dir / f"{sid}.jsonl"

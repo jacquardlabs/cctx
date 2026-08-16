@@ -485,8 +485,15 @@ def _link_subagents(
     """Stamp ToolUse.subagent_session_id and emit orphan warnings.
 
     Linking strategy (spec §7):
-      1. Exact: child.subagent_meta["tool_use_id"] matches a parent ToolUse.tool_use_id.
+      1. Exact: the child's .meta.json tool-use id matches a parent ToolUse.tool_use_id.
       2. Fallback: not implemented in v1; orphans warn.
+
+    Claude Code writes that id as camelCase `toolUseId`. The parser read
+    snake_case `tool_use_id` from its first commit and the tests wrote the same
+    spelling, so linking never fired on a real session — every subagent
+    orphaned and dispatching_tool_use_id was always None. Both spellings are
+    accepted now, camelCase first; normalizing here keeps the rest of the
+    codebase on one shape (CLAUDE.md: fix data at the boundary).
 
     Both directions of orphan are warned:
       - orphan_agent_call: parent has an Agent ToolUse with no matching child.
@@ -501,7 +508,8 @@ def _link_subagents(
 
     matched_use_ids: set[str] = set()
     for child in subagents:
-        meta_tool_use_id = (child.subagent_meta or {}).get("tool_use_id")
+        meta = child.subagent_meta or {}
+        meta_tool_use_id = meta.get("toolUseId") or meta.get("tool_use_id")
         if meta_tool_use_id and meta_tool_use_id in agent_uses_by_id:
             agent_uses_by_id[meta_tool_use_id].subagent_session_id = child.session_id
             matched_use_ids.add(meta_tool_use_id)
