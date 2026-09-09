@@ -56,13 +56,12 @@ def test_fast_mode_ignored_for_a_model_without_it(write_jsonl):
 
 
 def test_session_is_priced_at_the_rate_in_effect_when_it_ran(write_jsonl):
-    """Sonnet 5's introductory $2/$10 ends 2026-08-31. A session from before the change
-    keeps the intro rate no matter when the autopsy runs; one from after pays $3/$15."""
+    """Sonnet 5's $2/$10 introductory rate became the standing rate — the previously
+    announced 2026-09-01 hike to $3/$15 was cancelled, so cost is date-independent."""
     intro = _diagnose(write_jsonl, model="claude-sonnet-5", day="2026-08-31", filename="a.jsonl")
     after = _diagnose(write_jsonl, model="claude-sonnet-5", day="2026-09-01", filename="b.jsonl")
 
-    assert intro.total_cost_usd == 0.0084
-    assert after.total_cost_usd == 0.0126  # exactly 1.5x — $3/$15 against $2/$10
+    assert intro.total_cost_usd == after.total_cost_usd == 0.0084
 
 
 def test_unscheduled_model_cost_is_independent_of_session_date(write_jsonl):

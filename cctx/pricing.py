@@ -5,7 +5,7 @@ per-million-token USD; cache multipliers are relative to base input price and
 apply to Anthropic prompt caching only (OpenAI Usage cache fields are zeroed by
 the OTEL parser, and these models carry 0.0 multipliers as belt-and-suspenders).
 
-PRICES VERIFIED 2026-07-26 against:
+PRICES VERIFIED 2026-09-09 against:
   - Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
   - OpenAI:    current published API rates (gpt-4o/4.1/5, o3, o4-mini)
 
@@ -27,7 +27,7 @@ from __future__ import annotations
 import dataclasses
 from datetime import date
 
-PRICING_LAST_VERIFIED = date(2026, 7, 26)
+PRICING_LAST_VERIFIED = date(2026, 9, 9)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -41,6 +41,8 @@ class ModelPricing:
 
 
 _AC = {"cache_write_5m_mult": 1.25, "cache_write_1h_mult": 2.0, "cache_read_mult": 0.10}
+# Fable/Mythos 5.1 only — cache reads price at 0.025x, not the standard 0.10x.
+_AC_51 = {"cache_write_5m_mult": 1.25, "cache_write_1h_mult": 2.0, "cache_read_mult": 0.025}
 _NC = {"cache_write_5m_mult": 0.0, "cache_write_1h_mult": 0.0, "cache_read_mult": 0.0}
 
 # Keyed by model-id prefix. get_pricing() uses the LONGEST matching prefix, so
@@ -48,6 +50,8 @@ _NC = {"cache_write_5m_mult": 0.0, "cache_write_1h_mult": 0.0, "cache_read_mult"
 # (claude-opus-4), and gpt-4o-mini wins over gpt-4o.
 _PRICING: dict[str, ModelPricing] = {
     # --- Anthropic: current ---
+    "claude-fable-5-1":  ModelPricing(10.0, 50.0, **_AC_51),  # 0.025x cache-read, not 0.10x
+    "claude-mythos-5-1": ModelPricing(10.0, 50.0, **_AC_51),  # 0.025x cache-read, not 0.10x
     "claude-fable-5":   ModelPricing(10.0, 50.0, **_AC),
     "claude-mythos":    ModelPricing(10.0, 50.0, **_AC),  # mythos-5/preview → Fable 5 rates
     "claude-opus-5":    ModelPricing(5.0, 25.0, **_AC),
@@ -55,7 +59,7 @@ _PRICING: dict[str, ModelPricing] = {
     "claude-opus-4-7":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-6":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-5":  ModelPricing(5.0, 25.0, **_AC),
-    "claude-sonnet-5":  ModelPricing(2.0, 10.0, **_AC),  # intro rate; see _SCHEDULE
+    "claude-sonnet-5":  ModelPricing(2.0, 10.0, **_AC),  # standing; 09-01 hike cancelled
     "claude-sonnet-4":  ModelPricing(3.0, 15.0, **_AC),  # 4, 4.5, 4.6 share rates
     "claude-haiku-4-5": ModelPricing(1.0, 5.0, **_AC),
     # --- Anthropic: deprecated/retired, still present in historical logs ---
@@ -76,10 +80,10 @@ _PRICING: dict[str, ModelPricing] = {
 # oldest-first. The _PRICING entry is the rate in effect until the first date here, so a
 # rate is never written twice. Matching happens on the prefix, so id variants
 # (claude-sonnet-5[1m]) inherit the schedule.
-_SCHEDULE: dict[str, tuple[tuple[date, ModelPricing], ...]] = {
-    # Sonnet 5 introductory pricing runs through 2026-08-31.
-    "claude-sonnet-5": ((date(2026, 9, 1), ModelPricing(3.0, 15.0, **_AC)),),
-}
+#
+# Empty: the Sonnet 5 intro-rate → $3/$15 hike announced for 2026-09-01 was cancelled by
+# Anthropic (docs note: "$2/$10 ... is now the standard price"). Don't re-add it.
+_SCHEDULE: dict[str, tuple[tuple[date, ModelPricing], ...]] = {}
 
 # Fast mode (research preview) — Claude Opus 5 and Opus 4.8 only, first-party API only.
 # Cache multipliers stack on top of the fast base rate. Every other model ignores

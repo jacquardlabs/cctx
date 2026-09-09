@@ -16,13 +16,14 @@ M = 1_000_000
 @pytest.mark.parametrize("model, inp, out", [
     # Anthropic — current
     ("claude-fable-5",          10.0, 50.0),
+    ("claude-fable-5-1",        10.0, 50.0),
     ("claude-mythos-5",         10.0, 50.0),
+    ("claude-mythos-5-1",       10.0, 50.0),
     ("claude-mythos-preview",   10.0, 50.0),
     ("claude-opus-5",            5.0, 25.0),
     ("claude-opus-4-8",          5.0, 25.0),
     ("claude-opus-4-6",          5.0, 25.0),
-    # claude-sonnet-5 has a scheduled rate change — see the dated tests below, which pin
-    # `on=` rather than depending on when the suite runs.
+    ("claude-sonnet-5",          2.0, 10.0),  # standing rate; scheduled hike was cancelled
     ("claude-sonnet-4-6",        3.0, 15.0),
     ("claude-sonnet-4",          3.0, 15.0),
     ("claude-haiku-4-5",         1.0,  5.0),
@@ -60,8 +61,7 @@ def test_claude_code_1m_context_suffix_prices_as_base_model():
     """Claude Code logs the 1M-context variant as `<model>[1m]`; no long-context premium."""
     assert get_pricing("claude-opus-5[1m]").input_per_mtok == 5.0
     assert get_pricing("claude-opus-4-8[1m]").input_per_mtok == 5.0
-    # Sonnet 5's rate is date-scheduled, so pin the date rather than trusting the clock.
-    assert get_pricing("claude-sonnet-5[1m]", on=date(2026, 8, 31)).input_per_mtok == 2.0
+    assert get_pricing("claude-sonnet-5[1m]").input_per_mtok == 2.0
 
 
 def test_opus_5_is_not_captured_by_the_opus_4_stem():
@@ -80,6 +80,17 @@ def test_anthropic_cache_multipliers_present_openai_zeroed():
     assert gpt.cache_write_5m_mult == 0.0
     assert gpt.cache_write_1h_mult == 0.0
     assert gpt.cache_read_mult == 0.0
+
+
+def test_fable_5_1_and_mythos_5_1_get_the_discounted_cache_read_rate():
+    """Fable 5.1 / Mythos 5.1 cache hits are 0.025x base input, not the standard 0.10x."""
+    for model in ("claude-fable-5-1", "claude-mythos-5-1"):
+        p = get_pricing(model)
+        assert p.cache_read_mult == 0.025, model
+        assert p.cache_write_5m_mult == 1.25
+        assert p.cache_write_1h_mult == 2.0
+    # Fable 5 (pre-5.1) keeps the standard 0.10x cache-read rate.
+    assert get_pricing("claude-fable-5").cache_read_mult == 0.10
 
 
 def test_unknown_model_and_none_fall_back_to_nonzero_default():
@@ -149,20 +160,12 @@ def test_pricing_table_freshness():
 # --- scheduled rate changes: a session is priced at the rate it ran under -----
 
 
-def test_sonnet_5_intro_rate_applies_before_the_scheduled_change():
-    """Introductory $2/$10 runs through 2026-08-31; standard $3/$15 starts 2026-09-01."""
-    intro = get_pricing("claude-sonnet-5", on=date(2026, 8, 31))
-    assert (intro.input_per_mtok, intro.output_per_mtok) == (2.0, 10.0)
-    standard = get_pricing("claude-sonnet-5", on=date(2026, 9, 1))
-    assert (standard.input_per_mtok, standard.output_per_mtok) == (3.0, 15.0)
-    later = get_pricing("claude-sonnet-5", on=date(2027, 3, 1))
-    assert (later.input_per_mtok, later.output_per_mtok) == (3.0, 15.0)
-
-
-def test_scheduled_change_applies_to_model_id_variants():
-    """The schedule is keyed by matched prefix, so `[1m]` and dated ids inherit it."""
-    assert get_pricing("claude-sonnet-5[1m]", on=date(2026, 8, 31)).input_per_mtok == 2.0
-    assert get_pricing("claude-sonnet-5[1m]", on=date(2026, 9, 1)).input_per_mtok == 3.0
+def test_sonnet_5_intro_rate_is_now_the_standing_rate():
+    """Anthropic cancelled the announced 2026-09-01 hike to $3/$15 — $2/$10 stands
+    indefinitely. Regression test: _SCHEDULE must stay empty for this prefix."""
+    for on in (date(2026, 8, 31), date(2026, 9, 1), date(2027, 3, 1)):
+        p = get_pricing("claude-sonnet-5", on=on)
+        assert (p.input_per_mtok, p.output_per_mtok) == (2.0, 10.0)
 
 
 def test_unscheduled_model_ignores_the_session_date():
@@ -214,10 +217,10 @@ def test_fast_mode_ignored_on_models_without_it():
     assert get_pricing("claude-opus-4-7", speed="fast").input_per_mtok == 5.0
     assert get_pricing("claude-opus-4-6", speed="fast").input_per_mtok == 5.0
     assert get_pricing("claude-fable-5", speed="fast").input_per_mtok == 10.0  # its own rate
-    assert get_pricing("claude-sonnet-5", speed="fast", on=date(2026, 8, 31)).input_per_mtok == 2.0
+    assert get_pricing("claude-sonnet-5", speed="fast", on=date(2026, 9, 1)).input_per_mtok == 2.0
     assert get_pricing("some-future-model-9", speed="fast") == get_pricing(None)
 
 
 def test_price_per_tok_shim_forwards_speed_and_date():
     assert price_per_tok("claude-opus-5", speed="fast") == 10.0 / M
-    assert price_per_tok("claude-sonnet-5", on=date(2026, 9, 1)) == 3.0 / M
+    assert price_per_tok("claude-sonnet-5", on=date(2026, 9, 1)) == 2.0 / M
