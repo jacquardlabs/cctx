@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.24.4 (2026-09-09)
+
+### Bug Fixes
+
+- **pricing**: Correct Fable 5.1 cache-read rate and drop cancelled Sonnet 5 hike
+  ([#215](https://github.com/jacquardlabs/cctx/pull/215),
+  [`c42a211`](https://github.com/jacquardlabs/cctx/commit/c42a2117cd3b0ba2e682b9705ffdf6d84a6b6d85))
+
+- **pricing**: Satisfy ruff line-length limit
+  ([#215](https://github.com/jacquardlabs/cctx/pull/215),
+  [`c42a211`](https://github.com/jacquardlabs/cctx/commit/c42a2117cd3b0ba2e682b9705ffdf6d84a6b6d85))
+
+
 ## v1.24.3 (2026-08-16)
 
 ### Bug Fixes
