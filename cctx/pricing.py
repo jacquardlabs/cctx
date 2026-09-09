@@ -41,7 +41,8 @@ class ModelPricing:
 
 
 _AC = {"cache_write_5m_mult": 1.25, "cache_write_1h_mult": 2.0, "cache_read_mult": 0.10}
-_AC_51 = {"cache_write_5m_mult": 1.25, "cache_write_1h_mult": 2.0, "cache_read_mult": 0.025}  # Fable/Mythos 5.1 only
+# Fable/Mythos 5.1 only — cache reads price at 0.025x, not the standard 0.10x.
+_AC_51 = {"cache_write_5m_mult": 1.25, "cache_write_1h_mult": 2.0, "cache_read_mult": 0.025}
 _NC = {"cache_write_5m_mult": 0.0, "cache_write_1h_mult": 0.0, "cache_read_mult": 0.0}
 
 # Keyed by model-id prefix. get_pricing() uses the LONGEST matching prefix, so
@@ -58,7 +59,7 @@ _PRICING: dict[str, ModelPricing] = {
     "claude-opus-4-7":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-6":  ModelPricing(5.0, 25.0, **_AC),
     "claude-opus-4-5":  ModelPricing(5.0, 25.0, **_AC),
-    "claude-sonnet-5":  ModelPricing(2.0, 10.0, **_AC),  # standing rate; scheduled 2026-09-01 hike to $3/$15 was cancelled
+    "claude-sonnet-5":  ModelPricing(2.0, 10.0, **_AC),  # standing; 09-01 hike cancelled
     "claude-sonnet-4":  ModelPricing(3.0, 15.0, **_AC),  # 4, 4.5, 4.6 share rates
     "claude-haiku-4-5": ModelPricing(1.0, 5.0, **_AC),
     # --- Anthropic: deprecated/retired, still present in historical logs ---
