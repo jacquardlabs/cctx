@@ -821,3 +821,112 @@ def test_complete_project_returns_empty_on_error(monkeypatch):
 
     monkeypatch.setattr(discovery, "list_projects", boom)
     assert _complete_project(None, None, "x") == []
+
+
+# ---------------------------------------------------------------------------
+# --quiet names the next command (#185)
+# ---------------------------------------------------------------------------
+
+def _diag_with_retry_finding():
+    from datetime import datetime, timezone
+
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
+
+    finding = Finding(
+        kind=FindingKind.RETRY_LOOP,
+        severity=Severity.HIGH,
+        confidence=Confidence.HIGH,
+        first_turn=1,
+        last_turn=2,
+        evidence={},
+        cost_usd=0.5,
+        summary="Edit(foo.py) failed 3× between turns 1–2",
+    )
+    return Diagnosis(
+        session_id="test-sess-01",
+        findings=[finding],
+        inflection_turn=1,
+        patches=[],
+        total_cost_usd=1.0,
+        waste_cost_usd=0.5,
+        analysed_at=datetime(2026, 5, 16, 12, 0, tzinfo=timezone.utc),
+    )
+
+
+def test_quiet_harvest_command_runs_as_printed(runner, tmp_path, monkeypatch):
+    """The printed `→ cctx harvest <path>` runs against the same session, exit 0."""
+    import shlex
+
+    from cctx import diagnostician
+    from cctx.cli import cli
+
+    session_dir = tmp_path / "proj dir"
+    session_dir.mkdir()
+    line = {
+        "type": "user", "uuid": "u1", "parentUuid": None, "isSidechain": False,
+        "timestamp": "2026-05-14T10:00:00.000Z", "sessionId": "test-sess-01",
+        "message": {"role": "user", "content": "hello"},
+    }
+    session = session_dir / "test-sess-01.jsonl"
+    session.write_text(json.dumps(line) + "\n")
+    diag = _diag_with_retry_finding()
+    monkeypatch.setattr(diagnostician, "run", lambda trace: diag)
+
+    with runner.isolated_filesystem():
+        quiet = runner.invoke(cli, ["autopsy", str(session), "--quiet"],
+                              catch_exceptions=False)
+        assert quiet.exit_code == 0
+        out = quiet.output.strip()
+        assert out.startswith(f"{diag.verdict} — {diag.kind_summary} → cctx harvest ")
+        argv = shlex.split(out.split(" → ", 1)[1])
+        assert argv[:2] == ["cctx", "harvest"]
+        assert Path(argv[2]) == session.resolve()
+
+        harvested = runner.invoke(cli, argv[1:], input="n\n", catch_exceptions=False)
+        assert harvested.exit_code == 0, harvested.output
+        assert "Apply" in harvested.output  # patches reached the confirm prompt
+        assert not Path("CLAUDE.md").exists()
+
+
+def test_quiet_no_patches_prints_verdict_only(runner, session_jsonl, monkeypatch):
+    from cctx import diagnostician
+    from cctx.cli import cli
+    from cctx.recommender import claude_md
+
+    diag = _diag_with_retry_finding()
+    monkeypatch.setattr(diagnostician, "run", lambda trace: diag)
+    monkeypatch.setattr(claude_md, "generate", lambda d: d)
+
+    result = runner.invoke(cli, ["autopsy", str(session_jsonl), "--quiet"],
+                           catch_exceptions=False)
+    assert result.exit_code == 0
+    assert result.output.strip() == f"{diag.verdict} — {diag.kind_summary}"
+
+
+def test_quiet_clean_session_prints_nothing(runner, session_jsonl):
+    from cctx.cli import cli
+
+    result = runner.invoke(cli, ["autopsy", str(session_jsonl), "--quiet"],
+                           catch_exceptions=False)
+    assert result.exit_code == 0
+    assert result.output == ""
+
+
+def test_quiet_otel_trace_gets_no_harvest_suffix(runner, tmp_path, monkeypatch):
+    from cctx import diagnostician
+    from cctx.cli import cli
+
+    otel = tmp_path / "trace.jsonl"
+    otel.write_text(json.dumps({"resourceSpans": []}) + "\n")
+    diag = _diag_with_retry_finding()
+    monkeypatch.setattr(diagnostician, "run", lambda trace: diag)
+    monkeypatch.setattr(
+        "cctx.parsers.otel.parse_otel_file", lambda p: [object()]
+    )
+    monkeypatch.setattr("cctx.cli.tokenize_session", lambda t: t)
+
+    result = runner.invoke(cli, ["autopsy", str(otel), "--quiet"],
+                           catch_exceptions=False)
+    assert result.exit_code == 0
+    assert result.output.strip() == f"{diag.verdict} — {diag.kind_summary}"
+    assert "cctx harvest" not in result.output

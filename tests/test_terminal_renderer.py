@@ -437,3 +437,50 @@ def test_render_projects_no_badge_when_not_live(tmp_path):
     output = buf.getvalue()
 
     assert "●" not in output
+
+
+# ---------------------------------------------------------------------------
+# quiet_line — `autopsy --quiet` verdict + next-step harvest command (#185)
+# ---------------------------------------------------------------------------
+
+def test_quiet_line_with_patches_appends_quoted_harvest_command(tmp_path):
+    import shlex
+
+    from cctx.renderers.terminal import quiet_line
+
+    session = tmp_path / "my project" / "sess 01.jsonl"
+    diag = _make_diagnosis(
+        findings=[_make_finding("retry_loop", cost=1.5)],
+        patches=[_make_patch("retry_loop")],
+    )
+    line = quiet_line(diag, session)
+    expected_cmd = f"cctx harvest {shlex.quote(str(session.resolve()))}"
+    assert line == f"{diag.verdict} — {diag.kind_summary} → {expected_cmd}"
+    assert line.startswith(diag.verdict)
+    assert "'" in line  # the space in the path forced quoting
+
+
+def test_quiet_line_without_patches_has_no_suffix(tmp_path):
+    from cctx.renderers.terminal import quiet_line
+
+    diag = _make_diagnosis(findings=[_make_finding("scope_creep", cost=0.4)])
+    line = quiet_line(diag, tmp_path / "s.jsonl")
+    assert line == f"{diag.verdict} — {diag.kind_summary}"
+    assert "cctx harvest" not in line
+
+
+def test_quiet_line_without_session_path_has_no_suffix():
+    """No harvestable path (e.g. an OTEL trace) → verdict only, even with patches."""
+    from cctx.renderers.terminal import quiet_line
+
+    diag = _make_diagnosis(
+        findings=[_make_finding("retry_loop", cost=1.5)],
+        patches=[_make_patch("retry_loop")],
+    )
+    assert quiet_line(diag, None) == f"{diag.verdict} — {diag.kind_summary}"
+
+
+def test_quiet_line_clean_session_is_empty(tmp_path):
+    from cctx.renderers.terminal import quiet_line
+
+    assert quiet_line(_make_diagnosis(), tmp_path / "s.jsonl") == ""
