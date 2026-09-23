@@ -247,6 +247,15 @@ def _collect_unknown_models(trace: SessionTrace) -> list[str]:
     return list(seen)
 
 
+def _collect_unknown_usage_turns(trace: SessionTrace) -> list[int]:
+    """Root-trace assistant turns with no usable usage (parser returned None).
+
+    Root only: turn numbers restart in each subagent, so a bare int cannot
+    address a subagent turn.
+    """
+    return [t.turn_number for t in trace.turns if t.role == "assistant" and t.usage is None]
+
+
 def _turn_cost(turn: Turn, model: str | None, *, on: date | None) -> float:
     """Unrounded USD for one turn: input + output + cache reads/writes.
 
@@ -421,5 +430,6 @@ def run(trace: SessionTrace) -> Diagnosis:
         analysed_at=datetime.now(UTC),
         subagent_costs=subagent_costs,
         unknown_models=_collect_unknown_models(trace),
+        unknown_usage_turns=_collect_unknown_usage_turns(trace),
         turn_costs=_collect_turn_costs(trace),
     )

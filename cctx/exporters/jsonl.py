@@ -43,7 +43,8 @@ def export_diagnosis(
     obj = {
         "session_id": diagnosis.session_id,
         "analysed_at": diagnosis.analysed_at.isoformat(),
-        "total_cost_usd": diagnosis.total_cost_usd,
+        # Unknown usage on any turn makes the total unknown, not understated.
+        "total_cost_usd": None if diagnosis.unknown_usage_turns else diagnosis.total_cost_usd,
         "waste_cost_usd": diagnosis.waste_cost_usd,
         "inflection_turn": diagnosis.inflection_turn,
         "finding_count": len(diagnosis.findings),
@@ -52,6 +53,7 @@ def export_diagnosis(
         "turn_count": len(trace.turns),
         "model": trace.primary_model,
         "unknown_models": diagnosis.unknown_models,
+        "unknown_usage_turns": diagnosis.unknown_usage_turns,
         "subagent_costs": [
             {
                 "session_id":              a.session_id,

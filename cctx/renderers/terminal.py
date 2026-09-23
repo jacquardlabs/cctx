@@ -92,6 +92,13 @@ def render_diagnosis(
             f"— add to pricing.py for accurate cost",
             style="yellow",
         ))
+    if diagnosis.unknown_usage_turns:
+        turns = ", ".join(str(n) for n in diagnosis.unknown_usage_turns)
+        con.print(Text(
+            f"⚠ Unknown token usage on turn(s) {turns} — not priced; "
+            f"session cost is a lower bound",
+            style="yellow",
+        ))
 
     if show_health:
         grade = compute_health_grade(diagnosis)

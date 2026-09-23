@@ -44,6 +44,12 @@ def render_github_summary(diagnosis: Diagnosis) -> str:
             f"> ⚠️ Unrecognized model(s) priced at the default rate: {models} — "
             f"add to `cctx/pricing.py` for accurate cost.\n"
         )
+    if diagnosis.unknown_usage_turns:
+        turns = ", ".join(str(n) for n in diagnosis.unknown_usage_turns)
+        lines.append(
+            f"> ⚠️ Unknown token usage on turn(s) {turns} — not priced; "
+            f"session cost is a lower bound.\n"
+        )
 
     if not diagnosis.findings:
         lines.append(f"**Result:** ✅ {diagnosis.verdict}\n")

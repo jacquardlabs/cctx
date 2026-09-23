@@ -340,6 +340,10 @@ class Diagnosis:
     # Non-None model ids that fell to the default price (unrecognized family);
     # surfaced so a newly-released model doesn't get mispriced silently.
     unknown_models:  list[str] = field(default_factory=list)
+    # Root-trace assistant turns whose usage is unknown (usage is None — e.g. a
+    # token field that was not an int). total_cost_usd omits them, so it is a
+    # lower bound; exports emit a null cost rather than an understated number.
+    unknown_usage_turns: list[int] = field(default_factory=list)
 
     # Per-turn USD keyed (session_id, turn_number), covering the root trace and
     # every subagent at every depth. Populated by diagnostician.run(). The CSV

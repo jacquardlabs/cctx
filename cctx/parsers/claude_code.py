@@ -688,10 +688,35 @@ def _normalize_model(raw: object) -> str | None:
     return raw
 
 
+def _token_counts(block: dict) -> tuple[int, int, int, int, int] | None:
+    """(input, output, cache_read, cache_5m, cache_1h) from one usage-shaped dict.
+
+    A missing field counts as 0. A present field that is not an int (bool excluded)
+    — e.g. the fixture scrubber's "[SCRUBBED]" — makes the whole block unknown: None.
+    """
+    cache_obj = block.get("cache_creation")
+    if cache_obj is None:
+        cache_obj = {}
+    if not isinstance(cache_obj, dict):
+        return None
+    values = (
+        block.get("input_tokens", 0),
+        block.get("output_tokens", 0),
+        block.get("cache_read_input_tokens", 0),
+        cache_obj.get("ephemeral_5m_input_tokens", 0),
+        cache_obj.get("ephemeral_1h_input_tokens", 0),
+    )
+    if not all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+        return None
+    return values
+
+
 def _parse_usage(raw: dict | None) -> Usage | None:
     """Build a Usage from the message.usage dict.
 
     Defensive sum of iterations[] if present and divergent — spec §5.2.
+    Returns None when any token field read is not an int (top level, or in any
+    iterations entry): the turn's usage is unknown, never 0 and never a partial sum.
     """
     if not isinstance(raw, dict):
         return None
@@ -699,24 +724,21 @@ def _parse_usage(raw: dict | None) -> Usage | None:
     iterations = raw.get("iterations")
     if isinstance(iterations, list) and iterations:
         # Sum across iterations defensively.
-        input_t = sum(it.get("input_tokens", 0) for it in iterations)
-        output_t = sum(it.get("output_tokens", 0) for it in iterations)
-        cache_read = sum(it.get("cache_read_input_tokens", 0) for it in iterations)
-        cache_5m = sum(
-            (it.get("cache_creation") or {}).get("ephemeral_5m_input_tokens", 0)
+        per_iteration = [
+            counts
             for it in iterations
-        )
-        cache_1h = sum(
-            (it.get("cache_creation") or {}).get("ephemeral_1h_input_tokens", 0)
-            for it in iterations
+            if isinstance(it, dict) and (counts := _token_counts(it)) is not None
+        ]
+        if len(per_iteration) != len(iterations):
+            return None
+        input_t, output_t, cache_read, cache_5m, cache_1h = (
+            sum(column) for column in zip(*per_iteration, strict=True)
         )
     else:
-        input_t = raw.get("input_tokens", 0)
-        output_t = raw.get("output_tokens", 0)
-        cache_read = raw.get("cache_read_input_tokens", 0)
-        cache_obj = raw.get("cache_creation") or {}
-        cache_5m = cache_obj.get("ephemeral_5m_input_tokens", 0)
-        cache_1h = cache_obj.get("ephemeral_1h_input_tokens", 0)
+        counts = _token_counts(raw)
+        if counts is None:
+            return None
+        input_t, output_t, cache_read, cache_5m, cache_1h = counts
 
     return Usage(
         input_tokens=input_t,
