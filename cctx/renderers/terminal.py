@@ -39,12 +39,7 @@ if TYPE_CHECKING:
     )
 
 def quiet_line(diagnosis: Diagnosis, session_path: Path | None) -> str:
-    """One-line `autopsy --quiet` output; empty string for a clean session.
-
-    `"{verdict} — {kind_summary}"`, plus `→ cctx harvest <path>` when the
-    diagnosis carries patches and `session_path` is harvestable (a Claude Code
-    JSONL — callers pass None for sources `harvest` cannot parse).
-    """
+    """Callers pass session_path=None for sources `harvest` cannot parse (OTEL)."""
     if not diagnosis.findings:
         return ""
     line = f"{diagnosis.verdict} — {diagnosis.kind_summary}"
