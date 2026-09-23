@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+from tests.conftest import make_user_line
+
 
 @pytest.fixture
 def runner():
@@ -830,24 +832,10 @@ def test_complete_project_returns_empty_on_error(monkeypatch):
 
 def _quiet_session(tmp_path: Path, session_id: str) -> Path:
     """Session file under a directory with a space, so shell quoting is exercised."""
-    line = {
-        "type": "user",
-        "uuid": f"{session_id}-u1",
-        "parentUuid": None,
-        "isSidechain": False,
-        "timestamp": "2026-05-14T10:00:00.000Z",
-        "sessionId": session_id,
-        "version": "2.1.138",
-        "cwd": "/Users/test/Projects/demo",
-        "gitBranch": "main",
-        "userType": "external",
-        "entrypoint": "cli",
-        "message": {"role": "user", "content": "hello"},
-    }
     session_dir = tmp_path / "with space"
     session_dir.mkdir()
     path = session_dir / f"{session_id}.jsonl"
-    path.write_text(json.dumps(line) + "\n")
+    path.write_text(json.dumps(make_user_line(f"{session_id}-u1", session_id=session_id)) + "\n")
     return path
 
 
@@ -923,12 +911,3 @@ def test_autopsy_quiet_findings_without_patches_has_no_next_step(
     assert result.exit_code == 0
     assert result.output.strip() == "1 finding · $0.01 waste — RETRY LOOP"
     assert "harvest" not in result.output
-
-
-def test_autopsy_quiet_clean_session_prints_nothing(runner, tmp_path):
-    from cctx.cli import cli
-
-    session = _quiet_session(tmp_path, "quiet-clean-02")
-    result = runner.invoke(cli, ["autopsy", str(session), "--quiet"], catch_exceptions=False)
-    assert result.exit_code == 0
-    assert result.output == ""

@@ -52,12 +52,7 @@ def _default_console() -> Console:
 
 
 def quiet_line(diagnosis: Diagnosis, *, session_path: Path) -> str:
-    """One-line verdict for `autopsy --quiet` (the SessionEnd hook's output).
-
-    `Diagnosis.verdict` verbatim, decorated with `— {kind_summary}`, and — when
-    the diagnosis carries patches — a copy-pasteable `→ cctx harvest <session>`
-    next step with the resolved, shell-quoted session path.
-    """
+    """One-line verdict for `autopsy --quiet` (the SessionEnd hook's output)."""
     line = f"{diagnosis.verdict} — {diagnosis.kind_summary}"
     if not diagnosis.patches:
         return line
