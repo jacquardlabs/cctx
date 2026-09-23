@@ -240,6 +240,7 @@ One paragraph: what this delivers and why.
 - Specs are authoritative for module design. Don't deviate during implementation without updating the spec.
 - When implementing a feature: write the spec, get it reviewed, then write the plan (via the superpowers `writing-plans` skill), then implement.
 - The parser is dependency-free by design. If you find yourself adding `import anthropic` or `import click` inside `parsers/`, stop — that work belongs in `tokenizer.py` or `cli.py`.
+- **Tests:** `CCTX_OFFLINE=1 uv run --extra dev pytest -q`.
 - The tokenizer's offline mode (`CCTX_OFFLINE=1`) is the default for CI and tests. Live tokenization happens only when the CLI explicitly opts in and `ANTHROPIC_API_KEY` is set.
 
 ## Review workflow
