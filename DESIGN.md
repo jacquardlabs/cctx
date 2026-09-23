@@ -80,7 +80,7 @@ The canonical headline is **count-based** and comes from a single source — the
 | No findings | `"Clean session"` |
 | With findings | `"{n} finding · ${waste:.2f} waste"` when `n == 1`, else `"{n} findings · …"` (e.g. `"2 findings · $0.34 waste"`) |
 
-- `terminal.py`, the HTML template, `trace_tui.verdict()`, `github.py`, and `cli.py --quiet` all delegate to `Diagnosis.verdict` — no surface recomputes the format. A surface may decorate *around* the string (`github.py` prefixes `**Result:** ✅` when clean and appends `(N% of session cost)` when dirty; `--quiet` appends `— {kind_summary}`), but the `Diagnosis.verdict` string itself always appears verbatim. There is no sanctioned exception.
+- `terminal.py`, the HTML template, `trace_tui.verdict()`, `github.py`, and `cli.py --quiet` all delegate to `Diagnosis.verdict` — no surface recomputes the format. A surface may decorate *around* the string (`github.py` prefixes `**Result:** ✅` when clean and appends `(N% of session cost)` when dirty; `--quiet` appends `— {kind_summary}`, plus `→ cctx harvest <session>` when the diagnosis carries patches — built by `terminal.quiet_line()`), but the `Diagnosis.verdict` string itself always appears verbatim. There is no sanctioned exception.
 - Kind names render as a **secondary row** via the separate `Diagnosis.kind_summary` property (`"RETRY LOOP + SCOPE CREEP"`, deduped and ordered; empty when clean). The terminal prints it as a dim line under the verdict; per-finding badges carry the same information on the other surfaces.
 
 ## Evidence rendering

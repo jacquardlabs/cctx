@@ -821,3 +821,114 @@ def test_complete_project_returns_empty_on_error(monkeypatch):
 
     monkeypatch.setattr(discovery, "list_projects", boom)
     assert _complete_project(None, None, "x") == []
+
+
+# ---------------------------------------------------------------------------
+# autopsy --quiet: verdict names the next command (harvest)
+# ---------------------------------------------------------------------------
+
+
+def _quiet_session(tmp_path: Path, session_id: str) -> Path:
+    """Session file under a directory with a space, so shell quoting is exercised."""
+    line = {
+        "type": "user",
+        "uuid": f"{session_id}-u1",
+        "parentUuid": None,
+        "isSidechain": False,
+        "timestamp": "2026-05-14T10:00:00.000Z",
+        "sessionId": session_id,
+        "version": "2.1.138",
+        "cwd": "/Users/test/Projects/demo",
+        "gitBranch": "main",
+        "userType": "external",
+        "entrypoint": "cli",
+        "message": {"role": "user", "content": "hello"},
+    }
+    session_dir = tmp_path / "with space"
+    session_dir.mkdir()
+    path = session_dir / f"{session_id}.jsonl"
+    path.write_text(json.dumps(line) + "\n")
+    return path
+
+
+def _fake_dirty_run(trace):
+    from datetime import datetime, timezone
+
+    from cctx.models import Confidence, Diagnosis, Finding, FindingKind, Severity
+
+    return Diagnosis(
+        session_id=trace.session_id,
+        findings=[
+            Finding(
+                kind=FindingKind.RETRY_LOOP,
+                severity=Severity.HIGH,
+                confidence=Confidence.HIGH,
+                first_turn=1,
+                last_turn=2,
+                evidence={},
+                cost_usd=0.01,
+                summary="test finding",
+            )
+        ],
+        inflection_turn=1,
+        patches=[],
+        total_cost_usd=0.10,
+        waste_cost_usd=0.01,
+        analysed_at=datetime(2026, 5, 14, 10, 0, tzinfo=timezone.utc),
+    )
+
+
+def test_autopsy_quiet_with_patches_prints_runnable_harvest_command(
+    runner, tmp_path, monkeypatch
+):
+    import shlex
+
+    from cctx import diagnostician
+    from cctx.cli import cli
+
+    session = _quiet_session(tmp_path, "quiet-next-01")
+    monkeypatch.setattr(diagnostician, "run", _fake_dirty_run)
+    monkeypatch.chdir(tmp_path)  # harvest's default target dir; keep writes out of the repo
+
+    result = runner.invoke(cli, ["autopsy", str(session), "--quiet"], catch_exceptions=False)
+    assert result.exit_code == 0
+    line = result.output.strip()
+    assert "\n" not in line
+    assert line.startswith("1 finding · $0.01 waste — RETRY LOOP")
+    assert " → cctx harvest " in line
+
+    argv = shlex.split(line.split(" → ", 1)[1])
+    assert argv[:2] == ["cctx", "harvest"]
+    assert argv[2:] == [str(session.resolve())]
+
+    # Invoke exactly as printed; decline the interactive apply prompt.
+    harvest = runner.invoke(cli, argv[1:], input="n\n", catch_exceptions=False)
+    assert harvest.exit_code == 0, harvest.output
+    assert "Apply 1 patch(es)?" in harvest.output
+    assert not (tmp_path / "CLAUDE.md").exists()
+
+
+def test_autopsy_quiet_findings_without_patches_has_no_next_step(
+    runner, tmp_path, monkeypatch
+):
+    from cctx import diagnostician
+    from cctx.cli import cli
+    from cctx.recommender import claude_md
+
+    session = _quiet_session(tmp_path, "quiet-nopatch-01")
+    monkeypatch.setattr(diagnostician, "run", _fake_dirty_run)
+    monkeypatch.setattr(claude_md, "generate", lambda d: d)
+
+    result = runner.invoke(cli, ["autopsy", str(session), "--quiet"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert result.output.strip() == "1 finding · $0.01 waste — RETRY LOOP"
+    assert "harvest" not in result.output
+
+
+def test_autopsy_quiet_clean_session_prints_nothing(runner, tmp_path):
+    from cctx.cli import cli
+
+    session = _quiet_session(tmp_path, "quiet-clean-02")
+    result = runner.invoke(cli, ["autopsy", str(session), "--quiet"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert result.output == ""

@@ -365,6 +365,8 @@ def test_autopsy_quiet_uses_canonical_verdict_and_separator(runner, tmp_path, mo
 
     result = runner.invoke(cli, ["autopsy", str(session), "--quiet"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert result.output.strip() == f"{diag.verdict} — {diag.kind_summary}"
+    # Prefix, not equality: real claude_md.generate adds patches, so the line
+    # also carries the "→ cctx harvest <session>" next step.
+    assert result.output.strip().startswith(f"{diag.verdict} — {diag.kind_summary}")
     assert " + " in result.output          # canonical separator
     assert "RETRY LOOP, " not in result.output  # retired local ", " join

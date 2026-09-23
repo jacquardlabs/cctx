@@ -28,6 +28,7 @@ from cctx.models import KIND_LABEL, AggregateReport
 from cctx.parsers.claude_code import parse_session
 from cctx.recommender import claude_md
 from cctx.renderers.terminal import (
+    quiet_line,
     render_aggregate,
     render_aggregate_drilldown,
     render_check_results,
@@ -524,7 +525,7 @@ def autopsy(
         diagnosis = claude_md.generate(diagnosis)
         if quiet:
             if diagnosis.findings:
-                click.echo(f"{diagnosis.verdict} — {diagnosis.kind_summary}")
+                click.echo(quiet_line(diagnosis, session_path=target))
         elif json_out:
             import json as _json
 

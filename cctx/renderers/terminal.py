@@ -1,6 +1,7 @@
 """Terminal renderer for autopsy Diagnosis output.
 
 render_diagnosis(diagnosis, console=None) -> None
+quiet_line(diagnosis, session_path=...) -> str
 render_aggregate(report, console=None) -> None
 render_harvest_results(results, dry_run=False, console=None) -> None
 render_check_results(findings, target_dir, console=None) -> None
@@ -12,6 +13,7 @@ Uses rich for formatting. Accepts an optional Console for testing.
 """
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -47,6 +49,19 @@ _KIND_LABEL = KIND_LABEL
 
 def _default_console() -> Console:
     return Console()
+
+
+def quiet_line(diagnosis: Diagnosis, *, session_path: Path) -> str:
+    """One-line verdict for `autopsy --quiet` (the SessionEnd hook's output).
+
+    `Diagnosis.verdict` verbatim, decorated with `— {kind_summary}`, and — when
+    the diagnosis carries patches — a copy-pasteable `→ cctx harvest <session>`
+    next step with the resolved, shell-quoted session path.
+    """
+    line = f"{diagnosis.verdict} — {diagnosis.kind_summary}"
+    if not diagnosis.patches:
+        return line
+    return f"{line} → cctx harvest {shlex.quote(str(session_path.resolve()))}"
 
 
 def render_diagnosis(

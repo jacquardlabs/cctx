@@ -437,3 +437,35 @@ def test_render_projects_no_badge_when_not_live(tmp_path):
     output = buf.getvalue()
 
     assert "●" not in output
+
+
+# ---------------------------------------------------------------------------
+# quiet_line — the SessionEnd hook's one-line verdict (autopsy --quiet)
+# ---------------------------------------------------------------------------
+
+
+def test_quiet_line_names_harvest_when_patches_exist(tmp_path):
+    import shlex
+
+    from cctx.renderers.terminal import quiet_line
+
+    session = tmp_path / "with space" / "sess.jsonl"
+    diag = _make_diagnosis(
+        findings=[_make_finding("retry_loop", cost=0.12)],
+        patches=[_make_patch("retry_loop")],
+    )
+    line = quiet_line(diag, session_path=session)
+    assert line.startswith(f"{diag.verdict} — {diag.kind_summary}")
+    assert diag.verdict in line
+    assert "\n" not in line
+    suffix = line.split(" → ", 1)[1]
+    assert shlex.split(suffix) == ["cctx", "harvest", str(session.resolve())]
+
+
+def test_quiet_line_omits_next_step_without_patches(tmp_path):
+    from cctx.renderers.terminal import quiet_line
+
+    diag = _make_diagnosis(findings=[_make_finding("retry_loop", cost=0.12)])
+    line = quiet_line(diag, session_path=tmp_path / "sess.jsonl")
+    assert line == f"{diag.verdict} — {diag.kind_summary}"
+    assert "harvest" not in line
