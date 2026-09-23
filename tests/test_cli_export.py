@@ -197,9 +197,8 @@ def test_export_default_format_is_jsonl(runner: CliRunner, session_jsonl) -> Non
 def test_export_csv_cost_column_is_populated(runner: CliRunner, priced_session_jsonl) -> None:
     """End-to-end proof of #178 AC1: cost reaches CSV from the analyzer.
 
-    Built in-process rather than from tests/fixtures/claude_code/ -- four of
-    the five fixture dirs raise TypeError inside _parse_usage (#197), and the
-    fifth, short-clean, has no assistant turn so its cost is legitimately zero.
+    Built in-process rather than from tests/fixtures/claude_code/ -- the
+    fixtures' token counts are scrubbed, so their usage is unknown and unpriced.
     """
     import csv as _csv
     import io as _io
