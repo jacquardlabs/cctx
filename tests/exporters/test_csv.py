@@ -392,7 +392,7 @@ def _one_child_trace(
 
 def test_csv_export_has_subagent_dispatch_join_key() -> None:
     """CSV rows carry the Agent tool_use_id that dispatched the session they
-    belong to — the join key jig/studious use to correlate a dispatch-time
+    belong to — the join key jig uses to correlate a dispatch-time
     routing decision against its actual cost (#194, closing #193's CSV gap).
     """
     from cctx.exporters.csv import COLUMNS, write

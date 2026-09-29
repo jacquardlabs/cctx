@@ -388,7 +388,7 @@ def test_end_to_end_subagent_retry_loop_surfaces_and_is_attributed():
 
 def test_attribution_records_dispatching_tool_use_id():
     """SubagentAttribution.dispatching_tool_use_id is the parent's Agent/Task
-    tool_use_id that dispatched this subagent — the join key jig/studious use
+    tool_use_id that dispatched this subagent — the join key jig uses
     to correlate a dispatch-time routing decision with its actual cost (#193
     follow-up)."""
     from cctx.diagnostician import run
