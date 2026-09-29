@@ -249,32 +249,22 @@ One paragraph: what this delivers and why.
 - **PRODUCT.md** — product context, personas, principles, feature map. Read before any product decision.
 - **DESIGN.md** — design system, colors, typography, component patterns. Read before any UI work.
 
-### Quality gates
+### Issue → PR
 
-| Gate | When | Command |
-|------|------|---------|
-| Should we build? | Before any engineering | `/gate-should-we-build [idea]` |
-| Design review | After design doc, before implementation | `/gate-design-review` |
-| Audit | After implementation, before acceptance | `/audit` |
-| Acceptance | After audit passes, before merge | `/gate-acceptance` |
+1. Implement the issue on a new branch, run the tests, and commit.
+2. Run `/gauntlet:review`.
+3. Fix the findings you judge real; list the ones you declined, with why.
+4. Run `/exorcist:exorcise`.
+5. Push and open the PR.
+
+Design docs: `/viva-write design-doc`, then `/gauntlet:review <doc> --premortem`. Human sign-off on a doc or PR: `/viva-review`.
 
 ### Periodic reviews
 
-| Review | Cadence | Command |
-|--------|---------|---------|
-| Codebase health | Weekly or pre-milestone | `/review-codebase-health` |
-| Frontend health | Monthly or post-UI-sprint | `/review-frontend-health` |
-| Architecture | Quarterly or pre-major-feature | `/review-architecture` |
-| Product health | Monthly | `/review-product-health` |
-| README drift | After a release or feature batch | `/review-readme` |
-| All reviews | As needed | `/deep-review` |
+Weekly or pre-milestone: `/gauntlet:review posture` and `/exorcist:seance`.
 
 ### After each review
 
 1. Fix any **critical** findings before the next feature
 2. File **important** findings as tasks to address this cycle
 3. Track **minor** findings — they compound if ignored
-4. Update context docs if the review surfaced changes:
-   - `/review-product-health` updates PRODUCT.md
-   - `/review-frontend-health` updates DESIGN.md
-   - `/review-architecture` updates CLAUDE.md
